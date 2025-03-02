@@ -1,0 +1,29 @@
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+/build
+/dist
+*.o
+*.exe
+
+# Dependency directories
+/node_modules
+/server/node_modules
+/vendor
+
+# Log files
+*.log
+logs/
+
+# Sensitive information
+.env
+config/settings.json
+
+# IDE/Editor files
+.vscode/
+.cursorrules
+*.sublime-project
+*.sublime-workspace
+

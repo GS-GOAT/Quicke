@@ -1,0 +1,28 @@
+{
+  "name": "quicke",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.12.0",
+    "@google/generative-ai": "^0.1.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "next": "^14.0.4",
+    "openai": "^4.24.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.20",
+    "eslint": "^8.56.0",
+    "eslint-config-next": "^14.0.4",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^3.4.17"
+  }
+}
