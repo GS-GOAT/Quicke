@@ -1,37 +1,76 @@
+import { useState, useRef, useEffect } from 'react';
+
 export default function PromptInput({ prompt, setPrompt, onSubmit, onClear, disabled }) {
+  const textareaRef = useRef(null);
+  
+  // Auto-resize the textarea as the user types
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'inherit';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
+    }
+  }, [prompt]);
+  
+  // Handle Enter key to submit
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      onSubmit();
+    }
+  };
+
   return (
-    <div className="bg-white shadow overflow-hidden sm:rounded-lg p-4">
-      <div className="mb-4">
-        <label htmlFor="prompt" className="block text-sm font-medium text-gray-700">
-          Enter your prompt
-        </label>
-        <textarea
-          id="prompt"
-          name="prompt"
-          rows="4"
-          className="mt-1 block w-full rounded-md border border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-          placeholder="Enter a prompt to send to all selected LLMs..."
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-        ></textarea>
-      </div>
-      <div className="flex space-x-3">
+    <div className="relative transition-all duration-200 rounded-xl shadow-soft dark:shadow-soft-dark border border-gray-200 dark:border-gray-700 bg-white dark:bg-darksurface">
+      <textarea
+        ref={textareaRef}
+        className="w-full py-4 px-4 pr-16 text-gray-900 dark:text-gray-100 rounded-xl resize-none bg-transparent focus:outline-none"
+        rows="1"
+        placeholder="Ask the models anything..."
+        value={prompt}
+        onChange={(e) => setPrompt(e.target.value)}
+        onKeyDown={handleKeyDown}
+        disabled={disabled}
+        style={{ maxHeight: '200px', minHeight: '56px' }}
+      />
+      
+      <div className="absolute right-3 bottom-3 flex space-x-2">
+        {prompt && (
+          <button
+            onClick={() => setPrompt('')}
+            className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            title="Clear input"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
+        
         <button
-          type="button"
-          className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
-            disabled ? 'opacity-50 cursor-not-allowed' : ''
-          }`}
           onClick={onSubmit}
-          disabled={disabled}
+          disabled={disabled || !prompt.trim()}
+          className={`p-2 rounded-full transition-all duration-200 ${
+            disabled || !prompt.trim() 
+              ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed bg-gray-100 dark:bg-gray-800' 
+              : 'text-white bg-primary-600 hover:bg-primary-700 shadow-md'
+          } focus:outline-none`}
+          title="Send message"
         >
-          Generate Responses
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+          </svg>
         </button>
+      </div>
+      
+      <div className="absolute left-3 bottom-3">
         <button
-          type="button"
-          className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
           onClick={onClear}
+          className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          title="Clear conversation"
         >
-          Clear
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+          </svg>
         </button>
       </div>
     </div>

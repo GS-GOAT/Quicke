@@ -8,6 +8,9 @@ Thumbs.db
 *.o
 *.exe
 
+# Next.js build directory
+.next/
+
 # Dependency directories
 /node_modules
 /server/node_modules
@@ -15,7 +18,7 @@ Thumbs.db
 
 # Log files
 *.log
-logs/
+logs/s
 
 # Sensitive information
 .env

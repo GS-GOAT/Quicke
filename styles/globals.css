@@ -8,6 +8,7 @@ body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen,
     Ubuntu, Cantarell, Fira Sans, Droid Sans, Helvetica Neue, sans-serif;
+  @apply antialiased text-gray-900 dark:text-gray-100;
 }
 
 a {
@@ -17,4 +18,174 @@ a {
 
 * {
   box-sizing: border-box;
+}
+
+/* Enhanced typing cursor animation */
+.typing-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1.2em;
+  @apply bg-gray-800 dark:bg-gray-300;
+  margin-left: 2px;
+  animation: typing-blink 0.7s step-end infinite;
+  position: relative;
+  top: 3px;
+}
+
+@keyframes typing-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* Typing text animation */
+.typing-text {
+  display: inline-block;
+  border-right: 0.08em solid;
+  white-space: nowrap;
+  letter-spacing: 0.1em;
+  animation: typing 3.5s steps(40, end), blink-caret 0.75s step-end infinite;
+}
+
+/* Typing indicator animation */
+.dot-typing {
+  position: relative;
+  left: -9999px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  @apply bg-primary-500;
+  color: transparent;
+  box-shadow: 9984px 0 0 0 currentColor, 9999px 0 0 0 currentColor, 10014px 0 0 0 currentColor;
+  animation: dot-typing 1.5s infinite linear;
+}
+
+@keyframes dot-typing {
+  0% {
+    box-shadow: 9984px 0 0 0 currentColor, 9999px 0 0 0 currentColor, 10014px 0 0 0 currentColor;
+  }
+  16.667% {
+    box-shadow: 9984px -10px 0 0 currentColor, 9999px 0 0 0 currentColor, 10014px 0 0 0 currentColor;
+  }
+  33.333% {
+    box-shadow: 9984px 0 0 0 currentColor, 9999px 0 0 0 currentColor, 10014px 0 0 0 currentColor;
+  }
+  50% {
+    box-shadow: 9984px 0 0 0 currentColor, 9999px -10px 0 0 currentColor, 10014px 0 0 0 currentColor;
+  }
+  66.667% {
+    box-shadow: 9984px 0 0 0 currentColor, 9999px 0 0 0 currentColor, 10014px 0 0 0 currentColor;
+  }
+  83.333% {
+    box-shadow: 9984px 0 0 0 currentColor, 9999px 0 0 0 currentColor, 10014px -10px 0 0 currentColor;
+  }
+  100% {
+    box-shadow: 9984px 0 0 0 currentColor, 9999px 0 0 0 currentColor, 10014px 0 0 0 currentColor;
+  }
+}
+
+/* Text highlight effect for newly added words */
+@keyframes highlight-new {
+  0% { color: theme('colors.primary.500'); }
+  100% { color: inherit; }
+}
+
+.highlight-text {
+  animation: highlight-new 1.5s ease-out forwards;
+}
+
+/* Custom scrollbar for modern browsers */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(203, 213, 225, 0.5) transparent;
+}
+
+.dark .scrollbar-thin {
+  scrollbar-color: rgba(51, 65, 85, 0.5) transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: rgba(203, 213, 225, 0.5);
+  border-radius: 20px;
+}
+
+.dark .scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: rgba(51, 65, 85, 0.5);
+}
+
+/* Prose styling (with dark mode support) */
+.prose {
+  @apply text-gray-800 dark:text-gray-200;
+}
+
+.prose p {
+  @apply my-4;
+}
+
+.prose h1, .prose h2, .prose h3, .prose h4 {
+  @apply font-semibold my-4 text-gray-900 dark:text-white;
+}
+
+.prose h1 {
+  @apply text-2xl;
+}
+
+.prose h2 {
+  @apply text-xl;
+}
+
+.prose h3 {
+  @apply text-lg;
+}
+
+.prose ul, .prose ol {
+  @apply my-4 pl-5;
+}
+
+.prose ul {
+  @apply list-disc;
+}
+
+.prose ol {
+  @apply list-decimal;
+}
+
+.prose code {
+  @apply bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded text-sm font-mono text-gray-800 dark:text-gray-200;
+}
+
+.prose pre {
+  @apply bg-gray-100 dark:bg-gray-800 p-3 rounded-lg my-4 overflow-auto;
+}
+
+.prose pre code {
+  @apply bg-transparent p-0;
+}
+
+.prose blockquote {
+  @apply border-l-4 border-gray-300 dark:border-gray-700 pl-4 italic my-4 text-gray-700 dark:text-gray-300;
+}
+
+/* Add a smooth transition for all color changes */
+*, *::before, *::after {
+  @apply transition-colors duration-200;
+}
+
+/* Word-by-word animation effect */
+.word-appear {
+  opacity: 0;
+  animation: word-appear-animation 0.3s forwards;
+}
+
+@keyframes word-appear-animation {
+  from { opacity: 0; }
+  to { opacity: 1; }
 } 
