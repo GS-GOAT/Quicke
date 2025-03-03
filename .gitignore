@@ -14,7 +14,9 @@ Thumbs.db
 # Dependency directories
 /node_modules
 /server/node_modules
+/server/.env
 /vendor
+.env.local
 
 # Log files
 *.log

@@ -14,6 +14,8 @@ export default function Home() {
   const [showModelSelector, setShowModelSelector] = useState(false);
   const messagesEndRef = useRef(null);
   const eventSourceRef = useRef(null);
+  const modelButtonRef = useRef(null);
+  const modelSelectorRef = useRef(null);
 
   // Auto-scroll when new messages are added
   useEffect(() => {
@@ -30,6 +32,30 @@ export default function Home() {
       }
     };
   }, []);
+
+  // Function to handle clicks outside the ModelSelector when it's open
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (showModelSelector && modelButtonRef.current && modelSelectorRef.current &&
+          !modelButtonRef.current.contains(event.target) &&
+          !modelSelectorRef.current.contains(event.target)) {
+        setShowModelSelector(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showModelSelector]);
+
+  const handleModelButtonMouseEnter = () => {
+    setShowModelSelector(true);
+  };
+
+  const handleModelSelectorMouseLeave = () => {
+    setShowModelSelector(false);
+  };
 
   const handleSubmit = async () => {
     if (!prompt.trim() || loading) return;
@@ -180,7 +206,9 @@ export default function Home() {
             <ThemeToggle />
             
             <button 
-              onClick={() => setShowModelSelector(!showModelSelector)} 
+              ref={modelButtonRef}
+              onMouseEnter={handleModelButtonMouseEnter}
+              onClick={() => setShowModelSelector(!showModelSelector)}
               className="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 text-sm font-medium transition-colors duration-200"
             >
               {showModelSelector ? 'Hide Models' : 'Select Models'}
@@ -190,7 +218,11 @@ export default function Home() {
       </header>
       
       {showModelSelector && (
-        <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-4">
+        <div
+          ref={modelSelectorRef}
+          onMouseLeave={handleModelSelectorMouseLeave}
+          className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-4"
+        >
           <ModelSelector 
             selectedModels={selectedModels} 
             setSelectedModels={setSelectedModels} 
