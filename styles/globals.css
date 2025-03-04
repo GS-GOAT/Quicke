@@ -24,17 +24,15 @@ a {
 .typing-cursor {
   display: inline-block;
   width: 2px;
-  height: 1.2em;
-  @apply bg-gray-800 dark:bg-gray-300;
+  animation: blink 1s step-end infinite;
   margin-left: 2px;
-  animation: typing-blink 0.7s step-end infinite;
-  position: relative;
-  top: 3px;
+  color: currentColor;
+  opacity: 0.7;
 }
 
-@keyframes typing-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
+@keyframes blink {
+  from, to { opacity: 0; }
+  50% { opacity: 1; }
 }
 
 /* Typing text animation */
@@ -46,41 +44,43 @@ a {
   animation: typing 3.5s steps(40, end), blink-caret 0.75s step-end infinite;
 }
 
-/* Typing indicator animation */
+/* Loading dots animation */
 .dot-typing {
   position: relative;
-  left: -9999px;
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  @apply bg-primary-500;
-  color: transparent;
-  box-shadow: 9984px 0 0 0 currentColor, 9999px 0 0 0 currentColor, 10014px 0 0 0 currentColor;
-  animation: dot-typing 1.5s infinite linear;
+  background-color: #8b8b8b;
+  color: #8b8b8b;
+  animation: dot-typing 1s infinite linear;
+}
+
+.dot-typing::before,
+.dot-typing::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #8b8b8b;
+  color: #8b8b8b;
+  animation: dot-typing 1s infinite linear;
+}
+
+.dot-typing::before {
+  left: -12px;
+  animation-delay: -0.32s;
+}
+
+.dot-typing::after {
+  left: 12px;
+  animation-delay: -0.16s;
 }
 
 @keyframes dot-typing {
-  0% {
-    box-shadow: 9984px 0 0 0 currentColor, 9999px 0 0 0 currentColor, 10014px 0 0 0 currentColor;
-  }
-  16.667% {
-    box-shadow: 9984px -10px 0 0 currentColor, 9999px 0 0 0 currentColor, 10014px 0 0 0 currentColor;
-  }
-  33.333% {
-    box-shadow: 9984px 0 0 0 currentColor, 9999px 0 0 0 currentColor, 10014px 0 0 0 currentColor;
-  }
-  50% {
-    box-shadow: 9984px 0 0 0 currentColor, 9999px -10px 0 0 currentColor, 10014px 0 0 0 currentColor;
-  }
-  66.667% {
-    box-shadow: 9984px 0 0 0 currentColor, 9999px 0 0 0 currentColor, 10014px 0 0 0 currentColor;
-  }
-  83.333% {
-    box-shadow: 9984px 0 0 0 currentColor, 9999px 0 0 0 currentColor, 10014px -10px 0 0 currentColor;
-  }
-  100% {
-    box-shadow: 9984px 0 0 0 currentColor, 9999px 0 0 0 currentColor, 10014px 0 0 0 currentColor;
-  }
+  0%, 80%, 100% { transform: scale(0.7); }
+  40% { transform: scale(1); }
 }
 
 /* Text highlight effect for newly added words */

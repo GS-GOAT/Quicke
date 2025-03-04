@@ -1,19 +1,59 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export default function ResponseColumn({ model, response, streaming }) {
   const contentRef = useRef(null);
+  const [displayedText, setDisplayedText] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const lastResponseRef = useRef('');
 
-  // Auto-scroll to the bottom of content when it updates
+  // Reset displayed text when response changes completely
+  useEffect(() => {
+    if (!response?.text) {
+      setDisplayedText('');
+      lastResponseRef.current = '';
+      return;
+    }
+
+    // If it's a completely new response, reset the display
+    if (!response.text.startsWith(lastResponseRef.current)) {
+      setDisplayedText('');
+      lastResponseRef.current = '';
+    }
+
+    // Handle new text chunks
+    if (response.text !== lastResponseRef.current) {
+      const newText = response.text.slice(lastResponseRef.current.length);
+      typeText(newText);
+      lastResponseRef.current = response.text;
+    }
+  }, [response?.text]);
+
+  const typeText = async (text) => {
+    if (!text) return;
+    
+    setIsTyping(true);
+    const words = text.split(/(\s+)/).filter(word => word.length > 0);
+    
+    for (let i = 0; i < words.length; i++) {
+      if (!isTyping) break;
+      
+      await new Promise(resolve => setTimeout(resolve, 30)); // Adjust speed here
+      setDisplayedText(prev => prev + words[i]);
+    }
+    
+    setIsTyping(false);
+  };
+
+  // Auto-scroll to bottom
   useEffect(() => {
     if (contentRef.current && streaming) {
       contentRef.current.scrollTop = contentRef.current.scrollHeight;
     }
-  }, [response?.text, streaming]);
+  }, [displayedText, streaming]);
 
   const copyToClipboard = () => {
     if (response?.text) {
       navigator.clipboard.writeText(response.text);
-      // Use a more subtle notification
       const notificationEl = document.createElement('div');
       notificationEl.className = 'fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg transition-opacity duration-300 z-50';
       notificationEl.textContent = `Copied ${model}'s response`;
@@ -52,7 +92,7 @@ export default function ResponseColumn({ model, response, streaming }) {
         className="p-4 overflow-auto flex-grow scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-700 scrollbar-track-transparent"
         style={{ minHeight: "200px", maxHeight: "600px" }}
       >
-        {response?.loading && !response?.text ? (
+        {response?.loading && !displayedText ? (
           <div className="flex justify-center items-center h-full">
             <div className="dot-typing"></div>
           </div>
@@ -61,11 +101,11 @@ export default function ResponseColumn({ model, response, streaming }) {
             <p className="font-medium">Error encountered:</p>
             <p className="mt-1">{response.error}</p>
           </div>
-        ) : response?.text ? (
+        ) : displayedText || response?.text ? (
           <div className="prose prose-sm dark:prose-invert max-w-none">
             <div className="whitespace-pre-wrap text-gray-800 dark:text-gray-200">
-              {response.text}
-              {streaming && (
+              {displayedText || response.text}
+              {(streaming || isTyping) && (
                 <span className="typing-cursor">|</span>
               )}
             </div>
