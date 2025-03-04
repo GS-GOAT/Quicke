@@ -15,7 +15,7 @@ function ModelSelector({ selectedModels, setSelectedModels }) {
 
   return (
     <div className="bg-white shadow sm:rounded-lg p-4">
-      <h3 className="text-lg font-medium text-gray-900 mb-3">Select Models to Compare</h3>
+      <h3 className="text-lg font-medium text-gray-900 mb-3">Select Models </h3>
       <div className="flex flex-wrap gap-3">
         {availableModels.map(model => (
           <button

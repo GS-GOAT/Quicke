@@ -1,46 +1,98 @@
 import { useState, useEffect } from 'react';
 
 export default function ModelSelector({ selectedModels, setSelectedModels }) {
-  const availableModels = [
-    { 
-      id: 'gpt-4', 
-      name: 'GPT-4',
-      provider: 'OpenAI',
-      description: 'Most capable model for complex tasks.',
-      color: 'from-emerald-400 to-emerald-600',
-      icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-          <path d="M16.5 7.5h-9v9h9v-9z" />
-          <path fillRule="evenodd" d="M8.25 2.25A.75.75 0 019 3v.75h2.25V3a.75.75 0 011.5 0v.75H15V3a.75.75 0 011.5 0v.75h.75a3 3 0 013 3v.75H21A.75.75 0 0121 9h-.75v2.25H21a.75.75 0 010 1.5h-.75v2.25H21a.75.75 0 010 1.5h-.75v.75a3 3 0 01-3 3h-.75V21a.75.75 0 01-1.5 0v-.75h-2.25V21a.75.75 0 01-1.5 0v-.75H9V21a.75.75 0 01-1.5 0v-.75h-.75a3 3 0 01-3-3v-.75H3A.75.75 0 013 15h.75v-2.25H3a.75.75 0 010-1.5h.75V9H3a.75.75 0 010-1.5h.75v-.75a3 3 0 013-3h.75V3a.75.75 0 01.75-.75zM6 6.75A.75.75 0 016.75 6h10.5a.75.75 0 01.75.75v10.5a.75.75 0 01-.75.75H6.75a.75.75 0 01-.75-.75V6.75z" clipRule="evenodd" />
-        </svg>
-      )
-    },
-    { 
-      id: 'claude', 
-      name: 'Claude 3 Sonnet',
-      provider: 'Anthropic',
-      description: 'Balances speed and intelligence, excellent for general use.',
-      color: 'from-orange-400 to-orange-600',
-      icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-          <path d="M12 .75a8.25 8.25 0 00-4.135 15.39c.686.398 1.115 1.008 1.134 1.623a.75.75 0 00.577.706c.352.083.71.148 1.074.195.323.041.6-.218.6-.544v-4.661a6.75 6.75 0 111.5 0v4.66c0 .327.277.586.6.545.364-.047.722-.112 1.074-.195a.75.75 0 00.577-.706c.02-.615.448-1.225 1.134-1.623A8.25 8.25 0 0012 .75z" />
-          <path fillRule="evenodd" d="M9.013 19.9a.75.75 0 01.877-.597 11.319 11.319 0 004.22 0 .75.75 0 11.28 1.473 12.819 12.819 0 01-4.78 0 .75.75 0 01-.597-.876zM9.754 22.344a.75.75 0 01.824-.668 13.682 13.682 0 002.844 0 .75.75 0 11.156 1.492 15.156 15.156 0 01-3.156 0 .75.75 0 01-.668-.824z" clipRule="evenodd" />
-        </svg>
-      )
-    },
-    { 
-      id: 'gemini', 
-      name: 'Gemini Pro',
-      provider: 'Google',
-      description: 'Versatile model for a wide range of applications.',
-      color: 'from-blue-400 to-blue-600',
-      icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-          <path fillRule="evenodd" d="M14.615 1.595a.75.75 0 01.359.852L12.982 9.75h7.268a.75.75 0 01.548 1.262l-10.5 11.25a.75.75 0 01-1.272-.71l1.992-7.302H3.75a.75.75 0 01-.548-1.262l10.5-11.25a.75.75 0 01.913-.143z" clipRule="evenodd" />
-        </svg>
-      )
-    }
-  ];
+  const [activeCategory, setActiveCategory] = useState('all');
+
+  const modelCategories = {
+    featured: [
+      { 
+        id: 'gpt-4',
+        name: 'GPT-4',
+        provider: 'OpenAI',
+        description: 'Most capable GPT-4 model for complex tasks',
+        color: 'from-emerald-400 to-emerald-600',
+        icon: '🤖'
+      },
+      { 
+        id: 'claude',
+        name: 'Claude 3 Sonnet',
+        provider: 'Anthropic',
+        description: 'Latest Claude model with strong reasoning capabilities',
+        color: 'from-orange-400 to-orange-600',
+        icon: '🧠'
+      },
+      { 
+        id: 'gemini',
+        name: 'Gemini Pro',
+        provider: 'Google',
+        description: 'Google\'s most capable model',
+        color: 'from-blue-400 to-blue-600',
+        icon: '🌟'
+      }
+    ],
+    mistral: [
+      {
+        id: 'mistral-medium',
+        name: 'Mistral Medium',
+        provider: 'Mistral AI',
+        description: 'Balanced performance and efficiency',
+        color: 'from-purple-400 to-purple-600',
+        icon: '🌪️'
+      },
+      {
+        id: 'mixtral',
+        name: 'Mixtral 8x7B',
+        provider: 'Mistral AI',
+        description: 'Powerful mixture-of-experts model',
+        color: 'from-indigo-400 to-indigo-600',
+        icon: '🎭'
+      }
+    ],
+    meta: [
+      {
+        id: 'llama2-70b',
+        name: 'Llama-2 70B',
+        provider: 'Meta',
+        description: 'Meta\'s largest open model',
+        color: 'from-blue-500 to-blue-700',
+        icon: '🦙'
+      }
+    ],
+    other: [
+      {
+        id: 'solar',
+        name: 'Solar 70B',
+        provider: 'Upstage',
+        description: 'High-performance open model',
+        color: 'from-yellow-400 to-yellow-600',
+        icon: '☀️'
+      },
+      {
+        id: 'phi2',
+        name: 'Phi-2',
+        provider: 'Microsoft',
+        description: 'Compact but capable model',
+        color: 'from-cyan-400 to-cyan-600',
+        icon: 'φ'
+      },
+      {
+        id: 'qwen',
+        name: 'Qwen 72B',
+        provider: 'Alibaba',
+        description: 'Large multilingual model',
+        color: 'from-red-400 to-red-600',
+        icon: '🌏'
+      },
+      {
+        id: 'openchat',
+        name: 'OpenChat 3.5',
+        provider: 'OpenChat',
+        description: 'Open-source chat model',
+        color: 'from-green-400 to-green-600',
+        icon: '💬'
+      }
+    ]
+  };
 
   const [customModels, setCustomModels] = useState(() => {
     const storedModels = localStorage.getItem('customLLMs');
@@ -95,18 +147,50 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
     setSelectedModels(selectedModels.filter(id => id !== modelId));
   };
 
+  const allModels = Object.values(modelCategories).flat();
+
+  const filteredModels = activeCategory === 'all' 
+    ? allModels 
+    : modelCategories[activeCategory] || [];
+
   return (
     <div className="overflow-hidden">
       <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Select Models</h3>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          Choose which AI models to compare side by side
+          Select models to be prompted
         </p>
       </div>
       
       <div className="p-5">
+        <div className="flex space-x-2 mb-4 overflow-x-auto pb-2 scrollbar-thin">
+          <button
+            onClick={() => setActiveCategory('all')}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+              activeCategory === 'all'
+                ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300'
+                : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+            }`}
+          >
+            All Models
+          </button>
+          {Object.keys(modelCategories).map(category => (
+            <button
+              key={category}
+              onClick={() => setActiveCategory(category)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium capitalize whitespace-nowrap transition-colors ${
+                activeCategory === category
+                  ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300'
+                  : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+              }`}
+            >
+              {category}
+            </button>
+          ))}
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {availableModels.map(model => (
+          {filteredModels.map(model => (
             <div 
               key={model.id}
               onClick={() => toggleModel(model.id)}
