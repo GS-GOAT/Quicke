@@ -205,30 +205,46 @@ export default function Home() {
           <div className="flex items-center space-x-3">
             <ThemeToggle />
             
-            <button 
-              ref={modelButtonRef}
-              onMouseEnter={handleModelButtonMouseEnter}
-              onClick={() => setShowModelSelector(!showModelSelector)}
-              className="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 text-sm font-medium transition-colors duration-200"
-            >
-              {showModelSelector ? 'Hide Models' : 'Select Models'}
-            </button>
+            <div className="relative">
+              <button 
+                ref={modelButtonRef}
+                onMouseEnter={handleModelButtonMouseEnter}
+                onClick={() => setShowModelSelector(!showModelSelector)}
+                className="px-4 py-2 rounded-lg bg-white hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 text-sm font-medium transition-all duration-200 border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md"
+              >
+                <div className="flex items-center space-x-2">
+                  <span>{selectedModels.length} Model{selectedModels.length !== 1 ? 's' : ''} Selected</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                  </svg>
+                </div>
+              </button>
+
+              {showModelSelector && (
+                <div
+                  ref={modelSelectorRef}
+                  onMouseLeave={handleModelSelectorMouseLeave}
+                  className="fixed top-16 left-1/2 -translate-x-1/2 w-[calc(100vw-2rem)] max-w-3xl rounded-xl bg-white dark:bg-darksurface shadow-xl ring-1 ring-black ring-opacity-5 z-50 backdrop-blur-sm backdrop-filter"
+                  style={{
+                    maxHeight: 'calc(100vh - 200px)',
+                    overflowY: 'auto'
+                  }}
+                >
+                  <div className="relative w-full">
+                    {/* Arrow indicator */}
+                    <div className="absolute right-12 -top-2 w-4 h-4 bg-white dark:bg-darksurface rotate-45 border-t border-l border-gray-200 dark:border-gray-700"></div>
+                    
+                    <ModelSelector 
+                      selectedModels={selectedModels} 
+                      setSelectedModels={setSelectedModels} 
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </header>
-      
-      {showModelSelector && (
-        <div
-          ref={modelSelectorRef}
-          onMouseLeave={handleModelSelectorMouseLeave}
-          className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-4"
-        >
-          <ModelSelector 
-            selectedModels={selectedModels} 
-            setSelectedModels={setSelectedModels} 
-          />
-        </div>
-      )}
       
       {error && (
         <div className="mx-auto w-full max-w-4xl p-4 my-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg border border-red-200 dark:border-red-800/30">
