@@ -60,106 +60,102 @@ export default function Home() {
   const handleSubmit = async () => {
     if (!prompt.trim() || loading) return;
     
-    setLoading(true);
-    setError(null);
-    
-    // Close existing EventSource if there is one
+    // Close any existing EventSource
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
     }
     
-    // Add prompt to history
-    const newEntry = {
-      id: Date.now(),
-      prompt,
-      responses: {}
-    };
+    setLoading(true);
     
-    // Initialize streaming state for each model
+    // Initialize responses for all selected models
+    const initialResponses = {};
     selectedModels.forEach(model => {
-      newEntry.responses[model] = { 
-        text: '', 
-        loading: true, 
-        model: getLabelForModel(model),
-        streaming: true
-      };
+      initialResponses[model] = { loading: true, text: '', error: null };
     });
     
-    // Add the new entry to history
-    setHistory(prev => [...prev, newEntry]);
+    // Add to history - append to end instead of prepending
+    const id = Date.now().toString();
+    setHistory(prev => [...prev, { id, prompt, responses: initialResponses }]);
     
-    try {
-      // Create and save EventSource reference
-      const eventSource = new EventSource(`/api/stream?prompt=${encodeURIComponent(prompt)}&models=${selectedModels.join(',')}`);
-      eventSourceRef.current = eventSource;
-      
-      eventSource.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        
-        if (data.done) {
-          eventSource.close();
-          
-          // Mark all models as no longer streaming
-          setHistory(prev => {
-            const updated = [...prev];
-            const latestEntry = updated[updated.length - 1];
-            
-            selectedModels.forEach(model => {
-              if (latestEntry.responses[model]) {
-                latestEntry.responses[model].streaming = false;
-                latestEntry.responses[model].loading = false;
-              }
-            });
-            
-            return updated;
-          });
-          
-          setLoading(false);
-          return;
-        }
-        
-        // Update the streaming response for the specific model
-        if (data.model && (data.text || data.error)) {
-          setHistory(prev => {
-            const updated = [...prev];
-            const latestEntry = updated[updated.length - 1];
-            
-            if (data.text) {
-              latestEntry.responses[data.model] = {
-                ...latestEntry.responses[data.model],
-                text: data.text,
-                streaming: true,
-                loading: false
-              };
-            } else if (data.error) {
-              latestEntry.responses[data.model] = {
-                ...latestEntry.responses[data.model],
-                error: data.error,
-                streaming: false,
-                loading: false
-              };
-            }
-            
-            return updated;
-          });
-        }
-      };
-      
-      eventSource.onerror = (error) => {
-        console.error('EventSource error:', error);
-        eventSource.close();
-        setError('Connection error. Please try again.');
-        setLoading(false);
-      };
-      
-    } catch (err) {
-      setError(err.message);
-      console.error('Error fetching responses:', err);
-      setLoading(false);
-    }
-    
-    // Clear prompt after sending
+    // Clear the prompt input
     setPrompt('');
+    
+    // Create the URL with the selected models
+    const modelsParam = selectedModels.join(',');
+    const apiUrl = `/api/stream?prompt=${encodeURIComponent(prompt)}&models=${encodeURIComponent(modelsParam)}`;
+    
+    // Create a new EventSource for streaming
+    const newEventSource = new EventSource(apiUrl);
+    eventSourceRef.current = newEventSource;
+    
+    // Track which models have started receiving data
+    const modelStarted = {};
+    
+    newEventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      
+      // Handle the final done event
+      if (data.done && !data.model) {
+        newEventSource.close();
+        eventSourceRef.current = null;
+        setLoading(false);
+        return;
+      }
+      
+      // Handle individual model updates
+      if (data.model) {
+        setHistory(prev => {
+          const updated = [...prev];
+          if (updated.length === 0) return updated;
+          
+          const latestEntry = updated[updated.length - 1]; // Last entry is now the latest (since we append)
+          if (!latestEntry.responses) latestEntry.responses = {};
+          
+          // Mark this model as having started receiving data
+          modelStarted[data.model] = true;
+          
+          // Create or update the model's response
+          latestEntry.responses[data.model] = {
+            ...(latestEntry.responses[data.model] || {}),
+            text: data.text || latestEntry.responses[data.model]?.text || '',
+            error: data.error || null,
+            loading: data.done ? false : true,
+          };
+          
+          return updated;
+        });
+      }
+    };
+    
+    newEventSource.onerror = (error) => {
+      console.error('EventSource error:', error);
+      
+      // Handle the case where a model might not have started streaming
+      setHistory(prev => {
+        const updated = [...prev];
+        if (updated.length === 0) return updated;
+        
+        const latestEntry = updated[updated.length - 1]; // Last entry is now the latest (since we append)
+        if (!latestEntry.responses) latestEntry.responses = {};
+        
+        // For any model that hasn't received data, mark as error
+        selectedModels.forEach(model => {
+          if (!modelStarted[model] && latestEntry.responses[model]?.loading) {
+            latestEntry.responses[model] = {
+              ...latestEntry.responses[model],
+              loading: false,
+              error: 'Failed to receive response from model'
+            };
+          }
+        });
+        
+        return updated;
+      });
+      
+      newEventSource.close();
+      eventSourceRef.current = null;
+      setLoading(false);
+    };
   };
 
   const handleClear = () => {
@@ -187,7 +183,7 @@ export default function Home() {
     <div className="flex flex-col h-screen bg-gray-50 dark:bg-darkbg transition-colors duration-200">
       <Head>
         <title>Quicke - LLM Response Comparison</title>
-        <meta name="description" content="Compare responses from multiple LLMs side by side" />
+        <meta name="description" content="Get responses from multiple LLMs side by side" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
@@ -305,9 +301,9 @@ export default function Home() {
                     {selectedModels.map(model => (
                       <ResponseColumn 
                         key={`${entry.id}-${model}`}
-                        model={getLabelForModel(model)}
-                        response={entry.responses[model]}
-                        streaming={entry.responses[model]?.streaming}
+                        model={model}
+                        response={entry.responses?.[model] || { loading: false, text: '', error: null }}
+                        streaming={entry.responses?.[model]?.streaming}
                       />
                     ))}
                   </div>

@@ -1,27 +1,55 @@
 import { useEffect, useRef, useState } from 'react';
 
+// Model display names mapping
+const modelDisplayNames = {
+  'gpt-4': 'GPT-4',
+  'claude': 'Claude 3 Sonnet',
+  'gemini': 'Gemini Pro',
+  'mistral-medium': 'Mistral Medium',
+  'mixtral': 'Mixtral 8x7B',
+  'llama2-70b': 'Llama-2 70B',
+  'solar': 'Solar 70B',
+  'phi2': 'Phi-2',
+  'qwen': 'Qwen 72B',
+  'openchat': 'OpenChat 3.5'
+};
+
 export default function ResponseColumn({ model, response, streaming }) {
   const contentRef = useRef(null);
   const [displayedText, setDisplayedText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const lastResponseRef = useRef('');
+  const processingTimeoutRef = useRef(null);
+
+  // Get the display name for the model
+  const modelDisplayName = modelDisplayNames[model] || model;
+
+  // Clear timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (processingTimeoutRef.current) {
+        clearTimeout(processingTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Reset displayed text when response changes completely
   useEffect(() => {
-    if (!response?.text) {
+    // If response is undefined or null, initialize with defaults
+    if (!response) {
       setDisplayedText('');
       lastResponseRef.current = '';
       return;
     }
 
     // If it's a completely new response, reset the display
-    if (!response.text.startsWith(lastResponseRef.current)) {
+    if (response.text !== undefined && !response.text.startsWith(lastResponseRef.current)) {
       setDisplayedText('');
       lastResponseRef.current = '';
     }
 
-    // Handle new text chunks
-    if (response.text !== lastResponseRef.current) {
+    // Process text only if it exists and has changed
+    if (response.text !== undefined && response.text !== lastResponseRef.current) {
       const newText = response.text.slice(lastResponseRef.current.length);
       typeText(newText);
       lastResponseRef.current = response.text;
@@ -37,7 +65,9 @@ export default function ResponseColumn({ model, response, streaming }) {
     for (let i = 0; i < words.length; i++) {
       if (!isTyping) break;
       
-      await new Promise(resolve => setTimeout(resolve, 30)); // Adjust speed here
+      await new Promise(resolve => {
+        processingTimeoutRef.current = setTimeout(resolve, 30);
+      });
       setDisplayedText(prev => prev + words[i]);
     }
     
@@ -46,17 +76,18 @@ export default function ResponseColumn({ model, response, streaming }) {
 
   // Auto-scroll to bottom
   useEffect(() => {
-    if (contentRef.current && streaming) {
+    if (contentRef.current && (streaming || isTyping)) {
       contentRef.current.scrollTop = contentRef.current.scrollHeight;
     }
-  }, [displayedText, streaming]);
+  }, [displayedText, streaming, isTyping]);
 
   const copyToClipboard = () => {
-    if (response?.text) {
-      navigator.clipboard.writeText(response.text);
+    const textToCopy = response?.text || displayedText;
+    if (textToCopy) {
+      navigator.clipboard.writeText(textToCopy);
       const notificationEl = document.createElement('div');
       notificationEl.className = 'fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg transition-opacity duration-300 z-50';
-      notificationEl.textContent = `Copied ${model}'s response`;
+      notificationEl.textContent = `Copied ${modelDisplayName}'s response`;
       document.body.appendChild(notificationEl);
       
       setTimeout(() => {
@@ -68,14 +99,26 @@ export default function ResponseColumn({ model, response, streaming }) {
     }
   };
 
+  // Determine the current state
+  const isLoading = response?.loading === true;
+  const hasError = response?.error != null;
+  const hasText = (displayedText && displayedText.length > 0) || 
+                  (response?.text && response.text.length > 0);
+  const waitingForPrompt = !isLoading && !hasError && !hasText;
+
   return (
     <div className="bg-white dark:bg-darksurface border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden flex flex-col h-full shadow-soft dark:shadow-soft-dark transition-all duration-200">
       <div className="px-4 py-3 flex justify-between items-center border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center space-x-2">
           <div className="w-2 h-2 rounded-full bg-primary-500"></div>
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white">{model}</h3>
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white">{modelDisplayName}</h3>
+          {isLoading && (
+            <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
+              Loading...
+            </span>
+          )}
         </div>
-        {response?.text && (
+        {hasText && (
           <button
             onClick={copyToClipboard}
             className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
@@ -92,16 +135,16 @@ export default function ResponseColumn({ model, response, streaming }) {
         className="p-4 overflow-auto flex-grow scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-700 scrollbar-track-transparent"
         style={{ minHeight: "200px", maxHeight: "600px" }}
       >
-        {response?.loading && !displayedText ? (
+        {isLoading && !hasText ? (
           <div className="flex justify-center items-center h-full">
             <div className="dot-typing"></div>
           </div>
-        ) : response?.error ? (
+        ) : hasError ? (
           <div className="text-red-500 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800/30">
             <p className="font-medium">Error encountered:</p>
             <p className="mt-1">{response.error}</p>
           </div>
-        ) : displayedText || response?.text ? (
+        ) : hasText ? (
           <div className="prose prose-sm dark:prose-invert max-w-none">
             <div className="whitespace-pre-wrap text-gray-800 dark:text-gray-200">
               {displayedText || response.text}
@@ -110,11 +153,11 @@ export default function ResponseColumn({ model, response, streaming }) {
               )}
             </div>
           </div>
-        ) : (
+        ) : waitingForPrompt ? (
           <div className="text-gray-400 dark:text-gray-500 italic flex items-center justify-center h-full">
             Waiting for prompt...
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
