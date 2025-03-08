@@ -3,72 +3,94 @@ import { Anthropic } from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { verifyRequest } from './auth/verifyRequest';
 
-// Initialize API clients
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
-
-// Initialize OpenRouter client
-const openRouter = new OpenAI({
-  baseURL: 'https://openrouter.ai/api/v1',
-  apiKey: process.env.OPENROUTER_API_KEY,
-  defaultQuery: {
-    transforms: ['middle']  // Ensures consistent response format
-  },
-  defaultHeaders: {
-    'HTTP-Referer': process.env.NEXT_PUBLIC_URL || 'http://localhost:3000',
-    'X-Title': 'Quicke - LLM Response Comparison'
-  }
-});
-
-// Map of OpenRouter model IDs and their display names
-const openRouterModels = {
-  'mistral-medium': {
-    id: 'mistralai/mistral-medium',
-    name: 'Mistral Medium'
-  },
-  'mixtral': {
-    id: 'mistralai/mixtral-8x7b',
-    name: 'Mixtral 8x7B'
-  },
-  'llama2-70b': {
-    id: 'meta-llama/llama-2-70b-chat',
-    name: 'Llama-2 70B'
-  },
-  'solar': {
-    id: 'upstage/solar-0-70b-16bit',
-    name: 'Solar 70B'
-  },
-  'phi2': {
-    id: 'microsoft/phi-2',
-    name: 'Phi-2'
-  },
-  'qwen': {
-    id: 'qwen/qwen1.5-72b',
-    name: 'Qwen 72B'
-  },
-  'openchat': {
-    id: 'openchat/openchat-3.5-0106',
-    name: 'OpenChat 3.5'
-  }
-};
-
 export default async function handler(req, res) {
+  // Only allow GET requests for SSE
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Basic request verification
   if (!verifyRequest(req)) {
     return res.status(403).json({ error: 'Unauthorized request' });
   }
 
-  const { prompt, models } = req.query;
+  const { prompt, models, apiKeys } = req.query;
   const modelArray = models ? models.split(',') : [];
+  
+  // Parse API keys if provided
+  let parsedApiKeys = {};
+  try {
+    if (apiKeys) {
+      parsedApiKeys = JSON.parse(decodeURIComponent(apiKeys));
+    }
+  } catch (error) {
+    console.error('Error parsing API keys:', error);
+  }
 
+  // Initialize API clients with provided keys or fallback to environment variables
+  const openai = new OpenAI({ 
+    apiKey: parsedApiKeys.openai || process.env.OPENAI_API_KEY 
+  });
+  
+  const anthropic = new Anthropic({ 
+    apiKey: parsedApiKeys.anthropic || process.env.ANTHROPIC_API_KEY 
+  });
+  
+  const genAI = new GoogleGenerativeAI(
+    parsedApiKeys.google || process.env.GOOGLE_API_KEY
+  );
+
+  // Initialize OpenRouter client
+  const openRouter = new OpenAI({
+    baseURL: 'https://openrouter.ai/api/v1',
+    apiKey: parsedApiKeys.openrouter || process.env.OPENROUTER_API_KEY,
+    defaultQuery: {
+      transforms: ['middle']  // Ensures consistent response format
+    },
+    defaultHeaders: {
+      'HTTP-Referer': process.env.NEXT_PUBLIC_URL || 'http://localhost:3000',
+      'X-Title': 'Quicke - LLM Response Comparison'
+    }
+  });
+
+  // Map of OpenRouter model IDs and their display names
+  const openRouterModels = {
+    'mistral-medium': {
+      id: 'mistralai/mistral-medium',
+      name: 'Mistral Medium'
+    },
+    'mixtral': {
+      id: 'mistralai/mixtral-8x7b',
+      name: 'Mixtral 8x7B'
+    },
+    'llama2-70b': {
+      id: 'meta-llama/llama-2-70b-chat',
+      name: 'Llama-2 70B'
+    },
+    'solar': {
+      id: 'upstage/solar-0-70b-16bit',
+      name: 'Solar 70B'
+    },
+    'phi2': {
+      id: 'microsoft/phi-2',
+      name: 'Phi-2'
+    },
+    'qwen': {
+      id: 'qwen/qwen1.5-72b',
+      name: 'Qwen 72B'
+    },
+    'openchat': {
+      id: 'openchat/openchat-3.5-0106',
+      name: 'OpenChat 3.5'
+    }
+  };
+
+  // Setup Server-Sent Events
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
+  // Helper function to send SSE
   const sendEvent = (data) => {
     res.write(`data: ${JSON.stringify(data)}\n\n`);
   };
@@ -78,21 +100,21 @@ export default async function handler(req, res) {
 
     // Handle standard API models
     if (modelArray.includes('gpt-4')) {
-      modelPromises.push(handleOpenAIStream('gpt-4', prompt, sendEvent));
+      modelPromises.push(handleOpenAIStream('gpt-4', prompt, sendEvent, openai));
     }
 
     if (modelArray.includes('claude')) {
-      modelPromises.push(handleClaudeStream(prompt, sendEvent));
+      modelPromises.push(handleClaudeStream(prompt, sendEvent, anthropic));
     }
 
     if (modelArray.includes('gemini')) {
-      modelPromises.push(handleGeminiStream(prompt, sendEvent));
+      modelPromises.push(handleGeminiStream(prompt, sendEvent, genAI));
     }
 
     // Handle OpenRouter models
     const openRouterPromises = modelArray
       .filter(modelId => openRouterModels[modelId])
-      .map(modelId => handleOpenRouterStream(modelId, prompt, sendEvent));
+      .map(modelId => handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, openRouterModels));
 
     modelPromises.push(...openRouterPromises);
 
@@ -106,7 +128,7 @@ export default async function handler(req, res) {
   }
 }
 
-async function handleOpenAIStream(model, prompt, sendEvent) {
+async function handleOpenAIStream(model, prompt, sendEvent, openai) {
   try {
     const stream = await openai.chat.completions.create({
       model,
@@ -128,7 +150,7 @@ async function handleOpenAIStream(model, prompt, sendEvent) {
   }
 }
 
-async function handleClaudeStream(prompt, sendEvent) {
+async function handleClaudeStream(prompt, sendEvent, anthropic) {
   try {
     const stream = await anthropic.messages.create({
       model: 'claude-3-sonnet-20240229',
@@ -151,7 +173,7 @@ async function handleClaudeStream(prompt, sendEvent) {
   }
 }
 
-async function handleGeminiStream(prompt, sendEvent) {
+async function handleGeminiStream(prompt, sendEvent, genAI) {
   try {
     // First send an explicit loading state
     sendEvent({ model: 'gemini', loading: true, text: '' });
@@ -250,8 +272,23 @@ async function handleGeminiStream(prompt, sendEvent) {
   }
 }
 
-async function handleOpenRouterStream(modelId, prompt, sendEvent) {
+async function handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, openRouterModels) {
   try {
+    // Send initial loading state
+    sendEvent({ model: modelId, loading: true, text: '' });
+    
+    // Check if model exists in openRouterModels
+    if (!openRouterModels[modelId]) {
+      console.error(`OpenRouter model ${modelId} not found in model definitions`);
+      sendEvent({ 
+        model: modelId, 
+        error: `Model definition not found for ${modelId}`,
+        loading: false,
+        done: true 
+      });
+      return;
+    }
+    
     const stream = await openRouter.chat.completions.create({
       model: openRouterModels[modelId].id,
       messages: [{ role: 'user', content: prompt }],
@@ -263,12 +300,29 @@ async function handleOpenRouterStream(modelId, prompt, sendEvent) {
     for await (const chunk of stream) {
       if (chunk.choices[0]?.delta?.content) {
         text += chunk.choices[0].delta.content;
-        sendEvent({ model: modelId, text });
+        sendEvent({ model: modelId, text, loading: true });
       }
     }
-    sendEvent({ model: modelId, text, done: true });
+    
+    // Send final response with done flag and loading set to false
+    sendEvent({ model: modelId, text, loading: false, done: true });
+    
+    // If we didn't get any text, send an error
+    if (!text.trim()) {
+      sendEvent({ 
+        model: modelId, 
+        error: 'No response received from model. Please check your API key or try again.',
+        loading: false,
+        done: true
+      });
+    }
   } catch (error) {
     console.error(`OpenRouter (${modelId}) streaming error:`, error);
-    sendEvent({ model: modelId, error: error.message });
+    sendEvent({ 
+      model: modelId, 
+      error: error.message || 'Error connecting to OpenRouter API',
+      loading: false,
+      done: true 
+    });
   }
 } 
