@@ -118,6 +118,49 @@ export default async function handler(req, res) {
 
     modelPromises.push(...openRouterPromises);
 
+    // Handle DeepSeek R1 through OpenRouter
+    if (modelArray.includes('deepseek-r1')) {
+      modelPromises.push((async () => {
+        try {
+          const stream = await openRouter.chat.completions.create({
+            model: 'deepseek/deepseek-r1',
+            messages: [{ role: 'user', content: prompt }],
+            stream: true,
+          });
+
+          let accumulatedText = '';
+          
+          for await (const chunk of stream) {
+            const content = chunk.choices[0]?.delta?.content || '';
+            accumulatedText += content;
+            
+            sendEvent({
+              model: 'deepseek-r1',
+              text: accumulatedText,
+              loading: true,
+              done: false
+            });
+          }
+
+          sendEvent({
+            model: 'deepseek-r1',
+            text: accumulatedText,
+            loading: false,
+            done: true
+          });
+
+        } catch (error) {
+          console.error('DeepSeek R1 Error:', error);
+          sendEvent({
+            model: 'deepseek-r1',
+            error: error.message || 'Failed to get response from DeepSeek R1',
+            loading: false,
+            done: true
+          });
+        }
+      })());
+    }
+
     await Promise.all(modelPromises);
     sendEvent({ done: true });
     res.end();

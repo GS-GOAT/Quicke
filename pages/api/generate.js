@@ -113,6 +113,31 @@ export default async function handler(req, res) {
         };
       }
     }
+    
+    if (models.includes('deepseek-r1')) {
+      requests.push(
+        fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'deepseek/deepseek-r1',
+            messages: [{ role: 'user', content: prompt }]
+          })
+        }).then(async (response) => {
+          const data = await response.json();
+          results['deepseek-r1'] = {
+            text: data.choices[0].message.content,
+            model: 'DeepSeek R1'
+          };
+        }).catch(error => {
+          console.error('DeepSeek API error:', error);
+          results['deepseek-r1'] = { error: error.message, model: 'DeepSeek R1' };
+        })
+      );
+    }
 
     // Wait for all requests to complete
     await Promise.all(requests);

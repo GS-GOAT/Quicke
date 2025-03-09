@@ -10,7 +10,7 @@ export default function Home() {
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState([]);
-  const [selectedModels, setSelectedModels] = useState(['gpt-4', 'claude', 'gemini']);
+  const [selectedModels, setSelectedModels] = useState(['gpt-4', 'claude', 'gemini', 'deepseek-r1']);
   const [error, setError] = useState(null);
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [showApiKeyManager, setShowApiKeyManager] = useState(false);
@@ -205,7 +205,8 @@ export default function Home() {
     const labels = {
       'gpt-4': 'GPT-4',
       'claude': 'Claude 3 Sonnet',
-      'gemini': 'Gemini Pro'
+      'gemini': 'Gemini Pro',
+      'deepseek-r1': 'DeepSeek R1'
     };
     return labels[modelId] || modelId;
   }

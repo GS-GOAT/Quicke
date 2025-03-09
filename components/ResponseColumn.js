@@ -14,7 +14,8 @@ const modelDisplayNames = {
   'solar': 'Solar 70B',
   'phi2': 'Phi-2',
   'qwen': 'Qwen 72B',
-  'openchat': 'OpenChat 3.5'
+  'openchat': 'OpenChat 3.5' ,
+  'deepseek-r1': 'DeepSeek R1'
 };
 
 export default function ResponseColumn({ model, response, streaming }) {

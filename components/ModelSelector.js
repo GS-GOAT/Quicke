@@ -28,6 +28,14 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         description: 'Google\'s most capable model',
         color: 'from-blue-400 to-blue-600',
         icon: '🌟'
+      },
+      { 
+        id: 'deepseek-r1',
+        name: 'DeepSeek R1',
+        provider: 'DeepSeek',
+        description: 'Advanced reasoning and knowledge model',
+        color: 'from-violet-400 to-violet-600',
+        icon: '🔮'
       }
     ],
     mistral: [
