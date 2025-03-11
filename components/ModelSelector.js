@@ -23,7 +23,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
       },
       { 
         id: 'gemini',
-        name: 'Gemini Pro',
+        name: 'Gemini 2.0 Flash',
         provider: 'Google',
         description: 'Google\'s most capable model',
         color: 'from-blue-400 to-blue-600',

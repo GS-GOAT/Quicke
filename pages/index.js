@@ -205,7 +205,7 @@ export default function Home() {
     const labels = {
       'gpt-4': 'GPT-4',
       'claude': 'Claude 3 Sonnet',
-      'gemini': 'Gemini Pro',
+      'gemini': 'Gemini 2.0 Flash',
       'deepseek-r1': 'DeepSeek R1'
     };
     return labels[modelId] || modelId;

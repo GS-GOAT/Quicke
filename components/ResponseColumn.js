@@ -7,7 +7,7 @@ import { atomDark } from 'react-syntax-highlighter/dist/cjs/styles/prism';
 const modelDisplayNames = {
   'gpt-4': 'GPT-4',
   'claude': 'Claude 3 Sonnet',
-  'gemini': 'Gemini Pro',
+  'gemini': 'Gemini 2.0 Flash',
   'mistral-medium': 'Mistral Medium',
   'mixtral': 'Mixtral 8x7B',
   'llama2-70b': 'Llama-2 70B',

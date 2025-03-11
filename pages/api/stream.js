@@ -2,6 +2,13 @@ import { OpenAI } from 'openai';
 import { Anthropic } from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { verifyRequest } from './auth/verifyRequest';
+import { ParallelRequestProcessor } from '../../utils/parallelProcessor';
+
+const streamProcessor = new ParallelRequestProcessor({
+  maxConcurrentRequests: 8,
+  retryCount: 1,
+  retryDelay: 500
+});
 
 export default async function handler(req, res) {
   // Only allow GET requests for SSE
@@ -82,6 +89,10 @@ export default async function handler(req, res) {
     'openchat': {
       id: 'openchat/openchat-3.5-0106',
       name: 'OpenChat 3.5'
+    },
+    'deepseek-r1': {  // Add DeepSeek to OpenRouter models
+      id: 'deepseek/deepseek-r1:free',
+      name: 'DeepSeek R1'
     }
   };
 
@@ -92,74 +103,43 @@ export default async function handler(req, res) {
 
   // Helper function to send SSE
   const sendEvent = (data) => {
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
+    try {
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    } catch (error) {
+      console.error('Error sending event:', error);
+    }
   };
 
   try {
-    const modelPromises = [];
+    const modelPromises = modelArray.map(async (modelId) => {
+      try {
+        // Initialize response
+        sendEvent({
+          model: modelId,
+          text: '',
+          loading: true
+        });
 
-    // Handle standard API models
-    if (modelArray.includes('gpt-4')) {
-      modelPromises.push(handleOpenAIStream('gpt-4', prompt, sendEvent, openai));
-    }
-
-    if (modelArray.includes('claude')) {
-      modelPromises.push(handleClaudeStream(prompt, sendEvent, anthropic));
-    }
-
-    if (modelArray.includes('gemini')) {
-      modelPromises.push(handleGeminiStream(prompt, sendEvent, genAI));
-    }
-
-    // Handle OpenRouter models
-    const openRouterPromises = modelArray
-      .filter(modelId => openRouterModels[modelId])
-      .map(modelId => handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, openRouterModels));
-
-    modelPromises.push(...openRouterPromises);
-
-    // Handle DeepSeek R1 through OpenRouter
-    if (modelArray.includes('deepseek-r1')) {
-      modelPromises.push((async () => {
-        try {
-          const stream = await openRouter.chat.completions.create({
-            model: 'deepseek/deepseek-r1',
-            messages: [{ role: 'user', content: prompt }],
-            stream: true,
-          });
-
-          let accumulatedText = '';
-          
-          for await (const chunk of stream) {
-            const content = chunk.choices[0]?.delta?.content || '';
-            accumulatedText += content;
-            
-            sendEvent({
-              model: 'deepseek-r1',
-              text: accumulatedText,
-              loading: true,
-              done: false
-            });
-          }
-
-          sendEvent({
-            model: 'deepseek-r1',
-            text: accumulatedText,
-            loading: false,
-            done: true
-          });
-
-        } catch (error) {
-          console.error('DeepSeek R1 Error:', error);
-          sendEvent({
-            model: 'deepseek-r1',
-            error: error.message || 'Failed to get response from DeepSeek R1',
-            loading: false,
-            done: true
-          });
+        // Handle model-specific streaming
+        if (modelId === 'gpt-4') {
+          await handleOpenAIStream(modelId, prompt, sendEvent, openai);
+        } else if (modelId === 'claude') {
+          await handleClaudeStream(prompt, sendEvent, anthropic);
+        } else if (modelId === 'gemini') {
+          await handleGeminiStream(prompt, sendEvent, genAI);
+        } else if (openRouterModels[modelId]) {  // Handle all OpenRouter models including DeepSeek
+          await handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, openRouterModels);
         }
-      })());
-    }
+      } catch (error) {
+        console.error(`Error with ${modelId}:`, error);
+        sendEvent({
+          model: modelId,
+          error: error.message,
+          loading: false,
+          done: true
+        });
+      }
+    });
 
     await Promise.all(modelPromises);
     sendEvent({ done: true });
@@ -221,7 +201,7 @@ async function handleGeminiStream(prompt, sendEvent, genAI) {
     // First send an explicit loading state
     sendEvent({ model: 'gemini', loading: true, text: '' });
     
-    const modelOptions = ['gemini-pro', 'gemini-1.0-pro', 'gemini-1.5-pro', 'gemini-1.5-flash'];
+    const modelOptions = ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.0-pro', 'gemini-1.5-flash'];
     let success = false;
 
     for (const modelName of modelOptions) {
@@ -368,4 +348,36 @@ async function handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, op
       done: true 
     });
   }
-} 
+}
+
+// Update the streaming function to use the streamProcessor
+async function streamModelResponse(model, prompt, apiKeys, streamTracker) {
+  try {
+    const modelRequest = async () => {
+      let accumulatedText = '';
+      
+      if (model.startsWith('gpt-')) {
+        const openai = new OpenAI({ apiKey: apiKeys.openai });
+        const stream = await openai.chat.completions.create({
+          model,
+          messages: [{ role: 'user', content: prompt }],
+          stream: true,
+        });
+
+        for await (const chunk of stream) {
+          if (chunk.choices[0]?.delta?.content) {
+            accumulatedText += chunk.choices[0].delta.content;
+            streamTracker.updateResponse(model, accumulatedText);
+          }
+        }
+      }
+      // Add handlers for other models here
+      
+      streamTracker.updateResponse(model, accumulatedText, true);
+    };
+
+    await streamProcessor.processRequests({ [model]: modelRequest });
+  } catch (error) {
+    streamTracker.handleError(model, error);
+  }
+}

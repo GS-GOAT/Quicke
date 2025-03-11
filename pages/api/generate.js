@@ -66,9 +66,8 @@ export default async function handler(req, res) {
         // Try different model name formats based on the API documentation
         // The format should be like 'gemini-1.0-pro' or similar
         const geminiModelOptions = [
-          'gemini-1.0-pro',    // Try newer format first
-          'gemini-pro',        // Original format
-          'gemini-1.5-pro',    // Another possible format
+          'gemini-2.0-flash',
+          'gemini-1.5-pro',    
           'gemini-1.5-flash'   // Try flash model as fallback
         ];
         

@@ -69,10 +69,10 @@ app.post('/api/generate', async (req, res) => {
         geminiModel.generateContent(prompt).then(response => {
           results['gemini'] = {
             text: response.response.text(),
-            model: 'Gemini Pro'
+            model: 'Gemini 2.0 Flash'
           };
         }).catch(error => {
-          results['gemini'] = { error: error.message, model: 'Gemini Pro' };
+          results['gemini'] = { error: error.message, model: 'Gemini 2.0 Flash' };
         })
       );
     }
