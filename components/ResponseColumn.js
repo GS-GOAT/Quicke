@@ -8,12 +8,10 @@ const modelDisplayNames = {
   'gpt-4': 'GPT-4',
   'claude': 'Claude 3 Sonnet',
   'gemini': 'Gemini 2.0 Flash',
-  'mistral-medium': 'Mistral Medium',
-  'mixtral': 'Mixtral 8x7B',
+  'mistral-7b': 'Mistral Medium',
   'llama2-70b': 'Llama-2 70B',
-  'solar': 'Solar 70B',
-  'phi2': 'Phi-2',
-  'qwen': 'Qwen 72B',
+  'phi2': 'Phi-3',
+  'qwen-32b': 'Qwen QwQ 32B',
   'openchat': 'OpenChat 3.5' ,
   'deepseek-r1': 'DeepSeek R1'
 };

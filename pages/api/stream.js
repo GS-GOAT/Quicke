@@ -62,29 +62,21 @@ export default async function handler(req, res) {
 
   // Map of OpenRouter model IDs and their display names
   const openRouterModels = {
-    'mistral-medium': {
-      id: 'mistralai/mistral-medium',
-      name: 'Mistral Medium'
-    },
-    'mixtral': {
-      id: 'mistralai/mixtral-8x7b',
-      name: 'Mixtral 8x7B'
+    'mistral-7b': {
+      id: 'mistralai/mistral-7b-instruct:free',
+      name: 'Mistral 7B Instruct'
     },
     'llama2-70b': {
-      id: 'meta-llama/llama-2-70b-chat',
+      id: 'meta-llama/llama-3.3-70b-instruct:free',
       name: 'Llama-2 70B'
     },
-    'solar': {
-      id: 'upstage/solar-0-70b-16bit',
-      name: 'Solar 70B'
+    'phi3': {
+      id: 'microsoft/phi-3-medium-128k-instruct:free',
+      name: 'Phi-3'
     },
-    'phi2': {
-      id: 'microsoft/phi-2',
-      name: 'Phi-2'
-    },
-    'qwen': {
-      id: 'qwen/qwen1.5-72b',
-      name: 'Qwen 72B'
+    'qwen-32b': {
+      id: 'qwen/qwq-32b:free',
+      name: 'Qwen QwQ 32B'
     },
     'openchat': {
       id: 'openchat/openchat-3.5-0106',
@@ -127,7 +119,7 @@ export default async function handler(req, res) {
           await handleClaudeStream(prompt, sendEvent, anthropic);
         } else if (modelId === 'gemini') {
           await handleGeminiStream(prompt, sendEvent, genAI);
-        } else if (openRouterModels[modelId]) {  // Handle all OpenRouter models including DeepSeek
+        } else if (openRouterModels[modelId]) {
           await handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, openRouterModels);
         }
       } catch (error) {

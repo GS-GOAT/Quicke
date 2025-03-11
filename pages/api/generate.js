@@ -67,8 +67,6 @@ export default async function handler(req, res) {
         // The format should be like 'gemini-1.0-pro' or similar
         const geminiModelOptions = [
           'gemini-2.0-flash',
-          'gemini-1.5-pro',    
-          'gemini-1.5-flash'   // Try flash model as fallback
         ];
         
         let geminiError = null;
@@ -113,29 +111,39 @@ export default async function handler(req, res) {
       }
     }
     
-    if (models.includes('deepseek-r1')) {
-      requests.push(
-        fetch('https://openrouter.ai/api/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            model: 'deepseek/deepseek-r1',
-            messages: [{ role: 'user', content: prompt }]
+    // Handle all OpenRouter models including DeepSeek
+    const openRouterModels = Object.keys(models).filter(modelId => 
+      openRouterModels[modelId] && models.includes(modelId)
+    );
+
+    if (openRouterModels.length > 0) {
+      openRouterModels.forEach(modelId => {
+        requests.push(
+          fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              model: openRouterModels[modelId].id,
+              messages: [{ role: 'user', content: prompt }]
+            })
+          }).then(async (response) => {
+            const data = await response.json();
+            results[modelId] = {
+              text: data.choices[0].message.content,
+              model: openRouterModels[modelId].name
+            };
+          }).catch(error => {
+            console.error(`OpenRouter (${modelId}) API error:`, error);
+            results[modelId] = { 
+              error: error.message, 
+              model: openRouterModels[modelId].name 
+            };
           })
-        }).then(async (response) => {
-          const data = await response.json();
-          results['deepseek-r1'] = {
-            text: data.choices[0].message.content,
-            model: 'DeepSeek R1'
-          };
-        }).catch(error => {
-          console.error('DeepSeek API error:', error);
-          results['deepseek-r1'] = { error: error.message, model: 'DeepSeek R1' };
-        })
-      );
+        );
+      });
     }
 
     // Wait for all requests to complete
@@ -145,4 +153,4 @@ export default async function handler(req, res) {
     console.error('Error processing requests:', error);
     res.status(500).json({ error: 'Failed to process requests' });
   }
-} 
+}

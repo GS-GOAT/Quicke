@@ -10,6 +10,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         name: 'GPT-4',
         provider: 'OpenAI',
         description: 'Most capable GPT-4 model for complex tasks',
+        context:0,
         color: 'from-emerald-400 to-emerald-600',
         icon: '🤖'
       },
@@ -18,6 +19,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         name: 'Claude 3 Sonnet',
         provider: 'Anthropic',
         description: 'Latest Claude model with strong reasoning capabilities',
+        context:0,
         color: 'from-orange-400 to-orange-600',
         icon: '🧠'
       },
@@ -26,6 +28,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         name: 'Gemini 2.0 Flash',
         provider: 'Google',
         description: 'Google\'s most capable model',
+        context:0,
         color: 'from-blue-400 to-blue-600',
         icon: '🌟'
       },
@@ -34,27 +37,31 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         name: 'DeepSeek R1',
         provider: 'DeepSeek',
         description: 'Advanced reasoning and knowledge model',
+        context:'164K',
         color: 'from-violet-400 to-violet-600',
         icon: '🔮'
       }
     ],
     mistral: [
       {
-        id: 'mistral-medium',
-        name: 'Mistral Medium',
+        id: 'mistral-7b',
+        name: 'Mistral 7B Instruct',
         provider: 'Mistral AI',
-        description: 'Balanced performance and efficiency',
+        description: 'A high-performing model with optimizations for speed and context length.',
         color: 'from-purple-400 to-purple-600',
         icon: '🌪️'
       },
+    ],
+    qwen: [
       {
-        id: 'mixtral',
-        name: 'Mixtral 8x7B',
-        provider: 'Mistral AI',
-        description: 'Powerful mixture-of-experts model',
-        color: 'from-indigo-400 to-indigo-600',
-        icon: '🎭'
-      }
+        id: 'qwen-32b',
+        name: 'Qwen QwQ 32B',
+        provider: 'Alibaba',
+        description: 'Large multilingual model',
+        context:'131K',
+        color: 'from-red-400 to-red-600',
+        icon: '🌏'
+      },
     ],
     meta: [
       {
@@ -62,40 +69,27 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         name: 'Llama-2 70B',
         provider: 'Meta',
         description: 'Meta\'s largest open model',
+        context:'128K',
         color: 'from-blue-500 to-blue-700',
         icon: '🦙'
       }
     ],
     other: [
       {
-        id: 'solar',
-        name: 'Solar 70B',
-        provider: 'Upstage',
-        description: 'High-performance open model',
-        color: 'from-yellow-400 to-yellow-600',
-        icon: '☀️'
-      },
-      {
-        id: 'phi2',
-        name: 'Phi-2',
+        id: 'phi3',
+        name: 'Phi-3',
         provider: 'Microsoft',
         description: 'Compact but capable model',
+        context:'8K',
         color: 'from-cyan-400 to-cyan-600',
         icon: 'φ'
-      },
-      {
-        id: 'qwen',
-        name: 'Qwen 72B',
-        provider: 'Alibaba',
-        description: 'Large multilingual model',
-        color: 'from-red-400 to-red-600',
-        icon: '🌏'
       },
       {
         id: 'openchat',
         name: 'OpenChat 3.5',
         provider: 'OpenChat',
         description: 'Open-source chat model',
+        context:'8K',
         color: 'from-green-400 to-green-600',
         icon: '💬'
       }
