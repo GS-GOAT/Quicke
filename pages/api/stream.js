@@ -234,14 +234,25 @@ async function handleGeminiStream(prompt, sendEvent, genAI) {
             if (chunkText !== undefined) {
               text += chunkText;
               // Send the updated text with each chunk
-              sendEvent({ model: 'gemini', text, loading: true });
+              sendEvent({ 
+                model: 'gemini', 
+                text, 
+                loading: false,
+                streaming: true 
+              });
             }
           }
           
-          // Final update with done flag
+          // Final update with streaming and done flags
           if (text.length > 0) {
             console.log(`Gemini model ${modelName} succeeded with ${text.length} characters`);
-            sendEvent({ model: 'gemini', text, loading: false, done: true });
+            sendEvent({ 
+              model: 'gemini', 
+              text, 
+              loading: false,
+              streaming: false,  // Explicitly set streaming to false
+              done: true 
+            });
             success = true;
             break;
           } else {
@@ -258,7 +269,13 @@ async function handleGeminiStream(prompt, sendEvent, genAI) {
             
             if (text && text.length > 0) {
               // For non-streaming, send one update
-              sendEvent({ model: 'gemini', text, loading: false, done: true });
+              sendEvent({ 
+                model: 'gemini', 
+                text, 
+                loading: false, 
+                streaming: false, 
+                done: true 
+              });
               console.log(`Gemini model ${modelName} succeeded with non-streaming API`);
               success = true;
               break;

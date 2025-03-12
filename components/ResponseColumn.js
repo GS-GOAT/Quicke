@@ -10,7 +10,7 @@ const modelDisplayNames = {
   'gemini': 'Gemini 2.0 Flash',
   'mistral-7b': 'Mistral Medium',
   'llama2-70b': 'Llama-2 70B',
-  'phi2': 'Phi-3',
+  'phi3': 'Phi-3',
   'qwen-32b': 'Qwen QwQ 32B',
   'openchat': 'OpenChat 3.5' ,
   'deepseek-r1': 'DeepSeek R1'
