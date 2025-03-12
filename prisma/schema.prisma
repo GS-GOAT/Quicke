@@ -12,8 +12,8 @@ model User {
   name          String?
   email         String       @unique
   password      String?
-  apiKeys       ApiKey[]
-  conversations Conversation[]
+  apiKeys       ApiKey[]       @relation(name: "UserApiKeys", fields: [], references: [])
+  conversations Conversation[] @relation(name: "UserConversations", fields: [], references: [])
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 }
@@ -23,14 +23,14 @@ model ApiKey {
   provider     String
   encryptedKey String
   userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade, name: "UserApiKeys") 
   createdAt    DateTime @default(now())
 }
 
 model Conversation {
   id        String    @id @default(cuid())
   userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade, name: "UserConversations")
   messages  Message[]
   createdAt DateTime  @default(now())
 }

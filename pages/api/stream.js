@@ -1,7 +1,8 @@
 import { OpenAI } from 'openai';
 import { Anthropic } from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { verifyRequest } from './auth/verifyRequest';
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "./auth/[...nextauth]";
 import { ParallelRequestProcessor } from '../../utils/parallelProcessor';
 
 const streamProcessor = new ParallelRequestProcessor({
@@ -23,9 +24,8 @@ export default async function handler(req, res) {
   });
 
   // Basic request verification
-  if (!verifyRequest(req)) {
-    return res.status(403).json({ error: 'Unauthorized request' });
-  }
+  const session = await getServerSession(req, res, authOptions);
+  if (!session) return res.status(401).json({ error: "Unauthorized" });
 
   const { prompt, models, apiKeys } = req.query;
   const modelArray = models ? models.split(',') : [];

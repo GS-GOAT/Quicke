@@ -1,5 +1,6 @@
 import '../styles/globals.css';
 import Head from 'next/head';
+import Script from 'next/script';
 import { SessionProvider } from 'next-auth/react';
 
 function MyApp({ Component, pageProps }) {
@@ -12,25 +13,20 @@ function MyApp({ Component, pageProps }) {
         <title>Quicke - LLM Response Comparison</title>
         
         {/* Script to check dark mode preference before page renders to prevent flash */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function() {
-                // Check for saved theme preference or default to system preference
-                const isDark = localStorage.getItem('darkMode') === 'true' || 
-                  (localStorage.getItem('darkMode') === null && 
-                  window.matchMedia('(prefers-color-scheme: dark)').matches);
-                
-                // Apply dark mode class immediately if needed
-                if (isDark) {
-                  document.documentElement.classList.add('dark');
-                } else {
-                  document.documentElement.classList.remove('dark');
-                }
-              })();
-            `,
-          }}
-        />
+        <Script id="dark-mode-check" strategy="beforeInteractive">
+          {`
+            (function() {
+              const isDark = localStorage.getItem('darkMode') === 'true' || 
+                (localStorage.getItem('darkMode') === null && 
+                window.matchMedia('(prefers-color-scheme: dark)').matches);
+              if (isDark) {
+                document.documentElement.classList.add('dark');
+              } else {
+                document.documentElement.classList.remove('dark');
+              }
+            })();
+          `}
+        </Script>
       </Head>
       <Component {...pageProps} />
     </SessionProvider>

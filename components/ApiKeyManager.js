@@ -12,35 +12,41 @@ export default function ApiKeyManager({ isOpen, onClose }) {
   const [keyVisible, setKeyVisible] = useState({});
   const [saveStatus, setSaveStatus] = useState('');
 
-  // Load API keys from localStorage on component mount
+  // fetch api keys from DB
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    async function fetchApiKeys() {
       try {
-        const storedKeys = localStorage.getItem('quicke_api_keys');
-        if (storedKeys) {
-          const decryptedKeys = JSON.parse(decrypt(storedKeys));
-          setApiKeys(decryptedKeys);
-        }
+        const res = await fetch('/api/user/api-keys');
+        const data = await res.json();
+        const keysObject = {};
+        data.forEach(({ provider, encryptedKey }) => {
+          keysObject[provider] = { key: encryptedKey };
+        });
+        setApiKeys(prev => ({ ...prev, ...keysObject }));
       } catch (error) {
-        console.error('Error loading API keys:', error);
+        console.error('Error fetching API keys:', error);
       }
     }
+    fetchApiKeys();
   }, []);
-
-  // Save API keys to localStorage
-  const saveApiKeys = () => {
+  
+  // Save API keys to DB
+  const saveApiKeys = async () => {
     try {
-      const encryptedKeys = encrypt(JSON.stringify(apiKeys));
-      localStorage.setItem('quicke_api_keys', encryptedKeys);
+      await Promise.all(Object.entries(apiKeys).map(([provider, { key }]) =>
+        fetch('/api/user/api-keys', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider, key }),
+        })
+      ));
       setSaveStatus('API keys saved successfully!');
-      
-      // Clear success message after 3 seconds
       setTimeout(() => setSaveStatus(''), 3000);
     } catch (error) {
       console.error('Error saving API keys:', error);
       setSaveStatus('Error saving API keys.');
     }
-  };
+  };  
 
   const handleKeyChange = (provider, value) => {
     setApiKeys({
