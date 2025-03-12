@@ -20,12 +20,20 @@ export default function Home() {
   const modelSelectorRef = useRef(null);
   const [responses, setResponses] = useState({});
 
-  // Auto-scroll when new messages are added
+  // Modify auto-scroll to only trigger on new prompt addition
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (messagesEndRef.current && history.length > 0) {
+      const lastEntry = history[history.length - 1];
+      // Only scroll if this is a new prompt (all responses are in initial state)
+      const isNewPrompt = Object.values(lastEntry.responses).every(r => 
+        r.loading === true && r.text === ''
+      );
+      
+      if (isNewPrompt) {
+        messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      }
     }
-  }, [history]);
+  }, [history.length]); // Only trigger on history length change
 
   // Clean up EventSource on unmount
   useEffect(() => {

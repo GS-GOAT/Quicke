@@ -52,10 +52,16 @@ export default function ResponseColumn({ model, response, streaming }) {
     }
   }, [response?.text]);
 
-  // Auto-scroll to bottom during streaming
+  // Remove or modify the auto-scroll during streaming
   useEffect(() => {
     if (contentRef.current && streaming) {
-      contentRef.current.scrollTop = contentRef.current.scrollHeight;
+      // Only auto-scroll the response container if user has scrolled to bottom
+      const container = contentRef.current;
+      const isAtBottom = container.scrollHeight - container.scrollTop === container.clientHeight;
+      
+      if (isAtBottom) {
+        container.scrollTop = container.scrollHeight;
+      }
     }
   }, [displayedText, streaming]);
 
