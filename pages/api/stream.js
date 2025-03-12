@@ -85,7 +85,7 @@ export default async function handler(req, res) {
       name: 'Qwen QwQ 32B'
     },
     'openchat': {
-      id: 'openchat/openchat-3.5-0106',
+      id: 'openchat/openchat-7b:free',
       name: 'OpenChat 3.5'
     },
     'deepseek-r1': {  // Add DeepSeek to OpenRouter models
