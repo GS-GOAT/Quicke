@@ -11,10 +11,16 @@ const streamProcessor = new ParallelRequestProcessor({
 });
 
 export default async function handler(req, res) {
-  // Only allow GET requests for SSE
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
+
+  // Set headers for proper SSE
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    'Connection': 'keep-alive',
+  });
 
   // Basic request verification
   if (!verifyRequest(req)) {
@@ -88,31 +94,28 @@ export default async function handler(req, res) {
     }
   };
 
-  // Setup Server-Sent Events
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-
-  // Helper function to send SSE
+  // Helper function to send SSE with immediate flush
   const sendEvent = (data) => {
     try {
       res.write(`data: ${JSON.stringify(data)}\n\n`);
+      if (res.flush) res.flush();
     } catch (error) {
       console.error('Error sending event:', error);
     }
   };
 
   try {
+    // Process each model stream independently
     const modelPromises = modelArray.map(async (modelId) => {
       try {
-        // Initialize response
+        // Initial state
         sendEvent({
           model: modelId,
           text: '',
-          loading: true
+          loading: true,
+          streaming: true
         });
 
-        // Handle model-specific streaming
         if (modelId === 'gpt-4') {
           await handleOpenAIStream(modelId, prompt, sendEvent, openai);
         } else if (modelId === 'claude') {
@@ -128,12 +131,16 @@ export default async function handler(req, res) {
           model: modelId,
           error: error.message,
           loading: false,
+          streaming: false,
           done: true
         });
       }
     });
 
+    // Process all streams concurrently
     await Promise.all(modelPromises);
+    
+    // Signal completion
     sendEvent({ done: true });
     res.end();
   } catch (error) {
@@ -288,55 +295,59 @@ async function handleGeminiStream(prompt, sendEvent, genAI) {
 }
 
 async function handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, openRouterModels) {
+  const startTime = Date.now();
   try {
-    // Send initial loading state
     sendEvent({ model: modelId, loading: true, text: '' });
     
-    // Check if model exists in openRouterModels
+    // Validate model and log start
     if (!openRouterModels[modelId]) {
-      console.error(`OpenRouter model ${modelId} not found in model definitions`);
-      sendEvent({ 
-        model: modelId, 
-        error: `Model definition not found for ${modelId}`,
-        loading: false,
-        done: true 
-      });
-      return;
+      throw new Error(`Model ${modelId} not found in OpenRouter models`);
     }
+    
+    console.log(`[OpenRouter] Starting stream for ${modelId}`);
     
     const stream = await openRouter.chat.completions.create({
       model: openRouterModels[modelId].id,
       messages: [{ role: 'user', content: prompt }],
       stream: true,
-      temperature: 0.7,
+      temperature: 0.7
     });
 
     let text = '';
+    let tokenCount = 0;
+    
     for await (const chunk of stream) {
       if (chunk.choices[0]?.delta?.content) {
         text += chunk.choices[0].delta.content;
-        sendEvent({ model: modelId, text, loading: true });
+        tokenCount++;
+        // Send immediate update for this chunk
+        sendEvent({ 
+          model: modelId, 
+          text, 
+          loading: false,
+          streaming: true
+        });
       }
     }
     
-    // Send final response with done flag and loading set to false
-    sendEvent({ model: modelId, text, loading: false, done: true });
+    // Log completion and send final state
+    const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+    console.log(`[OpenRouter] ${modelId} completed in ${duration}s`);
     
-    // If we didn't get any text, send an error
-    if (!text.trim()) {
-      sendEvent({ 
-        model: modelId, 
-        error: 'No response received from model. Please check your API key or try again.',
-        loading: false,
-        done: true
-      });
-    }
-  } catch (error) {
-    console.error(`OpenRouter (${modelId}) streaming error:`, error);
     sendEvent({ 
       model: modelId, 
-      error: error.message || 'Error connecting to OpenRouter API',
+      text, 
+      loading: false, 
+      streaming: false,
+      done: true 
+    });
+  } catch (error) {
+    console.error(`[OpenRouter] ${modelId} error:`, error);
+    sendEvent({ 
+      model: modelId, 
+      error: error.message,
       loading: false,
+      streaming: false,
       done: true 
     });
   }

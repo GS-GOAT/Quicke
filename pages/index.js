@@ -18,6 +18,7 @@ export default function Home() {
   const eventSourceRef = useRef(null);
   const modelButtonRef = useRef(null);
   const modelSelectorRef = useRef(null);
+  const [responses, setResponses] = useState({});
 
   // Auto-scroll when new messages are added
   useEffect(() => {
@@ -74,118 +75,99 @@ export default function Home() {
     
     setLoading(true);
     
-    // Initialize responses for all selected models
+    // Initialize response objects for each selected model
     const initialResponses = {};
     selectedModels.forEach(model => {
-      initialResponses[model] = { loading: true, text: '', error: null };
+      initialResponses[model] = {
+        text: '',
+        loading: true,
+        error: null,
+        streaming: true
+      };
     });
     
-    // Add to history - append to end instead of prepending
+    setResponses(initialResponses);
+    
+    // Add to history immediately with initial state
     const id = Date.now().toString();
     setHistory(prev => [...prev, { id, prompt, responses: initialResponses }]);
-    
-    // Clear the prompt input
     setPrompt('');
-    
-    // Get API keys from localStorage if available
+
+    // Get API keys from localStorage
     let apiKeysParam = '';
     try {
-      if (typeof window !== 'undefined') {
-        const storedKeys = localStorage.getItem('quicke_api_keys');
-        if (storedKeys) {
-          const { decrypt } = await import('../utils/encryption');
-          const decryptedKeys = JSON.parse(decrypt(storedKeys));
-          
-          // Extract just the keys (not usage data)
-          const keyObjects = {
-            openai: decryptedKeys.openai?.key || '',
-            anthropic: decryptedKeys.anthropic?.key || '',
-            google: decryptedKeys.google?.key || '',
-            openrouter: decryptedKeys.openrouter?.key || ''
-          };
-          
-          apiKeysParam = `&apiKeys=${encodeURIComponent(JSON.stringify(keyObjects))}`;
-        }
+      const storedKeys = localStorage.getItem('quicke_api_keys');
+      if (storedKeys) {
+        const decryptedKeys = JSON.parse(decrypt(storedKeys));
+        apiKeysParam = `&apiKeys=${encodeURIComponent(JSON.stringify(decryptedKeys))}`;
       }
     } catch (error) {
-      console.error('Error retrieving API keys:', error);
+      console.error('Error getting API keys:', error);
     }
-    
-    // Create the URL with the selected models and API keys
-    const modelsParam = selectedModels.join(',');
-    const apiUrl = `/api/stream?prompt=${encodeURIComponent(prompt)}&models=${encodeURIComponent(modelsParam)}${apiKeysParam}`;
-    
-    // Create a new EventSource for streaming
-    const newEventSource = new EventSource(apiUrl);
+
+    // Create event source for streaming
+    const newEventSource = new EventSource(`/api/stream?prompt=${encodeURIComponent(prompt)}&models=${encodeURIComponent(selectedModels.join(','))}${apiKeysParam}`);
     eventSourceRef.current = newEventSource;
-    
-    // Track which models have started receiving data
-    const modelStarted = {};
-    
+
+    // Handle incoming stream data
     newEventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
       
-      // Handle the final done event
+      if (data.model) {
+        // Update both responses and history immediately
+        const update = {
+          text: data.text || '',
+          error: data.error || null,
+          loading: data.loading !== false,
+          streaming: data.streaming !== false
+        };
+        
+        setResponses(prev => ({
+          ...prev,
+          [data.model]: update
+        }));
+        
+        setHistory(prev => {
+          const updated = [...prev];
+          const latestEntry = updated[updated.length - 1];
+          if (latestEntry) {
+            latestEntry.responses[data.model] = update;
+          }
+          return updated;
+        });
+      }
+      
+      // Handle completion
       if (data.done && !data.model) {
         newEventSource.close();
         eventSourceRef.current = null;
         setLoading(false);
-        return;
-      }
-      
-      // Handle individual model updates
-      if (data.model) {
-        setHistory(prev => {
-          const updated = [...prev];
-          if (updated.length === 0) return updated;
-          
-          const latestEntry = updated[updated.length - 1]; // Last entry is now the latest (since we append)
-          if (!latestEntry.responses) latestEntry.responses = {};
-          
-          // Mark this model as having started receiving data
-          modelStarted[data.model] = true;
-          
-          // Create or update the model's response
-          latestEntry.responses[data.model] = {
-            ...(latestEntry.responses[data.model] || {}),
-            text: data.text || latestEntry.responses[data.model]?.text || '',
-            error: data.error || null,
-            loading: data.done ? false : true,
-          };
-          
-          return updated;
-        });
+        
+        // Check if all models have completed
+        const allComplete = selectedModels.every(model => 
+          !responses[model]?.loading && !responses[model]?.streaming
+        );
+        
+        if (allComplete) {
+          // Update final state in history
+          setHistory(prev => {
+            const updated = [...prev];
+            const latestEntry = updated[updated.length - 1];
+            if (latestEntry) {
+              latestEntry.responses = {...responses};
+            }
+            return updated;
+          });
+        }
       }
     };
-    
+
+    // Handle errors
     newEventSource.onerror = (error) => {
       console.error('EventSource error:', error);
-      
-      // Handle the case where a model might not have started streaming
-      setHistory(prev => {
-        const updated = [...prev];
-        if (updated.length === 0) return updated;
-        
-        const latestEntry = updated[updated.length - 1]; // Last entry is now the latest (since we append)
-        if (!latestEntry.responses) latestEntry.responses = {};
-        
-        // For any model that hasn't received data, mark as error
-        selectedModels.forEach(model => {
-          if (!modelStarted[model] && latestEntry.responses[model]?.loading) {
-            latestEntry.responses[model] = {
-              ...latestEntry.responses[model],
-              loading: false,
-              error: 'Failed to receive response from model'
-            };
-          }
-        });
-        
-        return updated;
-      });
-      
+      setLoading(false);
       newEventSource.close();
       eventSourceRef.current = null;
-      setLoading(false);
     };
   };
 
@@ -351,8 +333,8 @@ export default function Home() {
                       <ResponseColumn 
                         key={`${entry.id}-${model}`}
                         model={model}
-                        response={entry.responses?.[model] || { loading: false, text: '', error: null }}
-                        streaming={entry.responses?.[model]?.streaming}
+                        response={responses[model] || entry.responses?.[model] || { loading: false, text: '', error: null }}
+                        streaming={responses[model]?.streaming || entry.responses?.[model]?.streaming}
                       />
                     ))}
                   </div>
@@ -377,4 +359,4 @@ export default function Home() {
       </footer>
     </div>
   );
-} 
+}

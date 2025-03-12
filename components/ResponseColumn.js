@@ -19,10 +19,9 @@ const modelDisplayNames = {
 export default function ResponseColumn({ model, response, streaming }) {
   const contentRef = useRef(null);
   const [displayedText, setDisplayedText] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(null);  // Add this state for code copy functionality
   const lastResponseRef = useRef('');
   const processingTimeoutRef = useRef(null);
-  const [copiedCode, setCopiedCode] = useState(null);
 
   // Get the display name for the model
   const modelDisplayName = modelDisplayNames[model] || model;
@@ -36,53 +35,29 @@ export default function ResponseColumn({ model, response, streaming }) {
     };
   }, []);
 
-  // Reset displayed text when response changes completely
+  // Handle streaming updates
   useEffect(() => {
-    // If response is undefined or null, initialize with defaults
     if (!response) {
       setDisplayedText('');
       lastResponseRef.current = '';
       return;
     }
 
-    // If it's a completely new response, reset the display
-    if (response.text !== undefined && !response.text.startsWith(lastResponseRef.current)) {
-      setDisplayedText('');
-      lastResponseRef.current = '';
-    }
-
-    // Process text only if it exists and has changed
-    if (response.text !== undefined && response.text !== lastResponseRef.current) {
+    if (response.text && response.text !== lastResponseRef.current) {
       const newText = response.text.slice(lastResponseRef.current.length);
-      typeText(newText);
-      lastResponseRef.current = response.text;
+      if (newText) {
+        setDisplayedText(prev => prev + newText);
+        lastResponseRef.current = response.text;
+      }
     }
   }, [response?.text]);
 
-  const typeText = async (text) => {
-    if (!text) return;
-    
-    setIsTyping(true);
-    const words = text.split(/(\s+)/).filter(word => word.length > 0);
-    
-    for (let i = 0; i < words.length; i++) {
-      if (!isTyping) break;
-      
-      await new Promise(resolve => {
-        processingTimeoutRef.current = setTimeout(resolve, 30);
-      });
-      setDisplayedText(prev => prev + words[i]);
-    }
-    
-    setIsTyping(false);
-  };
-
-  // Auto-scroll to bottom
+  // Auto-scroll to bottom during streaming
   useEffect(() => {
-    if (contentRef.current && (streaming || isTyping)) {
+    if (contentRef.current && streaming) {
       contentRef.current.scrollTop = contentRef.current.scrollHeight;
     }
-  }, [displayedText, streaming, isTyping]);
+  }, [displayedText, streaming]);
 
   const copyToClipboard = () => {
     const textToCopy = response?.text || displayedText;
@@ -216,7 +191,7 @@ export default function ResponseColumn({ model, response, streaming }) {
             >
               {displayedText || response.text}
             </ReactMarkdown>
-            {(streaming || isTyping) && (
+            {streaming && (
               <span className="typing-cursor">|</span>
             )}
           </div>
@@ -228,4 +203,4 @@ export default function ResponseColumn({ model, response, streaming }) {
       </div>
     </div>
   );
-} 
+}
