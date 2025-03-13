@@ -4,6 +4,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "./auth/[...nextauth]";
 import { ParallelRequestProcessor } from '../../utils/parallelProcessor';
+import prisma from '../../lib/prisma';
 
 const streamProcessor = new ParallelRequestProcessor({
   maxConcurrentRequests: 8,
@@ -23,40 +24,37 @@ export default async function handler(req, res) {
     'Connection': 'keep-alive',
   });
 
-  // Basic request verification
+  // Get user session
   const session = await getServerSession(req, res, authOptions);
   if (!session) return res.status(401).json({ error: "Unauthorized" });
 
-  const { prompt, models, apiKeys } = req.query;
+  const { prompt, models } = req.query;
   const modelArray = models ? models.split(',') : [];
   
-  // Parse API keys if provided
-  let parsedApiKeys = {};
+  // Get user's API keys from database
+  const userApiKeys = {};
   try {
-    if (apiKeys) {
-      parsedApiKeys = JSON.parse(decodeURIComponent(apiKeys));
-    }
+    const apiKeysRes = await prisma.apiKey.findMany({
+      where: { userId: session.user.id },
+      select: { provider: true, encryptedKey: true }
+    });
+    
+    apiKeysRes.forEach(({ provider, encryptedKey }) => {
+      userApiKeys[provider] = encryptedKey;
+    });
   } catch (error) {
-    console.error('Error parsing API keys:', error);
+    console.error('Error fetching user API keys:', error);
+    res.status(500).json({ error: 'Failed to fetch API keys' });
+    return;
   }
 
-  // Initialize API clients with provided keys or fallback to environment variables
-  const openai = new OpenAI({ 
-    apiKey: parsedApiKeys.openai || process.env.OPENAI_API_KEY 
-  });
-  
-  const anthropic = new Anthropic({ 
-    apiKey: parsedApiKeys.anthropic || process.env.ANTHROPIC_API_KEY 
-  });
-  
-  const genAI = new GoogleGenerativeAI(
-    parsedApiKeys.google || process.env.GOOGLE_API_KEY
-  );
-
-  // Initialize OpenRouter client
+  // Initialize API clients with ONLY user's keys (no fallback to env variables)
+  const openai = new OpenAI({ apiKey: userApiKeys.openai });
+  const anthropic = new Anthropic({ apiKey: userApiKeys.anthropic });
+  const genAI = new GoogleGenerativeAI(userApiKeys.google);
   const openRouter = new OpenAI({
     baseURL: 'https://openrouter.ai/api/v1',
-    apiKey: parsedApiKeys.openrouter || process.env.OPENROUTER_API_KEY,
+    apiKey: userApiKeys.openrouter,
     defaultQuery: {
       transforms: ['middle']  // Ensures consistent response format
     },
@@ -104,18 +102,83 @@ export default async function handler(req, res) {
     }
   };
 
+  const sendErrorEvent = (model, message) => {
+    sendEvent({
+      model,
+      error: message,
+      loading: false,
+      streaming: false,
+      done: true
+    });
+  };
+
+  // Helper function to check if a model has its required API key
+  const hasRequiredApiKey = (modelId) => {
+    const providerMap = {
+      'gpt-4': 'openai',
+      'claude': 'anthropic',
+      'gemini': 'google',
+      // Map all OpenRouter models to the openrouter provider
+      'deepseek-r1': 'openrouter',
+      'mistral-7b': 'openrouter',
+      'llama2-70b': 'openrouter',
+      'phi3': 'openrouter',
+      'qwen-32b': 'openrouter',
+      'openchat': 'openrouter'
+    };
+    
+    const provider = providerMap[modelId];
+    
+    // Check if there's a valid API key
+    if (!provider) return false;
+    
+    const apiKey = userApiKeys[provider];
+    return Boolean(apiKey && apiKey.trim().length > 0);
+  };
+
+  // Helper function to verify if user has the required API key
+  const verifyApiKey = (modelId) => {
+    const providerMap = {
+      'gpt-4': 'openai',
+      'claude': 'anthropic',
+      'gemini': 'google',
+      'deepseek-r1': 'openrouter',
+      'mistral-7b': 'openrouter',
+      'llama2-70b': 'openrouter',
+      'phi3': 'openrouter',
+      'qwen-32b': 'openrouter',
+      'openchat': 'openrouter'
+    };
+
+    const provider = providerMap[modelId];
+    return userApiKeys[provider] ? true : false;
+  };
+
   try {
     // Process each model stream independently
     const modelPromises = modelArray.map(async (modelId) => {
-      try {
-        // Initial state
+      // First verify if user has the required API key
+      if (!verifyApiKey(modelId)) {
         sendEvent({
           model: modelId,
-          text: '',
-          loading: true,
-          streaming: true
+          error: `No API key found for ${modelId}. Please add your API key in settings.`,
+          loading: false,
+          streaming: false,
+          done: true
         });
+        return;
+      }
 
+      // Initial state for each model
+      sendEvent({
+        model: modelId,
+        text: '',
+        loading: true,
+        streaming: false
+      });
+
+      try {
+        // Directly attempt to use the model - let API errors handle missing/invalid keys
         if (modelId === 'gpt-4') {
           await handleOpenAIStream(modelId, prompt, sendEvent, openai);
         } else if (modelId === 'claude') {
@@ -127,9 +190,12 @@ export default async function handler(req, res) {
         }
       } catch (error) {
         console.error(`Error with ${modelId}:`, error);
+        const errorMessage = error.status === 401 || error.status === 403
+          ? `Invalid API key for ${modelId}. Please check your settings.`
+          : `Error: ${error.message}`;
         sendEvent({
           model: modelId,
-          error: error.message,
+          error: errorMessage,
           loading: false,
           streaming: false,
           done: true
@@ -167,8 +233,11 @@ async function handleOpenAIStream(model, prompt, sendEvent, openai) {
     }
     sendEvent({ model, text, done: true });
   } catch (error) {
-    console.error('OpenAI streaming error:', error);
-    sendEvent({ model, error: error.message });
+    // Improve error message based on status code
+    const errorMessage = error.status === 401 
+      ? "Invalid or missing OpenAI API key. Please check your API key in settings."
+      : error.message;
+    sendEvent({ model, error: errorMessage });
   }
 }
 
@@ -190,8 +259,10 @@ async function handleClaudeStream(prompt, sendEvent, anthropic) {
     }
     sendEvent({ model: 'claude', text, done: true });
   } catch (error) {
-    console.error('Claude streaming error:', error);
-    sendEvent({ model: 'claude', error: error.message });
+    const errorMessage = error.status === 401 
+      ? "Invalid or missing Anthropic API key. Please check your API key in settings."
+      : error.message;
+    sendEvent({ model: 'claude', error: errorMessage });
   }
 }
 

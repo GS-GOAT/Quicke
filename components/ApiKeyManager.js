@@ -11,24 +11,53 @@ export default function ApiKeyManager({ isOpen, onClose }) {
   });
   const [keyVisible, setKeyVisible] = useState({});
   const [saveStatus, setSaveStatus] = useState('');
+  const [keyStatuses, setKeyStatuses] = useState({
+    openai: { exists: false, isValid: false },
+    anthropic: { exists: false, isValid: false },
+    google: { exists: false, isValid: false },
+    openrouter: { exists: false, isValid: false }
+  });
 
   // fetch api keys from DB
-  useEffect(() => {
-    async function fetchApiKeys() {
-      try {
-        const res = await fetch('/api/user/api-keys');
-        const data = await res.json();
-        const keysObject = {};
-        data.forEach(({ provider, encryptedKey }) => {
-          keysObject[provider] = { key: encryptedKey };
-        });
-        setApiKeys(prev => ({ ...prev, ...keysObject }));
-      } catch (error) {
-        console.error('Error fetching API keys:', error);
-      }
+  const fetchApiKeys = async () => {
+    try {
+      const res = await fetch('/api/user/api-keys');
+      const data = await res.json();
+      
+      const keysObject = {};
+      const statusObject = {};
+
+      // Initialize all statuses as false
+      Object.keys(apiKeys).forEach(provider => {
+        keysObject[provider] = { key: '', usage: 0, limit: 0 };
+        statusObject[provider] = { exists: false, isValid: false };
+      });
+
+      // Update for existing keys
+      data.forEach(({ provider, encryptedKey }) => {
+        if (encryptedKey && encryptedKey.trim()) {
+          keysObject[provider] = {
+            key: encryptedKey,
+            usage: apiKeys[provider]?.usage || 0,
+            limit: apiKeys[provider]?.limit || 0
+          };
+          statusObject[provider] = { exists: true, isValid: true };
+        }
+      });
+
+      setApiKeys(prev => ({ ...prev, ...keysObject }));
+      setKeyStatuses(statusObject);
+    } catch (error) {
+      console.error('Error fetching API keys:', error);
+      setSaveStatus('Error loading API keys');
     }
-    fetchApiKeys();
-  }, []);
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchApiKeys();
+    }
+  }, [isOpen]);
   
   // Save API keys to DB
   const saveApiKeys = async () => {
@@ -53,6 +82,12 @@ export default function ApiKeyManager({ isOpen, onClose }) {
       ...apiKeys,
       [provider]: { ...apiKeys[provider], key: value }
     });
+    
+    // Reset validation status when key is changed
+    setKeyStatuses(prev => ({
+      ...prev,
+      [provider]: { exists: false, isValid: false }
+    }));
   };
 
   const handleLimitChange = (provider, value) => {
@@ -69,6 +104,155 @@ export default function ApiKeyManager({ isOpen, onClose }) {
       [provider]: !keyVisible[provider]
     });
   };
+
+  const handleKeyDelete = async (provider) => {
+    try {
+      await fetch('/api/user/api-keys', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider }),
+      });
+      
+      // Update state to reflect deletion
+      setApiKeys(prev => ({
+        ...prev,
+        [provider]: { key: '', usage: 0, limit: 0 }
+      }));
+      setKeyStatuses(prev => ({
+        ...prev,
+        [provider]: { exists: false, isValid: false }
+      }));
+      
+      setSaveStatus(`${provider} API key removed successfully`);
+      setTimeout(() => setSaveStatus(''), 3000);
+    } catch (error) {
+      console.error('Error deleting API key:', error);
+      setSaveStatus(`Error removing ${provider} API key`);
+    }
+  };
+
+  // Simplify handleSubmit to use single upsert operation
+  const handleSubmit = async (provider) => {
+    if (!apiKeys[provider].key.trim()) {
+      setSaveStatus('Please enter a valid API key');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/user/api-keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          provider, 
+          key: apiKeys[provider].key 
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save API key');
+      }
+
+      setKeyStatuses(prev => ({
+        ...prev,
+        [provider]: { exists: true, isValid: true }
+      }));
+
+      setSaveStatus(`${provider} API key saved successfully!`);
+      setTimeout(() => setSaveStatus(''), 3000);
+
+      // Refresh API keys after successful save
+      fetchApiKeys();
+    } catch (error) {
+      console.error('Error saving API key:', error);
+      setSaveStatus(`Error saving ${provider} API key`);
+      setKeyStatuses(prev => ({
+        ...prev,
+        [provider]: { exists: false, isValid: false }
+      }));
+    }
+  };
+
+  const renderKeyInput = (provider, label, placeholder, helpLink) => (
+    <div className="relative">
+      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+        {label}
+      </label>
+      <div className="flex items-center space-x-2">
+        <div className="relative flex-grow group">
+          <input
+            type={keyVisible[provider] ? "text" : "password"}
+            value={apiKeys[provider].key}
+            onChange={(e) => handleKeyChange(provider, e.target.value)}
+            className={`block w-full px-4 py-3 rounded-lg text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-900 border transition-all duration-200 ${
+              keyStatuses[provider].exists && keyStatuses[provider].isValid
+                ? 'border-green-500 dark:border-green-600' 
+                : apiKeys[provider].key
+                  ? 'border-yellow-500 dark:border-yellow-600'
+                  : 'border-gray-300 dark:border-gray-600'
+            } focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent`}
+            placeholder={placeholder}
+          />
+          
+          {keyStatuses[provider].exists && keyStatuses[provider].isValid && (
+            <div className="absolute right-10 top-1/2 -translate-y-1/2">
+              <div className="text-green-500 dark:text-green-400">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+                </svg>
+              </div>
+            </div>
+          )}
+          
+          {/* Show/Hide button */}
+          <button
+            type="button"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            onClick={() => toggleKeyVisibility(provider)}
+          >
+            {keyVisible[provider] ? (
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
+              </svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
+                <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
+              </svg>
+            )}
+          </button>
+        </div>
+        
+        {/* Action buttons */}
+        <div className="flex space-x-2">
+          {keyStatuses[provider].exists ? (
+            <button
+              onClick={() => handleKeyDelete(provider)}
+              className="p-2 text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors duration-200"
+              title="Remove API key"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clipRule="evenodd" />
+              </svg>
+            </button>
+          ) : apiKeys[provider].key ? (
+            <button
+              onClick={() => handleSubmit(provider)}
+              className="p-2 text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors duration-200"
+              title="Save API key"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+              </svg>
+            </button>
+          ) : null}
+        </div>
+      </div>
+      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+        Get your API key from <a href={helpLink} target="_blank" rel="noopener noreferrer" className="text-primary-600 dark:text-primary-400 hover:underline">{provider.charAt(0).toUpperCase() + provider.slice(1)}</a>
+      </p>
+    </div>
+  );
 
   // Simulate fetching usage data
   const fetchUsageData = async () => {
@@ -141,157 +325,10 @@ export default function ApiKeyManager({ isOpen, onClose }) {
                 Enter your API keys below. They are encrypted and stored locally in your browser.
               </p>
 
-              {/* OpenAI API Key */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  OpenAI API Key
-                </label>
-                <div className="flex">
-                  <div className="relative flex-grow">
-                    <input
-                      type={keyVisible.openai ? "text" : "password"}
-                      value={apiKeys.openai.key}
-                      onChange={(e) => handleKeyChange('openai', e.target.value)}
-                      className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-800 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-                      placeholder="sk-..."
-                    />
-                    <button
-                      type="button"
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-500"
-                      onClick={() => toggleKeyVisibility('openai')}
-                    >
-                      {keyVisible.openai ? (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-                          <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
-                        </svg>
-                      ) : (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
-                          <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-                </div>
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Get your API key from <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-primary-600 dark:text-primary-400 hover:underline">OpenAI</a>
-                </p>
-              </div>
-
-              {/* Anthropic API Key */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Anthropic API Key
-                </label>
-                <div className="flex">
-                  <div className="relative flex-grow">
-                    <input
-                      type={keyVisible.anthropic ? "text" : "password"}
-                      value={apiKeys.anthropic.key}
-                      onChange={(e) => handleKeyChange('anthropic', e.target.value)}
-                      className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-800 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-                      placeholder="sk-ant-..."
-                    />
-                    <button
-                      type="button"
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-500"
-                      onClick={() => toggleKeyVisibility('anthropic')}
-                    >
-                      {keyVisible.anthropic ? (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-                          <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
-                        </svg>
-                      ) : (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
-                          <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-                </div>
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Get your API key from <a href="https://console.anthropic.com/" target="_blank" rel="noopener noreferrer" className="text-primary-600 dark:text-primary-400 hover:underline">Anthropic</a>
-                </p>
-              </div>
-
-              {/* Google AI API Key */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Google AI API Key
-                </label>
-                <div className="flex">
-                  <div className="relative flex-grow">
-                    <input
-                      type={keyVisible.google ? "text" : "password"}
-                      value={apiKeys.google.key}
-                      onChange={(e) => handleKeyChange('google', e.target.value)}
-                      className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-800 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-                      placeholder="AIza..."
-                    />
-                    <button
-                      type="button"
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-500"
-                      onClick={() => toggleKeyVisibility('google')}
-                    >
-                      {keyVisible.google ? (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-                          <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
-                        </svg>
-                      ) : (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
-                          <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-                </div>
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Get your API key from <a href="https://makersuite.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-primary-600 dark:text-primary-400 hover:underline">Google AI Studio</a>
-                </p>
-              </div>
-
-              {/* OpenRouter API Key */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  OpenRouter API Key
-                </label>
-                <div className="flex">
-                  <div className="relative flex-grow">
-                    <input
-                      type={keyVisible.openrouter ? "text" : "password"}
-                      value={apiKeys.openrouter.key}
-                      onChange={(e) => handleKeyChange('openrouter', e.target.value)}
-                      className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-800 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-                      placeholder="sk-or-..."
-                    />
-                    <button
-                      type="button"
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-500"
-                      onClick={() => toggleKeyVisibility('openrouter')}
-                    >
-                      {keyVisible.openrouter ? (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-                          <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
-                        </svg>
-                      ) : (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
-                          <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-                </div>
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Get your API key from <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="text-primary-600 dark:text-primary-400 hover:underline">OpenRouter</a>
-                </p>
-              </div>
+              {renderKeyInput('openai', 'OpenAI API Key', 'sk-...', 'https://platform.openai.com/api-keys')}
+              {renderKeyInput('anthropic', 'Anthropic API Key', 'sk-ant-...', 'https://console.anthropic.com/')}
+              {renderKeyInput('google', 'Google AI API Key', 'AIza...', 'https://makersuite.google.com/app/apikey')}
+              {renderKeyInput('openrouter', 'OpenRouter API Key', 'sk-or-...', 'https://openrouter.ai/keys')}
             </div>
           )}
 
@@ -479,4 +516,4 @@ export default function ApiKeyManager({ isOpen, onClose }) {
       </div>
     </div>
   );
-} 
+}

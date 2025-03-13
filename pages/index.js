@@ -104,20 +104,10 @@ export default function Home() {
     setHistory(prev => [...prev, { id, prompt, responses: initialResponses }]);
     setPrompt('');
 
-    // Get API keys from localStorage
-    let apiKeysParam = '';
-    try {
-      const storedKeys = localStorage.getItem('quicke_api_keys');
-      if (storedKeys) {
-        const decryptedKeys = JSON.parse(decrypt(storedKeys));
-        apiKeysParam = `&apiKeys=${encodeURIComponent(JSON.stringify(decryptedKeys))}`;
-      }
-    } catch (error) {
-      console.error('Error getting API keys:', error);
-    }
-
-    // Create event source for streaming
-    const newEventSource = new EventSource(`/api/stream?prompt=${encodeURIComponent(prompt)}&models=${encodeURIComponent(selectedModels.join(','))}${apiKeysParam}`);
+    // Create event source for streaming - remove API keys from URL
+    const newEventSource = new EventSource(
+      `/api/stream?prompt=${encodeURIComponent(prompt)}&models=${encodeURIComponent(selectedModels.join(','))}`
+    );
     eventSourceRef.current = newEventSource;
 
     // Handle incoming stream data
