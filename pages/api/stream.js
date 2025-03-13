@@ -154,6 +154,12 @@ export default async function handler(req, res) {
     return userApiKeys[provider] ? true : false;
   };
 
+  let allResponsesComplete = false;
+  const modelCompletionStatus = modelArray.reduce((acc, model) => {
+    acc[model] = false;
+    return acc;
+  }, {});
+
   try {
     // Process each model stream independently
     const modelPromises = modelArray.map(async (modelId) => {
@@ -201,14 +207,28 @@ export default async function handler(req, res) {
           done: true
         });
       }
+
+      // Update completion status for this model
+      modelCompletionStatus[modelId] = true;
+      
+      // Check if all models have completed
+      if (Object.values(modelCompletionStatus).every(status => status)) {
+        allResponsesComplete = true;
+        // Signal final completion
+        sendEvent({ 
+          done: true,
+          allComplete: true
+        });
+      }
     });
 
     // Process all streams concurrently
     await Promise.all(modelPromises);
     
-    // Signal completion
-    sendEvent({ done: true });
-    res.end();
+    // Only end response when all models are complete
+    if (allResponsesComplete) {
+      res.end();
+    }
   } catch (error) {
     console.error('Streaming error:', error);
     sendEvent({ error: 'Failed to process streaming requests' });

@@ -11,19 +11,22 @@ export default async function handler(req, res) {
       const conversations = await prisma.conversation.findMany({
         where: { userId: session.user.id },
         include: { 
-          messages: {
-            orderBy: {
-              createdAt: 'asc'
-            }
-          }
+          messages: true
         },
         orderBy: { 
-          createdAt: 'asc'  // Changed to ascending to get oldest first
+          createdAt: 'desc'  // Get newest first
         },
-        take: -5,  // Take last 5 conversations
+        take: 5  // Take last 5 conversations
       });
 
-      res.status(200).json(conversations);
+      // Sort messages within each conversation
+      const sortedConversations = conversations.map(conv => ({
+        ...conv,
+        messages: conv.messages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+      }));
+
+      // Reverse the array to get oldest first
+      res.status(200).json(sortedConversations.reverse());
     } catch (error) {
       console.error('Error retrieving conversations:', error);
       res.status(500).json({ error: 'Failed to retrieve conversations' });

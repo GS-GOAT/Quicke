@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { atomDark } from 'react-syntax-highlighter/dist/cjs/styles/prism';
+import 'katex/dist/katex.min.css';
+import { InlineMath, BlockMath } from 'react-katex';
 
 // Model display names mapping
 const modelDisplayNames = {
@@ -97,11 +99,94 @@ export default function ResponseColumn({ model, response, streaming }) {
                   (response?.text && response.text.length > 0);
   const waitingForPrompt = !isLoading && !hasError && !hasText;
 
-  // Custom component to render code blocks with syntax highlighting
+  // Enhanced math processing function with more comprehensive patterns
+  const processMathInText = (text) => {
+    if (!text) return text;
+    
+    // Helper to wrap text in math delimiters
+    const wrapInMath = (content, type = 'inline') => 
+      `$$math$$${type}${content}$$`;
+
+    const replacements = [
+      // Basic math delimiters
+      { pattern: /\$\$([^$]+?)\$\$/g, replace: (_, m) => wrapInMath(m, 'block') },
+      { pattern: /\$([^$\n]+?)\$/g, replace: (_, m) => wrapInMath(m, 'inline') },
+      { pattern: /\\\[(.*?)\\\]/g, replace: (_, m) => wrapInMath(m, 'block') },
+      { pattern: /\\\((.*?)\\\)/g, replace: (_, m) => wrapInMath(m, 'inline') },
+      
+      // Common LaTeX patterns that should be wrapped in math mode
+      { pattern: /\\[a-zA-Z]+\{[^}]*\}/g, replace: m => wrapInMath(m) },
+      { pattern: /\\[a-zA-Z]+/g, replace: m => wrapInMath(m) },
+      { pattern: /\b\\(?:left|right|quad|qquad|text)\b/g, replace: m => wrapInMath(m) },
+      
+      // Equations and arrays
+      { pattern: /\\begin\{[^}]+\}[\s\S]*?\\end\{[^}]+\}/g, replace: m => wrapInMath(m, 'block') },
+      
+      // Special symbols and operators
+      { pattern: /[×÷±∑∏∫⋅⊗⊕≤≥≠∈∉⊆⊇∪∩]/g, replace: m => wrapInMath(m) },
+      
+      // Fractions, square roots, and other common constructs
+      { pattern: /\\frac\{[^}]*\}\{[^}]*\}/g, replace: m => wrapInMath(m) },
+      { pattern: /\\sqrt(?:\[[^]]*\])?\{[^}]*\}/g, replace: m => wrapInMath(m) },
+      { pattern: /\\boxed\{[^}]*\}/g, replace: m => wrapInMath(m) },
+      
+      // Matrices and arrays
+      { pattern: /\\begin\{(?:matrix|pmatrix|bmatrix|vmatrix)\}[\s\S]*?\\end\{(?:matrix|pmatrix|bmatrix|vmatrix)\}/g, 
+        replace: m => wrapInMath(m, 'block') },
+    ];
+
+    let processedText = text;
+    replacements.forEach(({ pattern, replace }) => {
+      processedText = processedText.replace(pattern, replace);
+    });
+
+    return processedText;
+  };
+
+  // Enhanced Math component with better error handling and options
+  const Math = ({ value, inline }) => {
+    const options = {
+      throwOnError: false,
+      errorColor: '#ff3860',
+      strict: false,
+      trust: true,
+      macros: {
+        "\\R": "\\mathbb{R}",
+        "\\N": "\\mathbb{N}",
+        "\\Z": "\\mathbb{Z}",
+        "\\Q": "\\mathbb{Q}",
+        "\\C": "\\mathbb{C}",
+        "\\implies": "\\Rightarrow",
+        "\\iff": "\\Leftrightarrow",
+        "\\norm": "\\|#1\\|"
+      },
+    };
+
+    try {
+      return inline ? (
+        <InlineMath math={value} settings={options} />
+      ) : (
+        <BlockMath math={value} settings={options} />
+      );
+    } catch (error) {
+      console.error('KaTeX error:', error);
+      return <code className="text-red-500">{value}</code>;
+    }
+  };
+
+  // Updated CodeBlock component
   const CodeBlock = ({ node, inline, className, children, ...props }) => {
     const match = /language-(\w+)/.exec(className || '');
     const language = match ? match[1] : '';
-    
+
+    // Handle math blocks
+    if (language === 'math') {
+      const content = String(children).replace(/\n$/, '');
+      const isInline = content.startsWith('inline');
+      const mathContent = isInline ? content.slice(6) : content.slice(5);
+      return <Math value={mathContent} inline={isInline} />;
+    }
+
     if (!inline && language) {
       return (
         <div className="relative group">
@@ -189,6 +274,8 @@ export default function ResponseColumn({ model, response, streaming }) {
             <ReactMarkdown
               components={{
                 code: CodeBlock,
+                // Process text nodes to identify math expressions
+                text: ({ children }) => processMathInText(children),
                 // Override for links to open in new tab
                 a: ({ node, ...props }) => (
                   <a target="_blank" rel="noopener noreferrer" className="text-primary-600 dark:text-primary-400 hover:underline" {...props} />

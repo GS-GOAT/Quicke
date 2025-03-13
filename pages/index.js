@@ -23,6 +23,7 @@ export default function Home() {
   const modelSelectorRef = useRef(null);
   const [responses, setResponses] = useState({});
   const [responseModels, setResponseModels] = useState({});
+  const [isProcessing, setIsProcessing] = useState(false); // Add this state
 
   // Modify auto-scroll to only trigger on new prompt addition
   useEffect(() => {
@@ -77,12 +78,12 @@ export default function Home() {
     // This will be handled in the ApiKeyManager component
   }, []);
 
-  // Add useEffect to load conversations on login
+  // Replace multiple useEffect hooks with a single one for session-based fetching
   useEffect(() => {
-    if (session?.user) {
+    if (session?.user && history.length === 0) {  // Only fetch if no history exists
       fetchConversations();
     }
-  }, [session]);
+  }, [session]);  // Remove history.length from dependencies
 
   // Modified function to fetch conversations
   const fetchConversations = async () => {
@@ -91,26 +92,27 @@ export default function Home() {
       if (!response.ok) throw new Error('Failed to fetch conversations');
       
       const data = await response.json();
-      
-      // Transform conversations into the required format
-      // Note: data is already ordered by createdAt desc from the API
       const transformedHistory = data.map(conv => {
+        // Find the user message (should be the first one)
         const userMessage = conv.messages.find(msg => msg.role === 'user');
+        
+        // Get all assistant messages and parse their content
         const assistantMessages = conv.messages
           .filter(msg => msg.role === 'assistant')
           .map(msg => {
             try {
               return JSON.parse(msg.content);
             } catch (e) {
-              console.error('Error parsing message content:', e);
+              console.error('Error parsing message:', msg.content);
               return null;
             }
           })
           .filter(Boolean);
-        
+
+        // Create responses object
         const responses = {};
         assistantMessages.forEach(parsed => {
-          const { model, ...responseData } = parsed;
+          const { model, timestamp, ...responseData } = parsed;
           responses[model] = {
             ...responseData,
             loading: false,
@@ -123,21 +125,30 @@ export default function Home() {
           prompt: userMessage.content,
           responses,
           activeModels: Object.keys(responses),
-          timestamp: new Date(conv.createdAt)
+          timestamp: new Date(conv.createdAt),
+          isHistorical: true // Flag to identify retrieved conversations
         };
       });
 
-      // Sort conversations by timestamp in ascending order (oldest first)
-      transformedHistory.sort((a, b) => a.timestamp - b.timestamp);
+      // Add isHistorical flag to loaded conversations
+      const historicalConversations = transformedHistory.map(conv => ({
+        ...conv,
+        isHistorical: true
+      }));
 
-      setHistory(transformedHistory);
+      setHistory(historicalConversations);
+      
+      // Scroll to bottom after loading historical conversations
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
     } catch (error) {
       console.error('Error fetching conversations:', error);
     }
   };
 
   const handleSubmit = async () => {
-    if (!prompt.trim() || loading) return;
+    if (!prompt.trim() || loading || isProcessing) return;
     
     // Close any existing EventSource
     if (eventSourceRef.current) {
@@ -145,9 +156,11 @@ export default function Home() {
     }
     
     setLoading(true);
+    setIsProcessing(true); // Set processing flag
     
     // Initialize response objects for each selected model
     const initialResponses = {};
+    const currentPrompt = prompt; // Store current prompt value
     selectedModels.forEach(model => {
       initialResponses[model] = {
         text: '',
@@ -170,7 +183,8 @@ export default function Home() {
       id, 
       prompt, 
       responses: initialResponses,
-      activeModels: [...selectedModels] // Store models active for this response
+      activeModels: [...selectedModels], // Store models active for this response
+      isHistorical: false // Mark new conversations as non-historical
     }]);
     setPrompt('');
 
@@ -211,37 +225,38 @@ export default function Home() {
       // Handle completion
       if (data.done && !data.model) {
         try {
-          await fetch('/api/conversations/save', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              prompt,
-              responses
-            }),
-          });
+          // Get the latest responses from state
+          const currentResponses = { ...responses };
+          
+          // Filter out responses with errors
+          const validResponses = Object.entries(currentResponses).reduce((acc, [model, response]) => {
+            if (!response.error) {
+              acc[model] = response;
+            }
+            return acc;
+          }, {});
+
+          // Only save if there are valid responses
+          if (Object.keys(validResponses).length > 0) {
+            await fetch('/api/conversations/save', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                prompt: currentPrompt,
+                responses: validResponses,
+                timestamp: Date.now()
+              }),
+            });
+          }
+
+          newEventSource.close();
+          eventSourceRef.current = null;
+          setLoading(false);
+          setIsProcessing(false); // Clear processing flag
         } catch (error) {
           console.error('Error saving conversation:', error);
-        }
-
-        newEventSource.close();
-        eventSourceRef.current = null;
-        setLoading(false);
-        
-        // Check if all models have completed
-        const allComplete = selectedModels.every(model => 
-          !responses[model]?.loading && !responses[model]?.streaming
-        );
-        
-        if (allComplete) {
-          // Update final state in history
-          setHistory(prev => {
-            const updated = [...prev];
-            const latestEntry = updated[updated.length - 1];
-            if (latestEntry) {
-              latestEntry.responses = {...responses};
-            }
-            return updated;
-          });
+          setLoading(false);
+          setIsProcessing(false); // Clear processing flag even on error
         }
       }
     };
@@ -250,6 +265,7 @@ export default function Home() {
     newEventSource.onerror = (error) => {
       console.error('EventSource error:', error);
       setLoading(false);
+      setIsProcessing(false); // Clear processing flag even on error
       newEventSource.close();
       eventSourceRef.current = null;
     };
@@ -276,6 +292,17 @@ export default function Home() {
     };
     return labels[modelId] || modelId;
   }
+
+  // Add separator component between conversations
+  const ConversationSeparator = () => (
+    <div className="flex items-center my-8">
+      <div className="flex-grow h-px bg-gradient-to-r from-transparent via-gray-300 dark:via-gray-600 to-transparent" />
+      <div className="mx-4 px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-xs text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
+        Previous Conversation
+      </div>
+      <div className="flex-grow h-px bg-gradient-to-r from-transparent via-gray-300 dark:via-gray-600 to-transparent" />
+    </div>
+  );
 
   return (
     <div className="flex flex-col h-screen bg-gray-50 dark:bg-darkbg transition-colors duration-200">
@@ -458,26 +485,64 @@ export default function Home() {
             </div>
           ) : (
             <div className="space-y-10 pb-24 pt-4">
-              {history.map((entry) => (
-                <div key={entry.id} className="space-y-6">
-                  <div className="flex justify-end">
-                    <div className="bg-primary-100 dark:bg-primary-900/30 p-4 rounded-2xl rounded-tr-none shadow-sm max-w-[80%] border border-primary-200 dark:border-primary-800/30">
-                      <p className="text-gray-800 dark:text-gray-200">{entry.prompt}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                    {(entry.activeModels || []).map(model => (
-                      <ResponseColumn 
-                        key={`${entry.id}-${model}`}
-                        model={model}
-                        response={responses[model] || entry.responses?.[model] || { loading: false, text: '', error: null }}
-                        streaming={responses[model]?.streaming || entry.responses?.[model]?.streaming}
-                      />
+              {/* Group conversations by historical status */}
+              {history.length > 0 && (
+                <>
+                  {/* Historical conversations */}
+                  <div className="space-y-10">
+                    {history.filter(entry => entry.isHistorical).map((entry) => (
+                      <div key={entry.id} className="space-y-6">
+                        <div className="flex justify-end">
+                          <div className="bg-primary-100 dark:bg-primary-900/30 p-4 rounded-2xl rounded-tr-none shadow-sm max-w-[80%] border border-primary-200 dark:border-primary-800/30">
+                            <p className="text-gray-800 dark:text-gray-200">{entry.prompt}</p>
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                          {(entry.activeModels || []).map(model => (
+                            <ResponseColumn 
+                              key={`${entry.id}-${model}`}
+                              model={model}
+                              response={responses[model] || entry.responses?.[model] || { loading: false, text: '', error: null }}
+                              streaming={responses[model]?.streaming || entry.responses?.[model]?.streaming}
+                            />
+                          ))}
+                        </div>
+                      </div>
                     ))}
                   </div>
-                </div>
-              ))}
+
+                  {/* Separator - only show if there are both historical and new conversations */}
+                  {history.some(entry => entry.isHistorical) && 
+                  history.some(entry => !entry.isHistorical) && (
+                    <ConversationSeparator />
+                  )}
+
+                  {/* New conversations */}
+                  <div className="space-y-10">
+                    {history.filter(entry => !entry.isHistorical).map((entry) => (
+                      <div key={entry.id} className="space-y-6">
+                        <div className="flex justify-end">
+                          <div className="bg-primary-100 dark:bg-primary-900/30 p-4 rounded-2xl rounded-tr-none shadow-sm max-w-[80%] border border-primary-200 dark:border-primary-800/30">
+                            <p className="text-gray-800 dark:text-gray-200">{entry.prompt}</p>
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                          {(entry.activeModels || []).map(model => (
+                            <ResponseColumn 
+                              key={`${entry.id}-${model}`}
+                              model={model}
+                              response={responses[model] || entry.responses?.[model] || { loading: false, text: '', error: null }}
+                              streaming={responses[model]?.streaming || entry.responses?.[model]?.streaming}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
               <div ref={messagesEndRef} />
             </div>
           )}
@@ -491,7 +556,7 @@ export default function Home() {
             setPrompt={setPrompt} 
             onSubmit={handleSubmit}
             onClear={handleClear}
-            disabled={loading || selectedModels.length === 0}
+            disabled={loading || selectedModels.length === 0 || isProcessing} // Add isProcessing to disabled check
           />
         </div>
       </footer>
