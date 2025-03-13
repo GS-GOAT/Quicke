@@ -17,6 +17,8 @@ export default function ApiKeyManager({ isOpen, onClose }) {
     google: { exists: false, isValid: false },
     openrouter: { exists: false, isValid: false }
   });
+  const [hasModifications, setHasModifications] = useState(false);
+  const [originalKeys, setOriginalKeys] = useState({});
 
   // fetch api keys from DB
   const fetchApiKeys = async () => {
@@ -45,8 +47,10 @@ export default function ApiKeyManager({ isOpen, onClose }) {
         }
       });
 
-      setApiKeys(prev => ({ ...prev, ...keysObject }));
+      setApiKeys(keysObject);
+      setOriginalKeys(keysObject); // Store original state
       setKeyStatuses(statusObject);
+      setHasModifications(false);
     } catch (error) {
       console.error('Error fetching API keys:', error);
       setSaveStatus('Error loading API keys');
@@ -61,6 +65,11 @@ export default function ApiKeyManager({ isOpen, onClose }) {
   
   // Save API keys to DB
   const saveApiKeys = async () => {
+    if (!hasModifications) {
+      onClose();
+      return;
+    }
+
     try {
       await Promise.all(Object.entries(apiKeys).map(([provider, { key }]) =>
         fetch('/api/user/api-keys', {
@@ -70,18 +79,31 @@ export default function ApiKeyManager({ isOpen, onClose }) {
         })
       ));
       setSaveStatus('API keys saved successfully!');
-      setTimeout(() => setSaveStatus(''), 3000);
+      setHasModifications(false);
+      setTimeout(() => {
+        setSaveStatus('');
+        onClose();
+      }, 1500);
     } catch (error) {
       console.error('Error saving API keys:', error);
       setSaveStatus('Error saving API keys.');
     }
   };  
 
+  const checkModifications = (newKeys) => {
+    return Object.keys(newKeys).some(provider => 
+      newKeys[provider].key !== originalKeys[provider]?.key ||
+      newKeys[provider].limit !== originalKeys[provider]?.limit
+    );
+  };
+
   const handleKeyChange = (provider, value) => {
-    setApiKeys({
+    const newKeys = {
       ...apiKeys,
       [provider]: { ...apiKeys[provider], key: value }
-    });
+    };
+    setApiKeys(newKeys);
+    setHasModifications(checkModifications(newKeys));
     
     // Reset validation status when key is changed
     setKeyStatuses(prev => ({
@@ -92,10 +114,12 @@ export default function ApiKeyManager({ isOpen, onClose }) {
 
   const handleLimitChange = (provider, value) => {
     const numValue = parseInt(value) || 0;
-    setApiKeys({
+    const newKeys = {
       ...apiKeys,
       [provider]: { ...apiKeys[provider], limit: numValue }
-    });
+    };
+    setApiKeys(newKeys);
+    setHasModifications(checkModifications(newKeys));
   };
 
   const toggleKeyVisibility = (provider) => {
@@ -235,17 +259,7 @@ export default function ApiKeyManager({ isOpen, onClose }) {
                 <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clipRule="evenodd" />
               </svg>
             </button>
-          ) : apiKeys[provider].key ? (
-            <button
-              onClick={() => handleSubmit(provider)}
-              className="p-2 text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors duration-200"
-              title="Save API key"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-                <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
-              </svg>
-            </button>
-          ) : null}
+          ) : apiKeys[provider].key ? null : null}
         </div>
       </div>
       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -273,245 +287,80 @@ export default function ApiKeyManager({ isOpen, onClose }) {
     }
   }, [activeTab]);
 
+  const handleClose = () => {
+    if (hasModifications) {
+      // Reset to original state
+      setApiKeys(originalKeys);
+      setHasModifications(false);
+    }
+    onClose();
+  };
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-darksurface rounded-xl shadow-xl w-full max-w-2xl overflow-hidden">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">API Key Management</h2>
-          <button 
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Tabs */}
-        <div className="border-b border-gray-200 dark:border-gray-700">
-          <div className="flex">
-            <button
-              className={`px-4 py-2 text-sm font-medium ${
-                activeTab === 'keys'
-                  ? 'border-b-2 border-primary-500 text-primary-600 dark:text-primary-400'
-                  : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
-              }`}
-              onClick={() => setActiveTab('keys')}
-            >
-              API Keys
-            </button>
-            <button
-              className={`px-4 py-2 text-sm font-medium ${
-                activeTab === 'usage'
-                  ? 'border-b-2 border-primary-500 text-primary-600 dark:text-primary-400'
-                  : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
-              }`}
-              onClick={() => setActiveTab('usage')}
-            >
-              Usage & Limits
-            </button>
+    <div className="fixed inset-0 z-50">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={handleClose} />
+      
+      <div className="fixed inset-0 flex items-center justify-center p-4">
+        <div className="bg-white dark:bg-darksurface rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-hidden">
+          {/* Header */}
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">API Keys</h2>
+              <button onClick={handleClose} className="text-gray-500 hover:text-gray-700 dark:text-gray-400">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              Configure your API keys for each model provider
+            </p>
           </div>
-        </div>
 
-        {/* Content */}
-        <div className="p-6">
-          {activeTab === 'keys' && (
+          {/* Content area */}
+          <div className="overflow-y-auto p-6" style={{ maxHeight: 'calc(80vh - 180px)' }}>
             <div className="space-y-6">
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Enter your API keys below. They are encrypted and stored locally in your browser.
-              </p>
-
               {renderKeyInput('openai', 'OpenAI API Key', 'sk-...', 'https://platform.openai.com/api-keys')}
               {renderKeyInput('anthropic', 'Anthropic API Key', 'sk-ant-...', 'https://console.anthropic.com/')}
               {renderKeyInput('google', 'Google AI API Key', 'AIza...', 'https://makersuite.google.com/app/apikey')}
               {renderKeyInput('openrouter', 'OpenRouter API Key', 'sk-or-...', 'https://openrouter.ai/keys')}
             </div>
-          )}
 
-          {activeTab === 'usage' && (
-            <div className="space-y-6">
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Set monthly limits and monitor your API usage.
-              </p>
-
-              <div className="space-y-4">
-                {/* OpenAI Usage */}
-                <div>
-                  <div className="flex justify-between mb-1">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      OpenAI Monthly Limit ($)
-                    </label>
-                    <span className="text-sm text-gray-500 dark:text-gray-400">
-                      Usage: ${apiKeys.openai.usage.toFixed(2)} / ${apiKeys.openai.limit.toFixed(2)}
-                    </span>
-                  </div>
-                  <input
-                    type="number"
-                    value={apiKeys.openai.limit}
-                    onChange={(e) => handleLimitChange('openai', e.target.value)}
-                    className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-800 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-                    placeholder="Set monthly limit in USD"
-                  />
-                  {apiKeys.openai.limit > 0 && (
-                    <div className="mt-2 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
-                      <div 
-                        className={`h-2.5 rounded-full ${
-                          apiKeys.openai.usage / apiKeys.openai.limit > 0.9 
-                            ? 'bg-red-500' 
-                            : apiKeys.openai.usage / apiKeys.openai.limit > 0.7 
-                              ? 'bg-yellow-500' 
-                              : 'bg-green-500'
-                        }`}
-                        style={{ width: `${Math.min(apiKeys.openai.usage / apiKeys.openai.limit * 100, 100)}%` }}
-                      ></div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Anthropic Usage */}
-                <div>
-                  <div className="flex justify-between mb-1">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Anthropic Monthly Limit ($)
-                    </label>
-                    <span className="text-sm text-gray-500 dark:text-gray-400">
-                      Usage: ${apiKeys.anthropic.usage.toFixed(2)} / ${apiKeys.anthropic.limit.toFixed(2)}
-                    </span>
-                  </div>
-                  <input
-                    type="number"
-                    value={apiKeys.anthropic.limit}
-                    onChange={(e) => handleLimitChange('anthropic', e.target.value)}
-                    className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-800 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-                    placeholder="Set monthly limit in USD"
-                  />
-                  {apiKeys.anthropic.limit > 0 && (
-                    <div className="mt-2 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
-                      <div 
-                        className={`h-2.5 rounded-full ${
-                          apiKeys.anthropic.usage / apiKeys.anthropic.limit > 0.9 
-                            ? 'bg-red-500' 
-                            : apiKeys.anthropic.usage / apiKeys.anthropic.limit > 0.7 
-                              ? 'bg-yellow-500' 
-                              : 'bg-green-500'
-                        }`}
-                        style={{ width: `${Math.min(apiKeys.anthropic.usage / apiKeys.anthropic.limit * 100, 100)}%` }}
-                      ></div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Google Usage */}
-                <div>
-                  <div className="flex justify-between mb-1">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Google AI Monthly Limit ($)
-                    </label>
-                    <span className="text-sm text-gray-500 dark:text-gray-400">
-                      Usage: ${apiKeys.google.usage.toFixed(2)} / ${apiKeys.google.limit.toFixed(2)}
-                    </span>
-                  </div>
-                  <input
-                    type="number"
-                    value={apiKeys.google.limit}
-                    onChange={(e) => handleLimitChange('google', e.target.value)}
-                    className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-800 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-                    placeholder="Set monthly limit in USD"
-                  />
-                  {apiKeys.google.limit > 0 && (
-                    <div className="mt-2 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
-                      <div 
-                        className={`h-2.5 rounded-full ${
-                          apiKeys.google.usage / apiKeys.google.limit > 0.9 
-                            ? 'bg-red-500' 
-                            : apiKeys.google.usage / apiKeys.google.limit > 0.7 
-                              ? 'bg-yellow-500' 
-                              : 'bg-green-500'
-                        }`}
-                        style={{ width: `${Math.min(apiKeys.google.usage / apiKeys.google.limit * 100, 100)}%` }}
-                      ></div>
-                    </div>
-                  )}
-                </div>
-
-                {/* OpenRouter Usage */}
-                <div>
-                  <div className="flex justify-between mb-1">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      OpenRouter Monthly Limit ($)
-                    </label>
-                    <span className="text-sm text-gray-500 dark:text-gray-400">
-                      Usage: ${apiKeys.openrouter.usage.toFixed(2)} / ${apiKeys.openrouter.limit.toFixed(2)}
-                    </span>
-                  </div>
-                  <input
-                    type="number"
-                    value={apiKeys.openrouter.limit}
-                    onChange={(e) => handleLimitChange('openrouter', e.target.value)}
-                    className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-800 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-                    placeholder="Set monthly limit in USD"
-                  />
-                  {apiKeys.openrouter.limit > 0 && (
-                    <div className="mt-2 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
-                      <div 
-                        className={`h-2.5 rounded-full ${
-                          apiKeys.openrouter.usage / apiKeys.openrouter.limit > 0.9 
-                            ? 'bg-red-500' 
-                            : apiKeys.openrouter.usage / apiKeys.openrouter.limit > 0.7 
-                              ? 'bg-yellow-500' 
-                              : 'bg-green-500'
-                        }`}
-                        style={{ width: `${Math.min(apiKeys.openrouter.usage / apiKeys.openrouter.limit * 100, 100)}%` }}
-                      ></div>
-                    </div>
-                  )}
-                </div>
-
-                <button
-                  className="mt-2 inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                  onClick={fetchUsageData}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Refresh Usage Data
-                </button>
+            {/* Status message */}
+            {saveStatus && (
+              <div className={`mt-4 p-3 rounded-lg text-sm ${
+                saveStatus.includes('Error') 
+                  ? 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-300' 
+                  : 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-300'
+              }`}>
+                {saveStatus}
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
-          {/* Save status message */}
-          {saveStatus && (
-            <div className={`mt-4 p-2 rounded text-sm ${
-              saveStatus.includes('Error') 
-                ? 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-300' 
-                : 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-300'
-            }`}>
-              {saveStatus}
-            </div>
-          )}
-        </div>
-
-        {/* Footer with actions */}
-        <div className="px-6 py-4 bg-gray-50 dark:bg-gray-800 flex justify-end space-x-3">
-          <button
-            type="button"
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white dark:bg-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-            onClick={onClose}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-md shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-            onClick={saveApiKeys}
-          >
-            Save
-          </button>
+          {/* Footer */}
+          <div className="px-6 py-4 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex justify-end space-x-3">
+            <button
+              type="button"
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white dark:bg-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600"
+              onClick={handleClose}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className={`px-4 py-2 text-sm font-medium text-white border border-transparent rounded-lg ${
+                hasModifications 
+                  ? 'bg-primary-600 hover:bg-primary-700'
+                  : 'bg-green-600 hover:bg-green-700'
+              }`}
+              onClick={saveApiKeys}
+            >
+              {hasModifications ? 'Save Changes' : 'Done'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
