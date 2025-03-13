@@ -22,6 +22,7 @@ export default function Home() {
   const modelButtonRef = useRef(null);
   const modelSelectorRef = useRef(null);
   const [responses, setResponses] = useState({});
+  const [responseModels, setResponseModels] = useState({});
 
   // Modify auto-scroll to only trigger on new prompt addition
   useEffect(() => {
@@ -101,7 +102,17 @@ export default function Home() {
     
     // Add to history immediately with initial state
     const id = Date.now().toString();
-    setHistory(prev => [...prev, { id, prompt, responses: initialResponses }]);
+    setResponseModels(prev => ({
+      ...prev,
+      [id]: [...selectedModels]
+    }));
+    
+    setHistory(prev => [...prev, { 
+      id, 
+      prompt, 
+      responses: initialResponses,
+      activeModels: [...selectedModels] // Store models active for this response
+    }]);
     setPrompt('');
 
     // Create event source for streaming - remove API keys from URL
@@ -384,7 +395,7 @@ export default function Home() {
                   </div>
                   
                   <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                    {selectedModels.map(model => (
+                    {(entry.activeModels || []).map(model => (
                       <ResponseColumn 
                         key={`${entry.id}-${model}`}
                         model={model}
