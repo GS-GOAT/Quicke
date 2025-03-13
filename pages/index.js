@@ -24,6 +24,7 @@ export default function Home() {
   const [responses, setResponses] = useState({});
   const [responseModels, setResponseModels] = useState({});
   const [isProcessing, setIsProcessing] = useState(false); // Add this state
+  const [currentPromptId, setCurrentPromptId] = useState(null);
 
   // Modify auto-scroll to only trigger on new prompt addition
   useEffect(() => {
@@ -150,17 +151,17 @@ export default function Home() {
   const handleSubmit = async () => {
     if (!prompt.trim() || loading || isProcessing) return;
     
-    // Close any existing EventSource
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-    }
-    
     setLoading(true);
-    setIsProcessing(true); // Set processing flag
+    setIsProcessing(true);
     
+    const currentPrompt = prompt;
+    const id = Date.now().toString();
+    setCurrentPromptId(id);
+    
+    let completedResponses = {};
+
     // Initialize response objects for each selected model
     const initialResponses = {};
-    const currentPrompt = prompt; // Store current prompt value
     selectedModels.forEach(model => {
       initialResponses[model] = {
         text: '',
@@ -170,36 +171,26 @@ export default function Home() {
       };
     });
     
-    setResponses(initialResponses);
-    
-    // Add to history immediately with initial state
-    const id = Date.now().toString();
-    setResponseModels(prev => ({
-      ...prev,
-      [id]: [...selectedModels]
-    }));
-    
     setHistory(prev => [...prev, { 
-      id, 
-      prompt, 
+      id,
+      prompt: currentPrompt,
       responses: initialResponses,
-      activeModels: [...selectedModels], // Store models active for this response
-      isHistorical: false // Mark new conversations as non-historical
+      activeModels: [...selectedModels],
+      isHistorical: false
     }]);
+    
     setPrompt('');
+    setResponses(initialResponses);
 
-    // Create event source for streaming - remove API keys from URL
     const newEventSource = new EventSource(
-      `/api/stream?prompt=${encodeURIComponent(prompt)}&models=${encodeURIComponent(selectedModels.join(','))}`
+      `/api/stream?prompt=${encodeURIComponent(currentPrompt)}&models=${encodeURIComponent(selectedModels.join(','))}`
     );
     eventSourceRef.current = newEventSource;
 
-    // Handle incoming stream data
     newEventSource.onmessage = async (event) => {
       const data = JSON.parse(event.data);
       
       if (data.model) {
-        // Update both responses and history immediately
         const update = {
           text: data.text || '',
           error: data.error || null,
@@ -207,6 +198,8 @@ export default function Home() {
           streaming: data.streaming !== false
         };
         
+        completedResponses[data.model] = update;
+
         setResponses(prev => ({
           ...prev,
           [data.model]: update
@@ -214,7 +207,7 @@ export default function Home() {
         
         setHistory(prev => {
           const updated = [...prev];
-          const latestEntry = updated[updated.length - 1];
+          const latestEntry = updated.find(entry => entry.id === id);
           if (latestEntry) {
             latestEntry.responses[data.model] = update;
           }
@@ -222,14 +215,11 @@ export default function Home() {
         });
       }
       
-      // Handle completion
-      if (data.done && !data.model) {
+      // Handle final completion after all models are done
+      if (data.allComplete) {
         try {
-          // Get the latest responses from state
-          const currentResponses = { ...responses };
-          
           // Filter out responses with errors
-          const validResponses = Object.entries(currentResponses).reduce((acc, [model, response]) => {
+          const validResponses = Object.entries(completedResponses).reduce((acc, [model, response]) => {
             if (!response.error) {
               acc[model] = response;
             }
@@ -244,20 +234,19 @@ export default function Home() {
               body: JSON.stringify({
                 prompt: currentPrompt,
                 responses: validResponses,
-                timestamp: Date.now()
+                conversationId: id
               }),
             });
           }
-
-          newEventSource.close();
-          eventSourceRef.current = null;
-          setLoading(false);
-          setIsProcessing(false); // Clear processing flag
         } catch (error) {
           console.error('Error saving conversation:', error);
-          setLoading(false);
-          setIsProcessing(false); // Clear processing flag even on error
         }
+
+        newEventSource.close();
+        eventSourceRef.current = null;
+        setLoading(false);
+        setIsProcessing(false);
+        setCurrentPromptId(null);
       }
     };
 

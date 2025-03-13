@@ -284,7 +284,8 @@ export default function ResponseColumn({ model, response, streaming }) {
             >
               {displayedText || response.text}
             </ReactMarkdown>
-            {streaming && (
+            {/* Only show cursor when actually streaming */}
+            {streaming && response?.loading && (
               <span className="typing-cursor">|</span>
             )}
           </div>
