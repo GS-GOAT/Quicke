@@ -25,6 +25,9 @@ model ApiKey {
   userId       String
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade, name: "UserApiKeys") 
   createdAt    DateTime @default(now())
+
+  // Add unique constraint for userId + provider combination
+  @@unique([userId, provider], name: "userId_provider")
 }
 
 model Conversation {
