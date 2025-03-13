@@ -77,6 +77,65 @@ export default function Home() {
     // This will be handled in the ApiKeyManager component
   }, []);
 
+  // Add useEffect to load conversations on login
+  useEffect(() => {
+    if (session?.user) {
+      fetchConversations();
+    }
+  }, [session]);
+
+  // Modified function to fetch conversations
+  const fetchConversations = async () => {
+    try {
+      const response = await fetch('/api/conversations/retrieve');
+      if (!response.ok) throw new Error('Failed to fetch conversations');
+      
+      const data = await response.json();
+      
+      // Transform conversations into the required format
+      // Note: data is already ordered by createdAt desc from the API
+      const transformedHistory = data.map(conv => {
+        const userMessage = conv.messages.find(msg => msg.role === 'user');
+        const assistantMessages = conv.messages
+          .filter(msg => msg.role === 'assistant')
+          .map(msg => {
+            try {
+              return JSON.parse(msg.content);
+            } catch (e) {
+              console.error('Error parsing message content:', e);
+              return null;
+            }
+          })
+          .filter(Boolean);
+        
+        const responses = {};
+        assistantMessages.forEach(parsed => {
+          const { model, ...responseData } = parsed;
+          responses[model] = {
+            ...responseData,
+            loading: false,
+            streaming: false
+          };
+        });
+
+        return {
+          id: conv.id,
+          prompt: userMessage.content,
+          responses,
+          activeModels: Object.keys(responses),
+          timestamp: new Date(conv.createdAt)
+        };
+      });
+
+      // Sort conversations by timestamp in ascending order (oldest first)
+      transformedHistory.sort((a, b) => a.timestamp - b.timestamp);
+
+      setHistory(transformedHistory);
+    } catch (error) {
+      console.error('Error fetching conversations:', error);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!prompt.trim() || loading) return;
     
@@ -122,7 +181,7 @@ export default function Home() {
     eventSourceRef.current = newEventSource;
 
     // Handle incoming stream data
-    newEventSource.onmessage = (event) => {
+    newEventSource.onmessage = async (event) => {
       const data = JSON.parse(event.data);
       
       if (data.model) {
@@ -151,6 +210,19 @@ export default function Home() {
       
       // Handle completion
       if (data.done && !data.model) {
+        try {
+          await fetch('/api/conversations/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              prompt,
+              responses
+            }),
+          });
+        } catch (error) {
+          console.error('Error saving conversation:', error);
+        }
+
         newEventSource.close();
         eventSourceRef.current = null;
         setLoading(false);
