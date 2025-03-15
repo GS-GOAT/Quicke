@@ -37,7 +37,7 @@ export default function SignUp() {
               Get started for free
             </h2>
             <p className="mt-2 text-sm text-gray-400">
-              Compare responses from leading AI models
+              Why Prompt One when you can Prompt them All
             </p>
           </div>
 

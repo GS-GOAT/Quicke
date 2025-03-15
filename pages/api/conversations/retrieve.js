@@ -8,25 +8,33 @@ export default async function handler(req, res) {
 
   if (req.method === 'GET') {
     try {
+      const page = parseInt(req.query.page) || 1;
+      const pageSize = 5;
+      const skip = (page - 1) * pageSize;
+
+      // Get conversations with pagination
       const conversations = await prisma.conversation.findMany({
         where: { userId: session.user.id },
-        include: { 
-          messages: true
-        },
-        orderBy: { 
-          createdAt: 'desc'  // Get newest first
-        },
-        take: 5  // Take last 5 conversations
+        include: { messages: true },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: pageSize + 1  // Take one extra to check if there are more
       });
 
+      // Check if there are more conversations
+      const hasMore = conversations.length > pageSize;
+      const conversationsToSend = hasMore ? conversations.slice(0, -1) : conversations;
+
       // Sort messages within each conversation
-      const sortedConversations = conversations.map(conv => ({
+      const sortedConversations = conversationsToSend.map(conv => ({
         ...conv,
         messages: conv.messages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
       }));
 
-      // Reverse the array to get oldest first
-      res.status(200).json(sortedConversations.reverse());
+      res.status(200).json({
+        conversations: sortedConversations.reverse(),
+        hasMore
+      });
     } catch (error) {
       console.error('Error retrieving conversations:', error);
       res.status(500).json({ error: 'Failed to retrieve conversations' });

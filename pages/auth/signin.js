@@ -37,7 +37,7 @@ export default function SignIn() {
               Welcome back
             </h2>
             <p className="mt-2 text-sm text-gray-400">
-              Compare responses from leading AI models
+              Get responses from leading AI models
             </p>
           </div>
 

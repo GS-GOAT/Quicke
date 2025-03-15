@@ -18,12 +18,15 @@ const modelDisplayNames = {
   'deepseek-r1': 'DeepSeek R1'
 };
 
-export default function ResponseColumn({ model, response, streaming, className }) {
+export default function ResponseColumn({ model, response, streaming, className, conversationId }) {  // Add conversationId prop
   const contentRef = useRef(null);
   const [displayedText, setDisplayedText] = useState('');
   const [copiedCode, setCopiedCode] = useState(null);  // Add this state for code copy functionality
   const lastResponseRef = useRef('');
   const processingTimeoutRef = useRef(null);
+  const [isActive, setIsActive] = useState(false);  // Add this to track if this column is currently receiving updates
+  const previousResponseRef = useRef('');  // Add this to track previous response
+  const currentConversationRef = useRef(conversationId);  // Add ref to track conversation
 
   // Get the display name for the model
   const modelDisplayName = modelDisplayNames[model] || model;
@@ -37,22 +40,60 @@ export default function ResponseColumn({ model, response, streaming, className }
     };
   }, []);
 
-  // Handle streaming updates
+  // Reset state when conversation changes
+  useEffect(() => {
+    if (currentConversationRef.current !== conversationId) {
+      setDisplayedText('');
+      lastResponseRef.current = '';
+      previousResponseRef.current = '';
+      setIsActive(false);
+      currentConversationRef.current = conversationId;
+    }
+  }, [conversationId]);
+
+  // Reset state when response changes completely
   useEffect(() => {
     if (!response) {
       setDisplayedText('');
       lastResponseRef.current = '';
+      previousResponseRef.current = '';
+      setIsActive(false);
+      return;
+    }
+
+    // Only update if this is a new response for the current conversation
+    if (currentConversationRef.current === conversationId) {
+      if (previousResponseRef.current !== response.text) {
+        setDisplayedText(response.text || '');
+        lastResponseRef.current = response.text || '';
+        previousResponseRef.current = response.text || '';
+        setIsActive(response.loading || streaming);
+      }
+    }
+  }, [response?.text, conversationId]);
+
+  // Handle streaming updates only for active responses in current conversation
+  useEffect(() => {
+    if (!response || !streaming || currentConversationRef.current !== conversationId) {
+      setIsActive(false);
       return;
     }
 
     if (response.text && response.text !== lastResponseRef.current) {
+      // Only update if this is new content
       const newText = response.text.slice(lastResponseRef.current.length);
       if (newText) {
         setDisplayedText(prev => prev + newText);
         lastResponseRef.current = response.text;
+        setIsActive(true);
       }
     }
-  }, [response?.text]);
+
+    // Clear active state when streaming ends
+    if (!response.loading && !streaming) {
+      setIsActive(false);
+    }
+  }, [response?.text, streaming, response?.loading, conversationId]);
 
   // Remove or modify the auto-scroll during streaming
   useEffect(() => {
@@ -263,7 +304,7 @@ export default function ResponseColumn({ model, response, streaming, className }
             </svg>
           ) : (
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-red-500 mt-0.5">
-              <path fillRule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zm-1.72 6.97a.75.75 0 10-1.06 1.06L10.94 12l-1.72 1.72a.75.75 0 101.06 1.06L12 13.06l1.72 1.72a.75.75 0 101.06-1.06L13.06 12l1.72-1.72a.75.75 0 10-1.06-1.06L12 10.94l-1.72-1.72z" clipRule="evenodd" />
+              <path fillRule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zm-1.72 6.97a.75.75 0 10-1.06 1.06L10.94 12l-1.72 1.72a.75.75 0 101.06 1.06L12 13.06l-1.72-1.72z" clipRule="evenodd" />
             </svg>
           )}
           <div>
@@ -345,8 +386,8 @@ export default function ResponseColumn({ model, response, streaming, className }
             >
               {displayedText || response.text}
             </ReactMarkdown>
-            {/* Only show cursor when actually streaming */}
-            {streaming && response?.loading && (
+            {/* Only show cursor when this column is actively receiving updates */}
+            {isActive && (
               <span className="typing-cursor">|</span>
             )}
           </div>

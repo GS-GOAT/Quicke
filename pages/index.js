@@ -29,6 +29,8 @@ export default function Home() {
   const [currentPromptId, setCurrentPromptId] = useState(null);
   const [showContinueButton, setShowContinueButton] = useState(true); // Add this line
   const [visibleSuggestions, setVisibleSuggestions] = useState([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
 
   const promptSuggestions = {
     writing: [
@@ -169,13 +171,22 @@ export default function Home() {
   }, []);
 
   // Modified function to fetch conversations
-  const fetchConversations = async () => {
+  const fetchConversations = async (pageNum = 1) => {
     try {
-      const response = await fetch('/api/conversations/retrieve');
+      // Get current scroll position before loading more
+      const mainContent = document.querySelector('main');
+      const oldScrollHeight = mainContent?.scrollHeight || 0;
+      const oldScrollTop = mainContent?.scrollTop || 0;
+
+      const response = await fetch(`/api/conversations/retrieve?page=${pageNum}`);
       if (!response.ok) throw new Error('Failed to fetch conversations');
       
       const data = await response.json();
-      const transformedHistory = data.map(conv => {
+      
+      // Check if there are more conversations to load
+      setHasMore(data.hasMore);
+
+      const transformedHistory = data.conversations.map(conv => {
         // Find the user message (should be the first one)
         const userMessage = conv.messages.find(msg => msg.role === 'user');
         
@@ -219,18 +230,33 @@ export default function Home() {
         isHistorical: true
       }));
 
-      setHistory(historicalConversations);
+      // Prepend new conversations if loading more, otherwise replace
+      setHistory(prev => 
+        pageNum > 1 
+          ? [...historicalConversations, ...prev]  // Changed this line to prepend
+          : historicalConversations
+      );
       
-      // Smooth scroll to bottom after loading historical conversations
-      setTimeout(() => {
-        const mainContent = document.querySelector('main');
-        if (mainContent) {
-          mainContent.scrollTo({
-            top: mainContent.scrollHeight,
-            behavior: 'smooth'
-          });
-        }
-      }, 100);
+      // Only scroll on initial load (page 1) or maintain scroll position for load more
+      if (pageNum === 1) {
+        setTimeout(() => {
+          if (mainContent) {
+            mainContent.scrollTo({
+              top: mainContent.scrollHeight,
+              behavior: 'smooth'
+            });
+          }
+        }, 100);
+      } else {
+        // After state update, adjust scroll position to maintain view
+        setTimeout(() => {
+          if (mainContent) {
+            const newScrollHeight = mainContent.scrollHeight;
+            const heightDifference = newScrollHeight - oldScrollHeight;
+            mainContent.scrollTop = oldScrollTop + heightDifference;
+          }
+        }, 0);
+      }
     } catch (error) {
       console.error('Error fetching conversations:', error);
     }
@@ -428,8 +454,32 @@ export default function Home() {
     </div>
   );
 
+  const handleLoadMore = () => {
+    const nextPage = page + 1;
+    setPage(nextPage);
+    fetchConversations(nextPage);
+  };
+
   const renderConversationHistory = () => (
     <div className="space-y-10 pb-24 pt-4">
+      {/* Load More button with updated styling */}
+      {history.some(entry => entry.isHistorical) && hasMore && (
+        <button
+          onClick={handleLoadMore}
+          className="flex items-center justify-center space-x-1 mx-auto px-3 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 bg-white dark:bg-gray-800 rounded-full shadow-sm hover:shadow transition-all duration-200 border border-gray-200 dark:border-gray-700 group"
+        >
+          <svg 
+            xmlns="http://www.w3.org/2000/svg" 
+            viewBox="0 0 20 20" 
+            fill="currentColor" 
+            className="w-3.5 h-3.5 rotate-180"
+          >
+            <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+          </svg>
+          <span>Load more</span>
+        </button>
+      )}
+
       {/* Historical conversations first */}
       {history.filter(entry => entry.isHistorical).map((entry) => (
         <div key={entry.id} className="space-y-6">
@@ -444,8 +494,17 @@ export default function Home() {
               <ResponseColumn 
                 key={`${entry.id}-${model}`}
                 model={model}
-                response={responses[model] || entry.responses?.[model] || { loading: false, text: '', error: null }}
-                streaming={responses[model]?.streaming || entry.responses?.[model]?.streaming}
+                conversationId={entry.id}  // Add conversation ID
+                response={
+                  // Only pass current responses if this is the active conversation
+                  currentPromptId === entry.id 
+                    ? responses[model] 
+                    : entry.responses?.[model]
+                }
+                streaming={
+                  currentPromptId === entry.id && 
+                  (responses[model]?.streaming || entry.responses?.[model]?.streaming)
+                }
                 className="light-response-column"
               />
             ))}
@@ -478,8 +537,17 @@ export default function Home() {
               <ResponseColumn 
                 key={`${entry.id}-${model}`}
                 model={model}
-                response={responses[model] || entry.responses?.[model] || { loading: false, text: '', error: null }}
-                streaming={responses[model]?.streaming || entry.responses?.[model]?.streaming}
+                conversationId={entry.id}  // Add conversation ID
+                response={
+                  // Only pass current responses if this is the active conversation
+                  currentPromptId === entry.id 
+                    ? responses[model] 
+                    : entry.responses?.[model]
+                }
+                streaming={
+                  currentPromptId === entry.id && 
+                  (responses[model]?.streaming || entry.responses?.[model]?.streaming)
+                }
                 className="light-response-column"
               />
             ))}
