@@ -387,9 +387,14 @@ async function handleGeminiStream(prompt, sendEvent, genAI) {
 async function handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, openRouterModels) {
   const startTime = Date.now();
   try {
-    sendEvent({ model: modelId, loading: true, text: '' });
+    // Send initial loading state
+    sendEvent({ 
+      model: modelId, 
+      loading: true, 
+      streaming: true,  // Add streaming flag
+      text: '' 
+    });
     
-    // Validate model and log start
     if (!openRouterModels[modelId]) {
       throw new Error(`Model ${modelId} not found in OpenRouter models`);
     }
@@ -400,30 +405,41 @@ async function handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, op
       model: openRouterModels[modelId].id,
       messages: [{ role: 'user', content: prompt }],
       stream: true,
-      temperature: 0.7
+      temperature: 0.7,
+      // Add these parameters for more reliable streaming
+      max_tokens: 1000,
+      presence_penalty: 0,
+      frequency_penalty: 0,
+      stop: null
     });
 
     let text = '';
     let tokenCount = 0;
+    let lastUpdateTime = Date.now();
     
     for await (const chunk of stream) {
       if (chunk.choices[0]?.delta?.content) {
         text += chunk.choices[0].delta.content;
         tokenCount++;
-        // Send immediate update for this chunk
-        sendEvent({ 
-          model: modelId, 
-          text, 
-          loading: false,
-          streaming: true
-        });
+        
+        // Send updates at regular intervals to ensure smooth streaming
+        const currentTime = Date.now();
+        if (currentTime - lastUpdateTime > 50) {  // Update every 50ms
+          sendEvent({ 
+            model: modelId, 
+            text, 
+            loading: false,
+            streaming: true
+          });
+          lastUpdateTime = currentTime;
+        }
       }
     }
     
-    // Log completion and send final state
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
     console.log(`[OpenRouter] ${modelId} completed in ${duration}s`);
     
+    // Send final update
     sendEvent({ 
       model: modelId, 
       text, 
@@ -435,7 +451,7 @@ async function handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, op
     console.error(`[OpenRouter] ${modelId} error:`, error);
     sendEvent({ 
       model: modelId, 
-      error: error.message,
+      error: error.message || 'Failed to get response',
       loading: false,
       streaming: false,
       done: true 

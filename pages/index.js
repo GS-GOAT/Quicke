@@ -746,7 +746,8 @@ export default function Home() {
                 setPrompt={setPrompt} 
                 onSubmit={handleSubmit}
                 onClear={handleClear}
-                disabled={loading || selectedModels.length === 0 || isProcessing}
+                disabled={loading || selectedModels.length === 0}  // Remove isProcessing from here
+                isProcessing={isProcessing}  // Add this separate prop
               />
             </div>
           </div>
