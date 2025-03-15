@@ -31,7 +31,9 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         context:0,
         color: 'from-blue-400 to-blue-600',
         icon: '🌟'
-      },
+      }
+    ],
+    reasoning: [
       { 
         id: 'deepseek-r1',
         name: 'DeepSeek R1',
@@ -40,6 +42,15 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         context:'164K',
         color: 'from-violet-400 to-violet-600',
         icon: '🔮'
+      },
+      {
+        id: 'qwen-32b',
+        name: 'Qwen QwQ 32B',
+        provider: 'Alibaba',
+        description: 'Large multilingual model',
+        context:'131K',
+        color: 'from-red-400 to-red-600',
+        icon: '🌏'
       }
     ],
     mistral: [
@@ -50,17 +61,6 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         description: 'A high-performing model with optimizations for speed and context length.',
         color: 'from-purple-400 to-purple-600',
         icon: '🌪️'
-      },
-    ],
-    qwen: [
-      {
-        id: 'qwen-32b',
-        name: 'Qwen QwQ 32B',
-        provider: 'Alibaba',
-        description: 'Large multilingual model',
-        context:'131K',
-        color: 'from-red-400 to-red-600',
-        icon: '🌏'
       },
     ],
     meta: [
@@ -131,8 +131,29 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
       alert('Please fill in all custom model fields.');
       return;
     }
+
+    // Validate endpoint URL
+    try {
+      new URL(newCustomModel.apiEndpoint);
+    } catch (e) {
+      alert('Please enter a valid API endpoint URL');
+      return;
+    }
+
     const modelId = `custom-${newCustomModel.name.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}`;
-    setCustomModels([...customModels, { ...newCustomModel, id: modelId }]);
+    const customModel = {
+      ...newCustomModel,
+      id: modelId,
+      type: 'custom',
+      color: 'from-gray-400 to-gray-600',
+      icon: '🔌'
+    };
+
+    // Store custom model config
+    const updatedCustomModels = [...customModels, customModel];
+    setCustomModels(updatedCustomModels);
+    localStorage.setItem('customLLMs', JSON.stringify(updatedCustomModels));
+
     setSelectedModels([...selectedModels, modelId]);
     setNewCustomModel({
       name: '',

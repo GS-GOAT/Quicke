@@ -306,8 +306,15 @@ export default function Home() {
     setPrompt('');
     setResponses(initialResponses);
 
+    // Get custom models configuration
+    const customModels = JSON.parse(localStorage.getItem('customLLMs') || '[]');
+    const customModelIds = customModels.map(m => m.id);
+    
+    // Check if any selected models are custom
+    const hasCustomModels = selectedModels.some(id => customModelIds.includes(id));
+
     const newEventSource = new EventSource(
-      `/api/stream?prompt=${encodeURIComponent(currentPrompt)}&models=${encodeURIComponent(selectedModels.join(','))}`
+      `/api/stream?prompt=${encodeURIComponent(currentPrompt)}&models=${encodeURIComponent(selectedModels.join(','))}&customModels=${encodeURIComponent(JSON.stringify(customModels))}`
     );
     eventSourceRef.current = newEventSource;
 
