@@ -112,21 +112,21 @@ export default async function handler(req, res) {
     });
   };
 
+  const providerMap = {
+    'gpt-4': 'openai',
+    'claude': 'anthropic',
+    'gemini': 'google',
+    // Map all OpenRouter models to the openrouter provider
+    'deepseek-r1': 'openrouter',
+    'mistral-7b': 'openrouter',
+    'llama2-70b': 'openrouter',
+    'phi3': 'openrouter',
+    'qwen-32b': 'openrouter',
+    'openchat': 'openrouter'
+  };
+
   // Helper function to check if a model has its required API key
   const hasRequiredApiKey = (modelId) => {
-    const providerMap = {
-      'gpt-4': 'openai',
-      'claude': 'anthropic',
-      'gemini': 'google',
-      // Map all OpenRouter models to the openrouter provider
-      'deepseek-r1': 'openrouter',
-      'mistral-7b': 'openrouter',
-      'llama2-70b': 'openrouter',
-      'phi3': 'openrouter',
-      'qwen-32b': 'openrouter',
-      'openchat': 'openrouter'
-    };
-    
     const provider = providerMap[modelId];
     
     // Check if there's a valid API key
@@ -138,18 +138,6 @@ export default async function handler(req, res) {
 
   // Helper function to verify if user has the required API key
   const verifyApiKey = (modelId) => {
-    const providerMap = {
-      'gpt-4': 'openai',
-      'claude': 'anthropic',
-      'gemini': 'google',
-      'deepseek-r1': 'openrouter',
-      'mistral-7b': 'openrouter',
-      'llama2-70b': 'openrouter',
-      'phi3': 'openrouter',
-      'qwen-32b': 'openrouter',
-      'openchat': 'openrouter'
-    };
-
     const provider = providerMap[modelId];
     return userApiKeys[provider] ? true : false;
   };

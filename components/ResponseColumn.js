@@ -231,15 +231,18 @@ export default function ResponseColumn({ model, response, streaming, className }
     );
   };
 
-  // Add API key warning handling
-  const handleApiKeyWarning = () => {
-    // Assuming you have a global state or context to manage the API key modal
-    window.dispatchEvent(new CustomEvent('openApiKeyModal', { 
-      detail: { provider: model } 
-    }));
+  // Modify the handleApiKeyWarning function
+  const handleApiKeyWarning = (provider) => {
+    // Find the API key manager toggle in global scope
+    if (typeof window !== 'undefined') {
+      const event = new CustomEvent('toggleApiKeyManager', {
+        detail: { show: true }
+      });
+      window.dispatchEvent(event);
+    }
   };
 
-  // Modify error display
+  // Update the renderError function to handle click properly
   const renderError = () => {
     const isApiKeyError = response.error?.toLowerCase().includes('api key');
     
@@ -250,12 +253,16 @@ export default function ResponseColumn({ model, response, streaming, className }
             ? 'border-yellow-600/30 bg-yellow-900/20 cursor-pointer hover:bg-yellow-900/30' 
             : 'border-red-800/30 bg-red-900/20'
         } transition-colors duration-200`}
-        onClick={isApiKeyError ? handleApiKeyWarning : undefined}
+        onClick={isApiKeyError ? (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          handleApiKeyWarning(model);
+        } : undefined}
       >
         <div className="flex items-start space-x-3">
           {isApiKeyError ? (
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-yellow-500 mt-0.5">
-              <path fillRule="evenodd" d="M8 7a5 5 0 1 1 5 5 6.5 6.5 0 0 0-3.096 1.206l-.224.19A6.5 6.5 0 0 0 8 18.5V19h6a1 1 0 1 1 0 2H8a2 2 0 0 1-2-2v-.5a8.5 8.5 0 0 1 4-7.224A3 3 0 1 0 8 7Z" clipRule="evenodd" />
+              <path fillRule="evenodd" d="M8 7a5 5 0 113.61 4.804l-1.903 1.903A1 1 0 019 14H8v1a1 1 0 01-1 1H6v1a1 1 0 01-1 1H3a1 1 0 01-1-1v-2a1 1 0 01.293-.707L8.196 8.39A5.002 5.002 0 018 7z" clipRule="evenodd" />
             </svg>
           ) : (
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-red-500 mt-0.5">
@@ -268,8 +275,11 @@ export default function ResponseColumn({ model, response, streaming, className }
             </p>
             <p className="mt-1 text-sm text-gray-300">{response.error}</p>
             {isApiKeyError && (
-              <button className="mt-2 text-xs text-yellow-500 hover:text-yellow-400 font-medium">
-                Click to add API key →
+              <button 
+                onClick={() => handleApiKeyWarning(model)}
+                className="mt-2 text-xs text-yellow-500 hover:text-yellow-400 font-medium flex items-center"
+              >
+                Add API key →
               </button>
             )}
           </div>

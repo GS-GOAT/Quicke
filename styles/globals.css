@@ -173,11 +173,11 @@ a {
 /* Enhanced scrollbar styles */
 .model-selector-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: rgba(156, 163, 175, 0.3) transparent;
+  scrollbar-color: rgba(75, 85, 99, 0.3) transparent !important;
 }
 
 .model-selector-scrollbar::-webkit-scrollbar {
-  width: 6px;
+  width: 4px;
 }
 
 .model-selector-scrollbar::-webkit-scrollbar-track {
@@ -185,13 +185,37 @@ a {
 }
 
 .model-selector-scrollbar::-webkit-scrollbar-thumb {
-  background-color: rgba(156, 163, 175, 0.3);
-  border-radius: 3px;
-  transition: background-color 0.2s;
+  background-color: rgba(75, 85, 99, 0.3) !important;
+  border-radius: 4px;
 }
 
 .model-selector-scrollbar::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(156, 163, 175, 0.5);
+  background-color: rgba(75, 85, 99, 0.5) !important;
+}
+
+/* Dark theme scrollbar styles */
+.dark *::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.dark *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dark *::-webkit-scrollbar-thumb {
+  background-color: rgba(75, 85, 99, 0.5);
+  border-radius: 3px;
+}
+
+.dark *::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(75, 85, 99, 0.7);
+}
+
+/* For Firefox */
+.dark * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(75, 85, 99, 0.5) transparent;
 }
 
 /* Prose styling (with dark mode support) */
@@ -506,4 +530,30 @@ a {
 
 .auth-input {
   @apply appearance-none relative block w-full px-4 py-3 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent sm:text-sm bg-white dark:bg-gray-700 transition-all duration-200;
+}
+
+/* Backdrop blur when model selector is open */
+.backdrop-blur-active {
+  @apply backdrop-blur-[2px] bg-gray-900/10;
+  transition: backdrop-filter 0.3s ease, background-color 0.3s ease;
+}
+
+.backdrop-blur-active::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 40;
+}
+
+/* Enhanced prompt input hover effect */
+.prompt-input-hover {
+  @apply transition-all duration-200;
+}
+
+.prompt-input-hover:hover {
+  @apply bg-gray-50 dark:bg-gray-800/50;
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.1);
 }

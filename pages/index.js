@@ -146,6 +146,16 @@ export default function Home() {
     }
   }, [history.length]);
 
+  // Add backdrop blur when model selector is open
+  useEffect(() => {
+    if (showModelSelector) {
+      document.body.classList.add('backdrop-blur-active');
+    } else {
+      document.body.classList.remove('backdrop-blur-active');
+    }
+    return () => document.body.classList.remove('backdrop-blur-active');
+  }, [showModelSelector]);
+
   // Modified function to fetch conversations
   const fetchConversations = async () => {
     try {
@@ -199,9 +209,15 @@ export default function Home() {
 
       setHistory(historicalConversations);
       
-      // Scroll to bottom after loading historical conversations
+      // Smooth scroll to bottom after loading historical conversations
       setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        const mainContent = document.querySelector('main');
+        if (mainContent) {
+          mainContent.scrollTo({
+            top: mainContent.scrollHeight,
+            behavior: 'smooth'
+          });
+        }
       }, 100);
     } catch (error) {
       console.error('Error fetching conversations:', error);
@@ -329,6 +345,17 @@ export default function Home() {
       newEventSource.close();
       eventSourceRef.current = null;
     };
+
+    // Add this after setting the new history item
+    setTimeout(() => {
+      const mainContent = document.querySelector('main');
+      if (mainContent) {
+        mainContent.scrollTo({
+          top: mainContent.scrollHeight,
+          behavior: 'smooth'
+        });
+      }
+    }, 100);
   };
 
   const handleClear = () => {
@@ -386,6 +413,67 @@ export default function Home() {
           </button>
         ))}
       </div>
+    </div>
+  );
+
+  const renderConversationHistory = () => (
+    <div className="space-y-10 pb-24 pt-4">
+      {/* Historical conversations first */}
+      {history.filter(entry => entry.isHistorical).map((entry) => (
+        <div key={entry.id} className="space-y-6">
+          <div className="flex justify-end">
+            <div className="bg-primary-100 dark:bg-primary-900/30 p-4 rounded-2xl rounded-tr-none shadow-sm max-w-[80%] border border-primary-200 dark:border-primary-800/30">
+              <p className="text-gray-800 dark:text-gray-200">{entry.prompt}</p>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {(entry.activeModels || []).map(model => (
+              <ResponseColumn 
+                key={`${entry.id}-${model}`}
+                model={model}
+                response={responses[model] || entry.responses?.[model] || { loading: false, text: '', error: null }}
+                streaming={responses[model]?.streaming || entry.responses?.[model]?.streaming}
+                className="light-response-column"
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+
+      {/* Separator - only show if there are both historical and new conversations */}
+      {history.some(entry => entry.isHistorical) && history.some(entry => !entry.isHistorical) && (
+        <div className="flex items-center my-8">
+          <div className="flex-grow h-px bg-gradient-to-r from-transparent via-gray-300 dark:via-gray-600 to-transparent" />
+          <div className="mx-4 px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-xs text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
+            New Conversations
+          </div>
+          <div className="flex-grow h-px bg-gradient-to-r from-transparent via-gray-300 dark:via-gray-600 to-transparent" />
+        </div>
+      )}
+
+      {/* New conversations last */}
+      {history.filter(entry => !entry.isHistorical).map((entry) => (
+        <div key={entry.id} className="space-y-6">
+          <div className="flex justify-end">
+            <div className="bg-primary-100 dark:bg-primary-900/30 p-4 rounded-2xl rounded-tr-none shadow-sm max-w-[80%] border border-primary-200 dark:border-primary-800/30">
+              <p className="text-gray-800 dark:text-gray-200">{entry.prompt}</p>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {(entry.activeModels || []).map(model => (
+              <ResponseColumn 
+                key={`${entry.id}-${model}`}
+                model={model}
+                response={responses[model] || entry.responses?.[model] || { loading: false, text: '', error: null }}
+                streaming={responses[model]?.streaming || entry.responses?.[model]?.streaming}
+                className="light-response-column"
+              />
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 
@@ -552,65 +640,7 @@ export default function Home() {
                 </div>
               </div>
             </div>
-          ) : (
-            <div className="space-y-10 pb-24 pt-4">
-              {/* Group conversations by historical status */}
-              {history.length > 0 && (
-                <>
-                  {/* Historical conversations */}
-                  <div className="space-y-10">
-                    {history.filter(entry => entry.isHistorical).map((entry) => (
-                      <div key={entry.id} className="space-y-6">
-                        <div className="flex justify-end">
-                          <div className="bg-primary-100 dark:bg-primary-900/30 p-4 rounded-2xl rounded-tr-none shadow-sm max-w-[80%] border border-primary-200 dark:border-primary-800/30">
-                            <p className="text-gray-800 dark:text-gray-200">{entry.prompt}</p>
-                          </div>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                          {(entry.activeModels || []).map(model => (
-                            <ResponseColumn 
-                              key={`${entry.id}-${model}`}
-                              model={model}
-                              response={responses[model] || entry.responses?.[model] || { loading: false, text: '', error: null }}
-                              streaming={responses[model]?.streaming || entry.responses?.[model]?.streaming}
-                              className="light-response-column"
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* New conversations */}
-                  <div className="space-y-10">
-                    {history.filter(entry => !entry.isHistorical).map((entry) => (
-                      <div key={entry.id} className="space-y-6">
-                        <div className="flex justify-end">
-                          <div className="bg-primary-100 dark:bg-primary-900/30 p-4 rounded-2xl rounded-tr-none shadow-sm max-w-[80%] border border-primary-200 dark:border-primary-800/30">
-                            <p className="text-gray-800 dark:text-gray-200">{entry.prompt}</p>
-                          </div>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                          {(entry.activeModels || []).map(model => (
-                            <ResponseColumn 
-                              key={`${entry.id}-${model}`}
-                              model={model}
-                              response={responses[model] || entry.responses?.[model] || { loading: false, text: '', error: null }}
-                              streaming={responses[model]?.streaming || entry.responses?.[model]?.streaming}
-                              className="light-response-column"
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-          )}
+          ) : renderConversationHistory()}
         </div>
       </main>
       

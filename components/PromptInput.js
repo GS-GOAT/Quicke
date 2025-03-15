@@ -20,7 +20,7 @@ export default function PromptInput({ prompt, setPrompt, onSubmit, onClear, disa
   };
 
   return (
-    <div className="relative transition-all duration-200 rounded-xl shadow-soft dark:shadow-soft-dark border border-gray-200 dark:border-gray-700 bg-white dark:bg-darksurface">
+    <div className="relative transition-all duration-200 rounded-xl shadow-soft dark:shadow-soft-dark border border-gray-200 dark:border-gray-700 bg-white dark:bg-darksurface prompt-input-hover">
       <textarea
         ref={textareaRef}
         className="w-full py-4 px-4 pr-16 text-gray-900 dark:text-gray-100 rounded-xl resize-none bg-transparent focus:outline-none"
@@ -63,4 +63,4 @@ export default function PromptInput({ prompt, setPrompt, onSubmit, onClear, disa
       </div>
     </div>
   );
-} 
+}

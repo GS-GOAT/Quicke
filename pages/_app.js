@@ -2,8 +2,18 @@ import '../styles/globals.css';
 import Head from 'next/head';
 import Script from 'next/script';
 import { SessionProvider } from 'next-auth/react';
+import { useEffect } from 'react';
 
 function MyApp({ Component, pageProps }) {
+  useEffect(() => {
+    // Add global API key manager toggle
+    window.__apiKeyManagerToggle = (show) => {
+      window.dispatchEvent(new CustomEvent('toggleApiKeyManager', { 
+        detail: { show } 
+      }));
+    };
+  }, []);
+
   return (
     <SessionProvider session={pageProps.session}>
       <Head>
@@ -33,4 +43,4 @@ function MyApp({ Component, pageProps }) {
   );
 }
 
-export default MyApp; 
+export default MyApp;
