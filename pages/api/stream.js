@@ -158,6 +158,9 @@ export default async function handler(req, res) {
   };
 
   try {
+    // Get custom models from localStorage (passed in request)
+    const customModels = JSON.parse(req.query.customModels || '[]');
+
     // Process each model stream independently
     const modelPromises = modelArray.map(async (modelId) => {
       // First verify if user has the required API key
@@ -191,6 +194,8 @@ export default async function handler(req, res) {
           await handleGeminiStream(prompt, sendEvent, genAI);
         } else if (openRouterModels[modelId]) {
           await handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, openRouterModels);
+        } else if (modelId.startsWith('custom-')) {
+          await handleCustomModelStream(modelId, prompt, sendEvent, customModels);
         }
       } catch (error) {
         console.error(`Error with ${modelId}:`, error);
@@ -384,34 +389,53 @@ async function handleGeminiStream(prompt, sendEvent, genAI) {
   }
 }
 
+const SLOW_MODELS = ['qwen-32b', 'deepseek-r1'];
+const TIMEOUT_THRESHOLD = 180000; // 3 minutes in milliseconds
+
 async function handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, openRouterModels) {
   const startTime = Date.now();
+  let hasStartedResponse = false;
+  let timeoutCheck;
+  const isSlowModel = SLOW_MODELS.includes(modelId);
+  let hasReceivedContent = false;
+
   try {
-    // Send initial loading state
+    // Send initial loading state with special flag for slow models
     sendEvent({ 
       model: modelId, 
       loading: true, 
-      streaming: true,  // Add streaming flag
-      text: '' 
+      streaming: true,
+      text: '',
+      isSlowModel // Add this flag
     });
     
     if (!openRouterModels[modelId]) {
       throw new Error(`Model ${modelId} not found in OpenRouter models`);
     }
-    
-    console.log(`[OpenRouter] Starting stream for ${modelId}`);
-    
-    const stream = await openRouter.chat.completions.create({
+
+    // Create a promise that rejects after timeout
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutCheck = setTimeout(() => {
+        if (!hasStartedResponse) {
+          reject(new Error('TIMEOUT'));
+        }
+      }, TIMEOUT_THRESHOLD);
+    });
+
+    // Create the stream promise
+    const streamPromise = openRouter.chat.completions.create({
       model: openRouterModels[modelId].id,
       messages: [{ role: 'user', content: prompt }],
       stream: true,
       temperature: 0.7,
-      // Add these parameters for more reliable streaming
       max_tokens: 1000,
       presence_penalty: 0,
       frequency_penalty: 0,
       stop: null
     });
+
+    // Race between timeout and stream
+    const stream = await Promise.race([streamPromise, timeoutPromise]);
 
     let text = '';
     let tokenCount = 0;
@@ -419,17 +443,26 @@ async function handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, op
     
     for await (const chunk of stream) {
       if (chunk.choices[0]?.delta?.content) {
-        text += chunk.choices[0].delta.content;
+        if (!hasStartedResponse) {
+          hasStartedResponse = true;
+          clearTimeout(timeoutCheck);
+        }
+
+        const content = chunk.choices[0].delta.content;
+        if (content.trim()) {
+          hasReceivedContent = true;
+        }
+        text += content;
         tokenCount++;
         
-        // Send updates at regular intervals to ensure smooth streaming
         const currentTime = Date.now();
-        if (currentTime - lastUpdateTime > 50) {  // Update every 50ms
+        if (currentTime - lastUpdateTime > 50) {
           sendEvent({ 
             model: modelId, 
             text, 
             loading: false,
-            streaming: true
+            streaming: true,
+            error: null // Clear any previous errors
           });
           lastUpdateTime = currentTime;
         }
@@ -437,24 +470,122 @@ async function handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, op
     }
     
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.log(`[OpenRouter] ${modelId} completed in ${duration}s`);
+    console.log(`[OpenRouter] ${modelId} completed in ${duration}s with ${tokenCount} tokens`);
     
+    // Only consider it a NO_RESPONSE if we haven't received any meaningful content
+    if (!text.trim() && !hasReceivedContent) {
+      throw new Error('NO_RESPONSE');
+    }
+
     // Send final update
     sendEvent({ 
       model: modelId, 
-      text, 
+      text: text || ' ',  // Send a space if text is empty but we had content
       loading: false, 
       streaming: false,
+      error: null,
       done: true 
     });
   } catch (error) {
+    clearTimeout(timeoutCheck);
     console.error(`[OpenRouter] ${modelId} error:`, error);
+    
+    const errorMessage = error.message === 'TIMEOUT' 
+      ? `Model is taking too long to respond (>${TIMEOUT_THRESHOLD/60000} minutes). Please try again later.`
+      : error.message === 'NO_RESPONSE'
+        ? `The model failed to generate a response. Please try again.`
+        : error.message || 'Failed to get response';
+
     sendEvent({ 
       model: modelId, 
-      error: error.message || 'Failed to get response',
+      error: errorMessage,
       loading: false,
       streaming: false,
       done: true 
+    });
+  }
+}
+
+async function handleCustomModelStream(modelId, prompt, sendEvent, customModels) {
+  try {
+    const customModel = customModels.find(model => model.id === modelId);
+    if (!customModel) {
+      throw new Error('Custom model configuration not found');
+    }
+
+    sendEvent({
+      model: modelId,
+      loading: true,
+      streaming: true,
+      text: ''
+    });
+
+    const response = await fetch(customModel.apiEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        [customModel.apiKeyName]: customModel.apiKeyValue
+      },
+      body: JSON.stringify({
+        prompt: prompt,
+        stream: true
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`API request failed: ${response.statusText}`);
+    }
+
+    const reader = response.body.getReader();
+    let text = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      // Assume UTF-8 encoding for the stream
+      const chunk = new TextDecoder().decode(value);
+      try {
+        // Try to parse JSON response
+        const data = JSON.parse(chunk);
+        if (data.text || data.content || data.response) {
+          const newContent = data.text || data.content || data.response;
+          text += newContent;
+          sendEvent({
+            model: modelId,
+            text,
+            loading: false,
+            streaming: true
+          });
+        }
+      } catch (e) {
+        // If not JSON, treat as raw text
+        text += chunk;
+        sendEvent({
+          model: modelId,
+          text,
+          loading: false,
+          streaming: true
+        });
+      }
+    }
+
+    sendEvent({
+      model: modelId,
+      text,
+      loading: false,
+      streaming: false,
+      done: true
+    });
+
+  } catch (error) {
+    console.error(`Custom model error:`, error);
+    sendEvent({
+      model: modelId,
+      error: error.message || 'Failed to get response from custom model',
+      loading: false,
+      streaming: false,
+      done: true
     });
   }
 }

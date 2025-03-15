@@ -4,6 +4,8 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { atomDark } from 'react-syntax-highlighter/dist/cjs/styles/prism';
 import 'katex/dist/katex.min.css';
 import { InlineMath, BlockMath } from 'react-katex';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
 
 // Model display names mapping
 const modelDisplayNames = {
@@ -143,11 +145,21 @@ export default function ResponseColumn({ model, response, streaming, className, 
   // Enhanced math processing function with more comprehensive patterns
   const processMathInText = (text) => {
     if (!text) return text;
-    
-    // Helper to wrap text in math delimiters
-    const wrapInMath = (content, type = 'inline') => 
-      `$$math$$${type}${content}$$`;
 
+    // First, protect displayed equations
+    let protectedText = text.replace(/\$\$([\s\S]*?)\$\$/g, (match, content) => {
+      return `\n\n$$${content}$$\n\n`;
+    });
+
+    // Add proper spacing around inline math
+    protectedText = protectedText.replace(/\$([^$\n]+?)\$/g, (match, content) => {
+      // Don't add space if already has space or punctuation
+      const spaceBefore = /[-\s({[]$/.test(match[0]) ? '' : ' ';
+      const spaceAfter = /[-\s)}\],.]$/.test(match[match.length - 1]) ? '' : ' ';
+      return `${spaceBefore}$${content}$${spaceAfter}`;
+    });
+
+    // Process other math expressions
     const replacements = [
       // Basic math delimiters
       { pattern: /\$\$([^$]+?)\$\$/g, replace: (_, m) => wrapInMath(m, 'block') },
@@ -155,28 +167,69 @@ export default function ResponseColumn({ model, response, streaming, className, 
       { pattern: /\\\[(.*?)\\\]/g, replace: (_, m) => wrapInMath(m, 'block') },
       { pattern: /\\\((.*?)\\\)/g, replace: (_, m) => wrapInMath(m, 'inline') },
       
-      // Common LaTeX patterns that should be wrapped in math mode
-      { pattern: /\\[a-zA-Z]+\{[^}]*\}/g, replace: m => wrapInMath(m) },
-      { pattern: /\\[a-zA-Z]+/g, replace: m => wrapInMath(m) },
-      { pattern: /\b\\(?:left|right|quad|qquad|text)\b/g, replace: m => wrapInMath(m) },
+      // Common LaTeX commands and environments
+      { pattern: /\\begin\{(equation|align|gather|multline)\*?\}([\s\S]*?)\\end\{\1\*?\}/g, 
+        replace: (_, env, content) => wrapInMath(content, 'block') },
+      { pattern: /\\boxed\{([^}]*)\}/g, replace: (_, m) => wrapInMath(`\\boxed{${m}}`, 'inline') },
       
-      // Equations and arrays
-      { pattern: /\\begin\{[^}]+\}[\s\S]*?\\end\{[^}]+\}/g, replace: m => wrapInMath(m, 'block') },
+      // Mathematical operators and symbols
+      { pattern: /\\(sin|cos|tan|csc|sec|cot|arcsin|arccos|arctan|sinh|cosh|tanh)\b/g, 
+        replace: m => wrapInMath(m) },
+      { pattern: /\\(log|ln|exp|lim|sup|inf|max|min|arg|det|dim|ker|deg|gcd|lcm)\b/g,
+        replace: m => wrapInMath(m) },
+      { pattern: /\\(sum|prod|coprod|int|oint|bigcap|bigcup|bigoplus|bigotimes)\b/g,
+        replace: m => wrapInMath(m) },
+      { pattern: /\\(alpha|beta|gamma|delta|epsilon|zeta|eta|theta|iota|kappa|lambda|mu|nu|xi|pi|rho|sigma|tau|upsilon|phi|chi|psi|omega)\b/g,
+        replace: m => wrapInMath(m) },
+      { pattern: /\\(mod|bmod|pmod|pod)\b/g, replace: m => wrapInMath(m) },
       
-      // Special symbols and operators
-      { pattern: /[×÷±∑∏∫⋅⊗⊕≤≥≠∈∉⊆⊇∪∩]/g, replace: m => wrapInMath(m) },
-      
-      // Fractions, square roots, and other common constructs
-      { pattern: /\\frac\{[^}]*\}\{[^}]*\}/g, replace: m => wrapInMath(m) },
-      { pattern: /\\sqrt(?:\[[^]]*\])?\{[^}]*\}/g, replace: m => wrapInMath(m) },
-      { pattern: /\\boxed\{[^}]*\}/g, replace: m => wrapInMath(m) },
+      // Common mathematical constructs
+      { pattern: /\\(frac|dfrac|tfrac)\{[^}]*\}\{[^}]*\}/g, replace: m => wrapInMath(m) },
+      { pattern: /\\(sqrt|\root)\[?[^]]*\]?\{[^}]*\}/g, replace: m => wrapInMath(m) },
+      { pattern: /\\(vec|bar|hat|tilde|dot|ddot)\{[^}]*\}/g, replace: m => wrapInMath(m) },
+      { pattern: /\\(overline|underline|widehat|widetilde|overrightarrow|overleftarrow)\{[^}]*\}/g,
+        replace: m => wrapInMath(m) },
       
       // Matrices and arrays
-      { pattern: /\\begin\{(?:matrix|pmatrix|bmatrix|vmatrix)\}[\s\S]*?\\end\{(?:matrix|pmatrix|bmatrix|vmatrix)\}/g, 
+      { pattern: /\\begin\{(matrix|pmatrix|bmatrix|vmatrix|Vmatrix|smallmatrix)\}[\s\S]*?\\end\{\1\}/g,
         replace: m => wrapInMath(m, 'block') },
+      { pattern: /\\begin\{(array|cases)\}[\s\S]*?\\end\{\1\}/g,
+        replace: m => wrapInMath(m, 'block') },
+      
+      // Mathematical spacing and alignment
+      { pattern: /\\(quad|qquad|hspace|vspace)\*?\{[^}]*\}/g, replace: m => wrapInMath(m) },
+      { pattern: /\\(left|right|middle|big|Big|bigg|Bigg)[\[\](){}|./]/g, replace: m => wrapInMath(m) },
+      
+      // Special symbols and operators
+      { pattern: /[×÷±∑∏∫⋅⊗⊕≤≥≠∈∉⊆⊇∪∩→←↔⇒⇐⇔∀∃∄¬∨∧⊥∥∞ℵℝℤℕℚℂ]/g, replace: m => wrapInMath(m) },
+      { pattern: /\\(infty|emptyset|partial|nabla|therefore|because|forall|exists|nexists|neg|vee|wedge|perp|parallel)/g,
+        replace: m => wrapInMath(m) },
+      // Add support for more mathematical expressions
+      { 
+        pattern: /\\begin\{(equation|align|gather|multline)\*?\}([\s\S]*?)\\end\{\1\*?\}/g,
+        replace: (_, env, content) => `\n\n$${content}$\n\n`
+      },
+      { 
+        pattern: /(?<![\\])\b(?:sin|cos|tan|log|ln)\b(?!\{)/g,
+        replace: m => `\\${m}`
+      },
+      {
+        pattern: /(?<=\$.*?)([0-9]+)(?=[⁄/][0-9]+.*?\$)/g,
+        replace: m => `\\frac{${m}}`
+      },
+      // Better fraction handling
+      {
+        pattern: /\\frac\{([^{}]+)\}\{([^{}]+)\}/g,
+        replace: (_, num, den) => `\\frac{${num}}{${den}}`
+      },
+      // Handle equation spacing
+      {
+        pattern: /(\$[^$\n]+\$)([,.])?(?!\n)/g,
+        replace: (_, math, punct) => punct ? `${math}${punct} ` : `${math} `
+      }
     ];
 
-    let processedText = text;
+    let processedText = protectedText;
     replacements.forEach(({ pattern, replace }) => {
       processedText = processedText.replace(pattern, replace);
     });
@@ -199,7 +252,30 @@ export default function ResponseColumn({ model, response, streaming, className, 
         "\\C": "\\mathbb{C}",
         "\\implies": "\\Rightarrow",
         "\\iff": "\\Leftrightarrow",
-        "\\norm": "\\|#1\\|"
+        "\\norm": "\\|#1\\|",
+        "\\set": "\\{#1\\}",
+        "\\abs": "|#1|",
+        "\\probability": "\\mathbb{P}\\left(#1\\right)",
+        "\\expectation": "\\mathbb{E}\\left[#1\\right]",
+        "\\variance": "\\text{Var}\\left(#1\\right)",
+        "\\diff": "\\mathrm{d}",
+        "\\pd": "\\partial",
+        "\\transpose": "^{\\mathsf{T}}",
+        "\\inverse": "^{-1}",
+        "\\argmin": "\\underset{#1}{\\text{arg min}}",
+        "\\argmax": "\\underset{#1}{\\text{arg max}}",
+        "\\mod": "\\text{ mod }",
+        "\\equiv": "\\text{ equiv }",
+        "\\ceil": "\\lceil#1\\rceil",
+        "\\floor": "\\lfloor#1\\rfloor",
+        "\\norm": "\\left\\|#1\\right\\|",
+        "\\paren": "\\left(#1\\right)",
+        "\\ang": "\\langle#1\\rangle",
+        "\\abs": "\\left|#1\\right|",
+        "\\set": "\\{#1\\}",
+        "\\card": "\\left|#1\\right|",
+        "\\vectornorm": "\\left\\|#1\\right\\|",
+        "\\interior": "\\mathop{\\mathrm{int}}"
       },
     };
 
@@ -281,6 +357,8 @@ export default function ResponseColumn({ model, response, streaming, className, 
 
   const renderError = () => {
     const isApiKeyError = response.error?.toLowerCase().includes('api key');
+    const isTimeoutError = response.error?.toLowerCase().includes('high traffic') || 
+                          response.error?.toLowerCase().includes('try again');
     
     return (
       <div 
@@ -293,8 +371,10 @@ export default function ResponseColumn({ model, response, streaming, className, 
         }}
         className={`p-4 rounded-lg border ${
           isApiKeyError 
-            ? 'border-yellow-600/30 bg-yellow-900/20 cursor-pointer hover:bg-yellow-900/30' 
-            : 'border-red-800/30 bg-red-900/20'
+            ? 'border-yellow-600/30 bg-yellow-900/20 cursor-pointer hover:bg-yellow-900/30'
+            : isTimeoutError
+              ? 'border-orange-600/30 bg-orange-900/20'
+              : 'border-red-800/30 bg-red-900/20'
         } transition-colors duration-200`}
       >
         <div className="flex items-start space-x-3">
@@ -302,14 +382,24 @@ export default function ResponseColumn({ model, response, streaming, className, 
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-yellow-500 mt-0.5">
               <path fillRule="evenodd" d="M8 7a5 5 0 113.61 4.804l-1.903 1.903A1 1 0 019 14H8v1a1 1 0 01-1 1H6v1a1 1 0 01-1 1H3a1 1 0 01-1-1v-2a1 1 0 01.293-.707L8.196 8.39A5.002 5.002 0 018 7z" clipRule="evenodd" />
             </svg>
+          ) : isTimeoutError ? (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-orange-500 mt-0.5">
+              <path fillRule="evenodd" d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8zm1-13a1 1 0 10-2 0v4c0 .28.116.52.306.682L14 15.243a1 1 0 001.414-1.414l-2.707-2.708V7z" clipRule="evenodd" />
+            </svg>
           ) : (
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-red-500 mt-0.5">
               <path fillRule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zm-1.72 6.97a.75.75 0 10-1.06 1.06L10.94 12l-1.72 1.72a.75.75 0 101.06 1.06L12 13.06l-1.72-1.72z" clipRule="evenodd" />
             </svg>
           )}
           <div>
-            <p className={`font-medium ${isApiKeyError ? 'text-yellow-400' : 'text-red-400'}`}>
-              {isApiKeyError ? 'API Key Required' : 'Error encountered'}
+            <p className={`font-medium ${
+              isApiKeyError ? 'text-yellow-400' : 
+              isTimeoutError ? 'text-orange-400' : 
+              'text-red-400'
+            }`}>
+              {isApiKeyError ? 'API Key Required' : 
+               isTimeoutError ? 'Model Temporarily Unavailable' : 
+               'Error encountered'}
             </p>
             <p className="mt-1 text-sm text-gray-300">{response.error}</p>
             {isApiKeyError && (
@@ -329,6 +419,16 @@ export default function ResponseColumn({ model, response, streaming, className, 
       </div>
     );
   };
+
+  const renderLoading = (isSlowModel) => (
+    <div className="flex flex-col items-center justify-center h-full space-y-4">
+      <div className="w-full max-w-md h-4 rounded-full loading-gradient"></div>
+      <div className="w-3/4 max-w-sm h-4 rounded-full loading-gradient"></div>
+      <div className="dot-typing-container">
+        <div className="dot-typing"></div>
+      </div>
+    </div>
+  );
 
   return (
     <div className={`rounded-xl overflow-hidden flex flex-col h-full shadow-lg transition-all duration-200 ${className}`}>
@@ -359,16 +459,8 @@ export default function ResponseColumn({ model, response, streaming, className, 
         className="p-4 overflow-auto flex-grow scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent"
         style={{ minHeight: "200px", maxHeight: "600px" }}
       >
-        {isLoading && !hasText ? (
-          <div className="flex flex-col items-center justify-center h-full space-y-4">
-            <div className="w-full max-w-md h-4 rounded-full loading-gradient"></div>
-            <div className="w-3/4 max-w-sm h-4 rounded-full loading-gradient"></div>
-            <div className="pulse-dots mt-4">
-              <div className="pulse-dot"></div>
-              <div className="pulse-dot"></div>
-              <div className="pulse-dot"></div>
-            </div>
-          </div>
+        {(isLoading && !hasText) || (response?.isSlowModel && !hasText) ? (
+          renderLoading(response?.isSlowModel)
         ) : hasError ? (
           renderError()
         ) : hasText ? (
@@ -383,6 +475,8 @@ export default function ResponseColumn({ model, response, streaming, className, 
                   <a target="_blank" rel="noopener noreferrer" className="text-primary-600 dark:text-primary-400 hover:underline" {...props} />
                 ),
               }}
+              remarkPlugins={[remarkMath]}
+              rehypePlugins={[rehypeKatex]}
             >
               {displayedText || response.text}
             </ReactMarkdown>
