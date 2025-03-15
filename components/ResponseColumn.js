@@ -146,8 +146,15 @@ export default function ResponseColumn({ model, response, streaming, className, 
   const processMathInText = (text) => {
     if (!text) return text;
 
+    // First protect code blocks
+    const codeBlocks = [];
+    let protectedText = text.replace(/```[\s\S]*?```/g, (match) => {
+      codeBlocks.push(match);
+      return `\uE000${codeBlocks.length - 1}\uE000`;
+    });
+
     // First, protect displayed equations
-    let protectedText = text.replace(/\$\$([\s\S]*?)\$\$/g, (match, content) => {
+    protectedText = protectedText.replace(/\$\$([\s\S]*?)\$\$/g, (match, content) => {
       return `\n\n$$${content}$$\n\n`;
     });
 
@@ -232,6 +239,11 @@ export default function ResponseColumn({ model, response, streaming, className, 
     let processedText = protectedText;
     replacements.forEach(({ pattern, replace }) => {
       processedText = processedText.replace(pattern, replace);
+    });
+
+    // Restore code blocks
+    processedText = processedText.replace(/\uE000(\d+)\uE000/g, (match, index) => {
+      return codeBlocks[index];
     });
 
     return processedText;
