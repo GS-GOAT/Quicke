@@ -156,8 +156,8 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
     : modelCategories[activeCategory] || [];
 
   return (
-    <div className="overflow-hidden">
-      <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
+    <div className="overflow-hidden model-selector-scrollbar">
+      <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700/50 bg-gradient-to-b from-white to-gray-50 dark:from-gray-900 dark:to-gray-800/50">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Select Models</h3>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
           Select models to be prompted
@@ -300,8 +300,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
       </div>
       
       <div className="px-5 py-3 bg-gray-50 dark:bg-gray-800/50 text-xs text-gray-500 dark:text-gray-400">
-        <p>API keys are stored securely in your browser's local storage.</p>
       </div>
     </div>
   );
-} 
+}

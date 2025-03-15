@@ -7,8 +7,10 @@ import ThemeToggle from '../components/ThemeToggle';
 import ApiKeyManager from '../components/ApiKeyManager';
 import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 
 export default function Home() {
+  const router = useRouter();
   const { data: session } = useSession();
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
@@ -26,6 +28,40 @@ export default function Home() {
   const [isProcessing, setIsProcessing] = useState(false); // Add this state
   const [currentPromptId, setCurrentPromptId] = useState(null);
   const [showContinueButton, setShowContinueButton] = useState(true); // Add this line
+  const [visibleSuggestions, setVisibleSuggestions] = useState([]);
+
+  const promptSuggestions = {
+    writing: [
+      "Write a short story about time travel",
+      "Create a poem about the ocean",
+      "Write a dialogue between two AI systems",
+      "Craft a creative product description",
+    ],
+    analysis: [
+      "Compare different programming languages",
+      "Analyze the impact of AI on society",
+      "Explain quantum computing simply",
+      "Break down complex economic concepts",
+    ],
+    creativity: [
+      "Design a unique superhero concept",
+      "Create a recipe fusion dish",
+      "Invent a new sport",
+      "Generate creative marketing ideas",
+    ],
+    business: [
+      "Write a professional email template",
+      "Create a business pitch",
+      "Develop a marketing strategy",
+      "Draft a project proposal",
+    ],
+    technical: [
+      "Debug this code snippet",
+      "Explain microservices architecture",
+      "Compare cloud providers",
+      "Optimize database queries",
+    ]
+  };
 
   // Modify auto-scroll to only trigger on new prompt addition
   useEffect(() => {
@@ -86,6 +122,29 @@ export default function Home() {
       fetchConversations();
     }
   }, [session]);  // Remove history.length from dependencies
+
+  // Add to useEffect section
+  useEffect(() => {
+    if (history.length === 0) {
+      const categories = Object.keys(promptSuggestions);
+      let currentIndex = 0;
+
+      const rotateSuggestions = () => {
+        const category = categories[currentIndex % categories.length];
+        const suggestions = promptSuggestions[category];
+        const randomSuggestions = suggestions
+          .sort(() => Math.random() - 0.5)
+          .slice(0, 4);
+
+        setVisibleSuggestions(randomSuggestions);
+        currentIndex++;
+      };
+
+      rotateSuggestions();
+      const interval = setInterval(rotateSuggestions, 8000);
+      return () => clearInterval(interval);
+    }
+  }, [history.length]);
 
   // Modified function to fetch conversations
   const fetchConversations = async () => {
@@ -150,6 +209,13 @@ export default function Home() {
   };
 
   const handleSubmit = async () => {
+    // Add authentication check
+    if (!session) {
+      const encodedPrompt = encodeURIComponent(prompt);
+      router.push(`/auth/signin?redirect=/?prompt=${encodedPrompt}`);
+      return;
+    }
+
     if (!prompt.trim() || loading || isProcessing) return;
     
     setLoading(true);
@@ -305,135 +371,145 @@ export default function Home() {
     </div>
   );
 
+  // Replace the old suggestion rendering with continuous scroll
+  const renderSuggestions = () => (
+    <div className="relative h-24 overflow-hidden">
+      <div className="suggestion-carousel">
+        {/* Duplicate suggestions array for seamless loop */}
+        {[...Object.values(promptSuggestions).flat(), ...Object.values(promptSuggestions).flat()].map((suggestion, index) => (
+          <button
+            key={`${suggestion}-${index}`}
+            onClick={() => setPrompt(suggestion)}
+            className="suggestion-item px-4 py-2 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-md hover:shadow-lg border border-gray-200 dark:border-gray-700"
+          >
+            "{suggestion}"
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
   return (
-    <div className="flex flex-col h-screen bg-gray-50 dark:bg-darkbg transition-colors duration-200">
+    <div className="flex flex-col h-screen bg-gray-50 dark:bg-[#111111] transition-colors duration-200">
       <Head>
         <title>Quicke - LLM Response Comparison</title>
         <meta name="description" content="Get responses from multiple LLMs side by side" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <header className="bg-white dark:bg-darksurface shadow-sm dark:shadow-none border-b border-gray-200 dark:border-gray-800 transition-colors duration-200">
-        <div className="max-w-7xl mx-auto py-4 px-4 sm:px-6 flex items-center justify-between">
-          {/* Left side with logo */}
-          <div className="flex items-center space-x-3">
-            <div className="h-8 w-8 bg-gradient-to-br from-primary-500 to-primary-700 rounded-lg flex items-center justify-center shadow-md">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-white">
-                <path d="M21.721 12.752a9.711 9.711 0 00-.945-5.003 12.754 12.754 0 01-4.339 2.708 18.991 18.991 0 01-.214 4.772 17.165 17.165 0 005.498-2.477zM14.634 15.55a17.324 17.324 0 00.332-4.647c-.952.227-1.945.347-2.966.347-1.021 0-2.014-.12-2.966-.347a17.515 17.515 0 00.332 4.647 17.385 17.385 0 005.268 0zM9.772 17.119a18.963 18.963 0 004.456 0A17.182 17.182 0 0112 21.724a17.18 17.18 0 01-2.228-4.605zM7.777 15.23a18.87 18.87 0 01-.214-4.774 12.753 12.753 0 01-4.34-2.708 9.711 9.711 0 00-.944 5.004 17.165 17.165 0 005.498 2.477zM21.356 14.752a9.765 9.765 0 01-7.478 6.817 18.64 18.64 0 001.988-4.718 18.627 18.627 0 005.49-2.098zM2.644 14.752c1.682.971 3.53 1.688 5.49 2.099a18.64 18.64 0 001.988 4.718 9.765 9.765 0 01-7.478-6.816zM13.878 2.43a9.755 9.755 0 016.116 3.986 11.267 11.267 0 01-3.746 2.504 18.63 18.63 0 00-2.37-6.49zM12 2.276a17.152 17.152 0 012.805 7.121c-.897.23-1.837.353-2.805.353-.968 0-1.908-.122-2.805-.353A17.151 17.151 0 0112 2.276zM10.122 2.43a18.629 18.629 0 00-2.37 6.49 11.266 11.266 0 01-3.746-2.504a9.754 9.754 0 016.116-3.985z" />
-              </svg>
+      <header className="relative z-10 bg-white/80 dark:bg-darksurface/80 backdrop-blur-sm shadow-sm border-b border-gray-200 dark:border-gray-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          <div className="flex items-center justify-between h-16">
+            {/* Logo & Brand */}
+            <div className="flex items-center space-x-3">
+              <div className="h-10 w-10 relative group">
+                <div className="absolute inset-0 bg-gradient-to-tr from-primary-600 to-primary-400 rounded-xl transform group-hover:scale-105 transition-transform duration-200"></div>
+                <div className="relative h-full w-full flex items-center justify-center">
+                  <span className="text-2xl font-bold text-white">Q</span>
+                </div>
+              </div>
+              <h1 className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-400 bg-clip-text text-transparent">
+                Quicke
+              </h1>
             </div>
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white">Quicke</h1>
-          </div>
-          
-          {/* Center/Right side with actions */}
-          <div className="flex items-center space-x-4">
 
-            <ThemeToggle />
-
-            {/* Model selector */}
-            <div className="relative">
+            {/* Center - Model Selector */}
+            <div className="flex-1 flex justify-center">
               <button 
                 ref={modelButtonRef}
                 onMouseEnter={handleModelButtonMouseEnter}
-                onClick={() => setShowModelSelector(!showModelSelector)}
-                className="px-4 py-2 rounded-lg bg-white hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 text-sm font-medium transition-all duration-200 border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md"
+                className="group px-4 py-2 rounded-lg bg-white hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 text-sm font-medium transition-all duration-200 border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md"
               >
                 <div className="flex items-center space-x-2">
-                  <span>{selectedModels.length} Model{selectedModels.length !== 1 ? 's' : ''} Selected</span>
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                  <span>{selectedModels.length} Model{selectedModels.length !== 1 ? 's' : ''}</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-gray-400 group-hover:text-primary-500 transition-colors">
                     <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
                   </svg>
                 </div>
               </button>
-
-              {showModelSelector && (
-                <div
-                  ref={modelSelectorRef}
-                  onMouseLeave={handleModelSelectorMouseLeave}
-                  className="fixed top-16 left-1/2 -translate-x-1/2 w-[calc(100vw-2rem)] max-w-3xl rounded-xl bg-white dark:bg-darksurface shadow-xl ring-1 ring-black ring-opacity-5 z-50 backdrop-blur-sm backdrop-filter"
-                  style={{
-                    maxHeight: 'calc(100vh - 200px)',
-                    overflowY: 'auto'
-                  }}
-                >
-                  <div className="relative w-full">
-                    {/* Arrow indicator */}
-                    <div className="absolute right-12 -top-2 w-4 h-4 bg-white dark:bg-darksurface rotate-45 border-t border-l border-gray-200 dark:border-gray-700"></div>
-                    
-                    <ModelSelector 
-                      selectedModels={selectedModels} 
-                      setSelectedModels={setSelectedModels} 
-                    />
-                  </div>
-                </div>
-              )}
             </div>
 
-            {/* User menu - moved to rightmost position */}
-            {session?.user ? (
-              <div className="relative group">
-                <button className="flex items-center space-x-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center text-white font-medium">
-                    {session.user.email.charAt(0).toUpperCase()}
-                  </div>
-                  {/* <div className="flex flex-col items-start">
-                    <span className="text-sm font-medium">{session.user.email}</span>
-                    <span className="text-xs text-gray-500 dark:text-gray-400">Manage account</span>
-                  </div> */}
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-gray-400">
-                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-                  </svg>
-                </button>
-                
-                <div className="absolute right-0 mt-2 w-56 py-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-50 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all duration-200">
-                  <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Signed in as</p>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{session.user.email}</p>
-                  </div>
-                  
-                  {/* Added API Keys option */}
-                  <button 
-                    onClick={() => setShowApiKeyManager(true)}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 mr-2">
-                      <path fillRule="evenodd" d="M8 7a5 5 0 113.61 4.804l-1.903 1.903A1 1 0 019 14H8v1a1 1 0 01-1 1H6v1a1 1 0 01-1 1H3a1 1 0 01-1-1v-2a1 1 0 01.293-.707L8.196 8.39A5.002 5.002 0 018 7zm5-3a.75.75 0 000 1.5A1.5 1.5 0 0114.5 7 .75.75 0 0016 7a3 3 0 00-3-3z" clipRule="evenodd" />
+            {/* Right Actions */}
+            <div className="flex items-center space-x-4">
+              <ThemeToggle />
+              {session?.user ? (
+                <div className="relative group">
+                  <button className="flex items-center space-x-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center text-white font-medium">
+                      {session.user.email.charAt(0).toUpperCase()}
+                    </div>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-gray-400">
+                      <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
                     </svg>
-                    API Keys
                   </button>
                   
-                  <div className="border-t border-gray-200 dark:border-gray-700 mt-2 pt-2">
+                  <div className="absolute right-0 mt-2 w-56 py-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-50 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all duration-200">
+                    <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Signed in as</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{session.user.email}</p>
+                    </div>
+                    
+                    {/* Added API Keys option */}
                     <button 
-                      onClick={() => signOut()}
+                      onClick={() => setShowApiKeyManager(true)}
                       className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 mr-2">
-                        <path fillRule="evenodd" d="M3 4.25A2.25 2.25 0 015.25 2h5.5A2.25 2.25 0 0113 4.25v2a.75.75 0 01-1.5 0v-2a.75.75 0 00-.75-.75h-5.5a.75.75 0 00-.75.75v11.5c0 .414.336.75.75.75h5.5a.75.75 0 00.75-.75v-2a.75.75 0 011.5 0v2A2.25 2.25 0 0110.75 18h-5.5A2.25 2.25 0 013 15.75V4.25z" clipRule="evenodd" />
-                        <path fillRule="evenodd" d="M19 10a.75.75 0 00-.75-.75H8.704l1.048-.943a.75.75 0 10-1.004-1.114l-2.5 2.25a.75.75 0 000 1.114l2.5 2.25a.75.75 0 101.004-1.114l-1.048-.943h9.546A.75.75 0 0019 10z" clipRule="evenodd" />
+                        <path fillRule="evenodd" d="M8 7a5 5 0 113.61 4.804l-1.903 1.903A1 1 0 019 14H8v1a1 1 0 01-1 1H6v1a1 1 0 01-1 1H3a1 1 0 01-1-1v-2a1 1 0 01.293-.707L8.196 8.39A5.002 5.002 0 018 7zm5-3a.75.75 0 000 1.5A1.5 1.5 0 0114.5 7 .75.75 0 0016 7a3 3 0 00-3-3z" clipRule="evenodd" />
                       </svg>
-                      Sign out
+                      API Keys
                     </button>
+                    
+                    <div className="border-t border-gray-200 dark:border-gray-700 mt-2 pt-2">
+                      <button 
+                        onClick={() => signOut()}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 mr-2">
+                          <path fillRule="evenodd" d="M3 4.25A2.25 2.25 0 015.25 2h5.5A2.25 2.25 0 0113 4.25v2a.75.75 0 01-1.5 0v-2a.75.75 0 00-.75-.75h-5.5a.75.75 0 00-.75.75v11.5c0 .414.336.75.75.75h5.5a.75.75 0 00.75-.75v-2a.75.75 0 011.5 0v2A2.25 2.25 0 0110.75 18h-5.5A2.25 2.25 0 013 15.75V4.25z" clipRule="evenodd" />
+                          <path fillRule="evenodd" d="M19 10a.75.75 0 00-.75-.75H8.704l1.048-.943a.75.75 0 10-1.004-1.114l-2.5 2.25a.75.75 0 000 1.114l2.5 2.25a.75.75 0 101.004-1.114l-1.048-.943h9.546A.75.75 0 0019 10z" clipRule="evenodd" />
+                        </svg>
+                        Sign out
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ) : (
-              <div className="flex items-center space-x-3">
-                <Link href="/auth/signin" className="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400">
-                  Sign in
-                </Link>
-                <Link 
-                  href="/auth/signup"
-                  className="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg shadow-sm transition-colors duration-200"
-                >
-                  Sign up
-                </Link>
-              </div>
-            )}
+              ) : (
+                <div className="flex items-center space-x-3">
+                  <Link href="/auth/signin" className="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400">
+                    Sign in
+                  </Link>
+                  <Link 
+                    href="/auth/signup"
+                    className="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg shadow-sm hover:shadow-lg hover:shadow-primary-500/25 transition-all duration-200"
+                  >
+                    Start Free
+                  </Link>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </header>
-      
-      {/* API Key Manager Modal */}
+
+      {/* Model Selector Dropdown */}
+      {showModelSelector && (
+        <div
+          ref={modelSelectorRef}
+          onMouseLeave={handleModelSelectorMouseLeave}
+          className="fixed top-16 left-1/2 -translate-x-1/2 w-[calc(100vw-2rem)] max-w-3xl rounded-xl bg-white/95 dark:bg-gray-900/95 backdrop-blur-md shadow-2xl ring-1 ring-black/5 dark:ring-white/5 z-50 transition-all duration-200 ease-out transform"
+          style={{
+            maxHeight: 'calc(100vh - 200px)',
+            overflowY: 'auto'
+          }}
+        >
+          <ModelSelector 
+            selectedModels={selectedModels} 
+            setSelectedModels={setSelectedModels} 
+          />
+        </div>
+      )}
+
       <ApiKeyManager 
         isOpen={showApiKeyManager} 
         onClose={() => setShowApiKeyManager(false)} 
@@ -453,35 +529,27 @@ export default function Home() {
       <main className="flex-grow overflow-auto px-4 py-2">
         <div className="max-w-5xl mx-auto">
           {history.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-              <div className="w-20 h-20 mb-6 rounded-full bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center shadow-lg">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-10 h-10 text-white">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
-                </svg>
-              </div>
-              <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">Welcome to Quicke</h2>
-              <p className="mt-3 text-gray-600 dark:text-gray-400 max-w-md">
-                Enter a prompt below to see responses from multiple AI models side by side
-              </p>
-              <div className="mt-6 flex flex-wrap justify-center gap-3">
-                <button 
-                  onClick={() => setPrompt("Explain quantum computing in simple terms")}
-                  className="px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                >
-                  "Explain quantum computing"
-                </button>
-                <button 
-                  onClick={() => setPrompt("Write a short poem about the ocean")}
-                  className="px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                >
-                  "Write a poem"
-                </button>
-                <button 
-                  onClick={() => setPrompt("Compare React, Vue and Angular for a new web project")}
-                  className="px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                >
-                  "Compare frameworks"
-                </button>
+            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
+              <div className="max-w-3xl w-full space-y-8">
+                <div className="space-y-4">
+                  <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 dark:text-white">
+                    Prompt AI Models At Once
+                  </h1>
+                  <p className="text-xl text-gray-600 dark:text-gray-400">
+                    Get instant responses from multiple AI models side by side
+                  </p>
+                </div>
+
+                {renderSuggestions()}
+
+                {/* Quick start section */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-8">
+                  {/* <div className="p-4 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm">
+                    <h3 className="font-semibold text-gray-900 dark:text-white">Multiple Models</h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Compare responses from leading AI models</p>
+                  </div> */}
+                  {/* Add more quick start cards */}
+                </div>
               </div>
             </div>
           ) : (
@@ -506,18 +574,13 @@ export default function Home() {
                               model={model}
                               response={responses[model] || entry.responses?.[model] || { loading: false, text: '', error: null }}
                               streaming={responses[model]?.streaming || entry.responses?.[model]?.streaming}
+                              className="light-response-column"
                             />
                           ))}
                         </div>
                       </div>
                     ))}
                   </div>
-
-                  {/* Separator - only show if there are both historical and new conversations */}
-                  {history.some(entry => entry.isHistorical) && 
-                  history.some(entry => !entry.isHistorical) && (
-                    <ConversationSeparator />
-                  )}
 
                   {/* New conversations */}
                   <div className="space-y-10">
@@ -536,6 +599,7 @@ export default function Home() {
                               model={model}
                               response={responses[model] || entry.responses?.[model] || { loading: false, text: '', error: null }}
                               streaming={responses[model]?.streaming || entry.responses?.[model]?.streaming}
+                              className="light-response-column"
                             />
                           ))}
                         </div>

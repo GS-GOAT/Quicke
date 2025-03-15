@@ -30,25 +30,21 @@ export default function SignUp() {
       <Head>
         <title>Sign Up - Quicke</title>
       </Head>
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-gray-900 to-gray-800 px-4">
-        <div className="w-full max-w-md">
-          {/* Logo and Title */}
-          <div className="text-center mb-8 animate-fade-in">
-            <div className="mx-auto h-12 w-12 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl flex items-center justify-center shadow-lg mb-4 transform hover:rotate-6 transition-transform duration-300">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7 text-white">
-                <path d="M21.721 12.752a9.711 9.711 0 00-.945-5.003 12.754 12.754 0 01-4.339 2.708 18.991 18.991 0 01-.214 4.772 17.165 17.165 0 005.498-2.477zM14.634 15.55a17.324 17.324 0 00.332-4.647c-.952.227-1.945.347-2.966.347-1.021 0-2.014-.12-2.966-.347a17.515 17.515 0 00.332 4.647 17.385 17.385 0 005.268 0zM9.772 17.119a18.963 18.963 0 004.456 0A17.182 17.182 0 0112 21.724a17.18 17.18 0 01-2.228-4.605z" />
-              </svg>
-            </div>
-            <h2 className="mt-2 text-3xl font-bold text-white">Create your account</h2>
+      <div className="min-h-screen flex flex-col items-center justify-center auth-bg px-4">
+        <div className="w-full max-w-md relative z-10">
+          <div className="text-center mb-8">
+            <h2 className="mt-2 text-4xl font-bold bg-gradient-to-r from-primary-400 to-primary-600 bg-clip-text text-transparent">
+              Get started for free
+            </h2>
             <p className="mt-2 text-sm text-gray-400">
-              Start using Quicke today
+              Compare responses from leading AI models
             </p>
           </div>
 
-          <div className="bg-gray-800 rounded-2xl shadow-xl overflow-hidden transform hover:scale-[1.01] transition-all duration-200 border border-gray-700/50">
+          <div className="backdrop-blur-xl bg-gray-900/50 rounded-2xl shadow-2xl overflow-hidden border border-gray-800/50">
             <div className="p-6 sm:p-8">
               {error && (
-                <div className="mb-4 p-3 rounded-lg bg-red-900/30 text-red-400 text-sm animate-shake">
+                <div className="mb-6 p-3 rounded-lg bg-red-900/30 text-red-400 text-sm animate-shake">
                   <p>{error}</p>
                 </div>
               )}
@@ -91,18 +87,30 @@ export default function SignUp() {
                   Create account
                 </button>
               </form>
+
+              <div className="mt-6 text-center">
+                <p className="text-sm text-gray-400">
+                  Already have an account?{' '}
+                  <Link href="/auth/signin" className="text-primary-500 hover:text-primary-400 font-medium">
+                    Sign in
+                  </Link>
+                </p>
+              </div>
             </div>
           </div>
 
-          <p className="mt-6 text-center text-sm text-gray-400">
-            Already have an account?{' '}
-            <Link 
-              href="/auth/signin" 
-              className="font-medium text-primary-400 hover:text-primary-300 transition-colors duration-200"
-            >
-              Sign in
-            </Link>
-          </p>
+          {/* Add OAuth providers */}
+          <div className="mt-6 space-y-4">
+            <button className="w-full px-4 py-3 flex items-center justify-center space-x-3 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-xl hover:shadow-lg transition-all duration-200 border border-gray-200 dark:border-gray-700">
+              <svg className="w-5 h-5" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/><path d="M1 1h22v22H1z" fill="none"/></svg>
+              <span>Continue with Google</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Animated Background Elements */}
+        <div className="fixed inset-0 pointer-events-none">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(45,100,255,0.1),transparent_50%)]"></div>
         </div>
       </div>
     </>

@@ -18,7 +18,7 @@ const modelDisplayNames = {
   'deepseek-r1': 'DeepSeek R1'
 };
 
-export default function ResponseColumn({ model, response, streaming }) {
+export default function ResponseColumn({ model, response, streaming, className }) {
   const contentRef = useRef(null);
   const [displayedText, setDisplayedText] = useState('');
   const [copiedCode, setCopiedCode] = useState(null);  // Add this state for code copy functionality
@@ -231,15 +231,62 @@ export default function ResponseColumn({ model, response, streaming }) {
     );
   };
 
+  // Add API key warning handling
+  const handleApiKeyWarning = () => {
+    // Assuming you have a global state or context to manage the API key modal
+    window.dispatchEvent(new CustomEvent('openApiKeyModal', { 
+      detail: { provider: model } 
+    }));
+  };
+
+  // Modify error display
+  const renderError = () => {
+    const isApiKeyError = response.error?.toLowerCase().includes('api key');
+    
+    return (
+      <div 
+        className={`p-4 rounded-lg border ${
+          isApiKeyError 
+            ? 'border-yellow-600/30 bg-yellow-900/20 cursor-pointer hover:bg-yellow-900/30' 
+            : 'border-red-800/30 bg-red-900/20'
+        } transition-colors duration-200`}
+        onClick={isApiKeyError ? handleApiKeyWarning : undefined}
+      >
+        <div className="flex items-start space-x-3">
+          {isApiKeyError ? (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-yellow-500 mt-0.5">
+              <path fillRule="evenodd" d="M8 7a5 5 0 1 1 5 5 6.5 6.5 0 0 0-3.096 1.206l-.224.19A6.5 6.5 0 0 0 8 18.5V19h6a1 1 0 1 1 0 2H8a2 2 0 0 1-2-2v-.5a8.5 8.5 0 0 1 4-7.224A3 3 0 1 0 8 7Z" clipRule="evenodd" />
+            </svg>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-red-500 mt-0.5">
+              <path fillRule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zm-1.72 6.97a.75.75 0 10-1.06 1.06L10.94 12l-1.72 1.72a.75.75 0 101.06 1.06L12 13.06l1.72 1.72a.75.75 0 101.06-1.06L13.06 12l1.72-1.72a.75.75 0 10-1.06-1.06L12 10.94l-1.72-1.72z" clipRule="evenodd" />
+            </svg>
+          )}
+          <div>
+            <p className={`font-medium ${isApiKeyError ? 'text-yellow-400' : 'text-red-400'}`}>
+              {isApiKeyError ? 'API Key Required' : 'Error encountered'}
+            </p>
+            <p className="mt-1 text-sm text-gray-300">{response.error}</p>
+            {isApiKeyError && (
+              <button className="mt-2 text-xs text-yellow-500 hover:text-yellow-400 font-medium">
+                Click to add API key →
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div className="bg-white dark:bg-darksurface border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden flex flex-col h-full shadow-soft dark:shadow-soft-dark transition-all duration-200">
-      <div className="px-4 py-3 flex justify-between items-center border-b border-gray-200 dark:border-gray-700">
+    <div className={`rounded-xl overflow-hidden flex flex-col h-full shadow-lg transition-all duration-200 ${className}`}>
+      <div className="px-4 py-3 flex justify-between items-center border-b border-gray-800">
         <div className="flex items-center space-x-2">
           <div className="w-2 h-2 rounded-full bg-primary-500"></div>
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white">{modelDisplayName}</h3>
+          <h3 className="text-lg font-medium text-gray-200">{modelDisplayName}</h3>
           {isLoading && (
-            <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
-              Loading...
+            <span className="ml-2 text-xs text-gray-400">
+              Thinking...
             </span>
           )}
         </div>
@@ -257,20 +304,23 @@ export default function ResponseColumn({ model, response, streaming }) {
       </div>
       <div 
         ref={contentRef}
-        className="p-4 overflow-auto flex-grow scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-700 scrollbar-track-transparent"
+        className="p-4 overflow-auto flex-grow scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent"
         style={{ minHeight: "200px", maxHeight: "600px" }}
       >
         {isLoading && !hasText ? (
-          <div className="flex justify-center items-center h-full">
-            <div className="dot-typing"></div>
+          <div className="flex flex-col items-center justify-center h-full space-y-4">
+            <div className="w-full max-w-md h-4 rounded-full loading-gradient"></div>
+            <div className="w-3/4 max-w-sm h-4 rounded-full loading-gradient"></div>
+            <div className="pulse-dots mt-4">
+              <div className="pulse-dot"></div>
+              <div className="pulse-dot"></div>
+              <div className="pulse-dot"></div>
+            </div>
           </div>
         ) : hasError ? (
-          <div className="text-red-500 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800/30">
-            <p className="font-medium">Error encountered:</p>
-            <p className="mt-1">{response.error}</p>
-          </div>
+          renderError()
         ) : hasText ? (
-          <div className="prose prose-sm dark:prose-invert max-w-none">
+          <div className="prose prose-sm prose-invert max-w-none prose-pre:bg-[#1a1a1a] prose-pre:border prose-pre:border-gray-800">
             <ReactMarkdown
               components={{
                 code: CodeBlock,
@@ -290,7 +340,7 @@ export default function ResponseColumn({ model, response, streaming }) {
             )}
           </div>
         ) : waitingForPrompt ? (
-          <div className="text-gray-400 dark:text-gray-500 italic flex items-center justify-center h-full">
+          <div className="text-gray-500 italic flex items-center justify-center h-full">
             Waiting for prompt...
           </div>
         ) : null}
