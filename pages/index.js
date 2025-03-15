@@ -13,7 +13,7 @@ export default function Home() {
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState([]);
-  const [selectedModels, setSelectedModels] = useState(['gpt-4', 'claude', 'gemini', 'deepseek-r1']);
+  const [selectedModels, setSelectedModels] = useState(['gemini', 'deepseek-r1']);
   const [error, setError] = useState(null);
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [showApiKeyManager, setShowApiKeyManager] = useState(false);
@@ -159,6 +159,9 @@ export default function Home() {
     const id = Date.now().toString();
     setCurrentPromptId(id);
     
+    // Clear previous responses before starting new request
+    setResponses({});
+    
     let completedResponses = {};
 
     // Initialize response objects for each selected model
@@ -206,11 +209,12 @@ export default function Home() {
           [data.model]: update
         }));
         
+        // Only update the current conversation's responses
         setHistory(prev => {
           const updated = [...prev];
-          const latestEntry = updated.find(entry => entry.id === id);
-          if (latestEntry) {
-            latestEntry.responses[data.model] = update;
+          const currentEntry = updated.find(entry => entry.id === id);
+          if (currentEntry) {
+            currentEntry.responses[data.model] = update;
           }
           return updated;
         });
