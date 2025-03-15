@@ -156,6 +156,18 @@ export default function Home() {
     return () => document.body.classList.remove('backdrop-blur-active');
   }, [showModelSelector]);
 
+  // Add event listener for API key manager toggle
+  useEffect(() => {
+    const handleApiKeyManagerToggle = (event) => {
+      setShowApiKeyManager(true);
+    };
+
+    window.addEventListener('toggleApiKeyManager', handleApiKeyManagerToggle);
+    return () => {
+      window.removeEventListener('toggleApiKeyManager', handleApiKeyManagerToggle);
+    };
+  }, []);
+
   // Modified function to fetch conversations
   const fetchConversations = async () => {
     try {

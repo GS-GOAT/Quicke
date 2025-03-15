@@ -231,33 +231,30 @@ export default function ResponseColumn({ model, response, streaming, className }
     );
   };
 
-  // Modify the handleApiKeyWarning function
-  const handleApiKeyWarning = (provider) => {
-    // Find the API key manager toggle in global scope
-    if (typeof window !== 'undefined') {
-      const event = new CustomEvent('toggleApiKeyManager', {
-        detail: { show: true }
-      });
-      window.dispatchEvent(event);
-    }
+  const handleApiKeyWarning = () => {
+    const event = new CustomEvent('toggleApiKeyManager', {
+      detail: { show: true }
+    });
+    window.dispatchEvent(event);
   };
 
-  // Update the renderError function to handle click properly
   const renderError = () => {
     const isApiKeyError = response.error?.toLowerCase().includes('api key');
     
     return (
       <div 
+        onClick={(e) => {
+          if (isApiKeyError) {
+            e.preventDefault();
+            e.stopPropagation();
+            handleApiKeyWarning();
+          }
+        }}
         className={`p-4 rounded-lg border ${
           isApiKeyError 
             ? 'border-yellow-600/30 bg-yellow-900/20 cursor-pointer hover:bg-yellow-900/30' 
             : 'border-red-800/30 bg-red-900/20'
         } transition-colors duration-200`}
-        onClick={isApiKeyError ? (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          handleApiKeyWarning(model);
-        } : undefined}
       >
         <div className="flex items-start space-x-3">
           {isApiKeyError ? (
@@ -276,7 +273,11 @@ export default function ResponseColumn({ model, response, streaming, className }
             <p className="mt-1 text-sm text-gray-300">{response.error}</p>
             {isApiKeyError && (
               <button 
-                onClick={() => handleApiKeyWarning(model)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleApiKeyWarning();
+                }}
                 className="mt-2 text-xs text-yellow-500 hover:text-yellow-400 font-medium flex items-center"
               >
                 Add API key →
