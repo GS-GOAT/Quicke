@@ -504,7 +504,7 @@ export default function Home() {
             </div>
           </div>
           
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className={getResponseLayoutClass()}>
             {(entry.activeModels || []).map(model => (
               <ResponseColumn 
                 key={`${entry.id}-${model}`}
@@ -547,7 +547,7 @@ export default function Home() {
             </div>
           </div>
           
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className={getResponseLayoutClass()}>
             {(entry.activeModels || []).map(model => (
               <ResponseColumn 
                 key={`${entry.id}-${model}`}
