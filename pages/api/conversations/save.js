@@ -3,53 +3,57 @@ import { authOptions } from "../auth/[...nextauth]";
 import prisma from '../../../lib/prisma';
 
 export default async function handler(req, res) {
+  // Get the session at the start
   const session = await getServerSession(req, res, authOptions);
-  if (!session) return res.status(401).json({ error: "Unauthorized" });
+  
+  // Add detailed logging
+  console.log('Save conversation request received');
+  console.log('Session:', session ? 'exists' : 'missing');
+
+  if (!session) {
+    console.log('Unauthorized: No valid session');
+    return res.status(401).json({ error: "Unauthorized" });
+  }
 
   if (req.method === 'POST') {
     try {
       const { prompt, responses } = req.body;
 
-      // Only proceed if there are valid responses to save
-      if (Object.keys(responses).length === 0) {
-        return res.status(400).json({ error: 'No valid responses to save' });
+      // Validate input
+      if (!prompt || !responses || Object.keys(responses).length === 0) {
+        return res.status(400).json({ error: 'Invalid request data' });
       }
 
+      // Create conversation with validation
       const conversation = await prisma.conversation.create({
         data: {
           userId: session.user.id,
-          createdAt: new Date(),
           messages: {
             create: [
               {
                 role: 'user',
                 content: prompt,
-                createdAt: new Date()
               },
-              // Only save responses that don't have errors
               ...Object.entries(responses)
-                .filter(([_, response]) => !response.error)
+                .filter(([_, response]) => response && !response.error && response.text)
                 .map(([model, response]) => ({
                   role: 'assistant',
-                  content: JSON.stringify({ 
-                    model, 
-                    ...response,
-                    timestamp: Date.now()
-                  }),
-                  createdAt: new Date()
-                })),
-            ],
-          },
-        },
-        include: { 
-          messages: {
-            orderBy: {
-              createdAt: 'asc'
-            }
+                  content: JSON.stringify({
+                    model,
+                    text: response.text,
+                    timestamp: Date.now(),
+                    duration: response.duration // Add duration to saved data
+                  })
+                }))
+            ]
           }
         },
+        include: {
+          messages: true
+        }
       });
 
+      console.log('Conversation saved successfully');
       res.status(201).json(conversation);
     } catch (error) {
       console.error('Error saving conversation:', error);

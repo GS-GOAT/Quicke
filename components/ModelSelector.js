@@ -4,7 +4,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
   const [activeCategory, setActiveCategory] = useState('all');
 
   const modelCategories = {
-    featured: [
+    OpenAI: [
       { 
         id: 'gpt-4',
         name: 'GPT-4',
@@ -14,6 +14,8 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         color: 'from-emerald-400 to-emerald-600',
         icon: '🤖'
       },
+    ],
+    Anthropic: [
       { 
         id: 'claude',
         name: 'Claude 3 Sonnet',
@@ -22,7 +24,9 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         context:0,
         color: 'from-orange-400 to-orange-600',
         icon: '🧠'
-      },
+      }
+    ],
+    Google: [
       { 
         id: 'gemini',
         name: 'Gemini 2.0 Flash',
@@ -33,7 +37,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         icon: '🌟'
       }
     ],
-    reasoning: [
+    openrouter: [
       { 
         id: 'deepseek-r1',
         name: 'DeepSeek R1',
@@ -51,19 +55,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         context:'131K',
         color: 'from-red-400 to-red-600',
         icon: '🌏'
-      }
-    ],
-    mistral: [
-      {
-        id: 'mistral-7b',
-        name: 'Mistral 7B Instruct',
-        provider: 'Mistral AI',
-        description: 'A high-performing model with optimizations for speed and context length.',
-        color: 'from-purple-400 to-purple-600',
-        icon: '🌪️'
       },
-    ],
-    meta: [
       {
         id: 'llama2-70b',
         name: 'Llama-2 70B',
@@ -72,9 +64,15 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         context:'128K',
         color: 'from-blue-500 to-blue-700',
         icon: '🦙'
-      }
-    ],
-    other: [
+      },
+      {
+        id: 'mistral-7b',
+        name: 'Mistral 7B Instruct',
+        provider: 'Mistral AI',
+        description: 'A high-performing model with optimizations for speed and context length.',
+        color: 'from-purple-400 to-purple-600',
+        icon: '🌪️'
+      },
       {
         id: 'phi3',
         name: 'Phi-3',

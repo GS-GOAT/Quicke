@@ -29,6 +29,13 @@ export default function ResponseColumn({ model, response, streaming, className, 
   const [isActive, setIsActive] = useState(false);  // Add this to track if this column is currently receiving updates
   const previousResponseRef = useRef('');  // Add this to track previous response
   const currentConversationRef = useRef(conversationId);  // Add ref to track conversation
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  // Simplify timer-related state to just what's needed
+  const [elapsedTime, setElapsedTime] = useState(null);
+  const timerRef = useRef(null);
+  const startTimeRef = useRef(null);
 
   // Get the display name for the model
   const modelDisplayName = modelDisplayNames[model] || model;
@@ -109,6 +116,74 @@ export default function ResponseColumn({ model, response, streaming, className, 
       }
     }
   }, [displayedText, streaming]);
+
+  // Single timer effect to handle all cases
+  useEffect(() => {
+    // Clear existing timer
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+
+    // For historical responses, use stored duration
+    if (response?.duration) {
+      setElapsedTime(response.duration);
+      return;
+    }
+
+    // Start timer for new responses
+    if (response?.loading) {
+      startTimeRef.current = Date.now();
+      timerRef.current = setInterval(() => {
+        const elapsed = ((Date.now() - startTimeRef.current) / 1000).toFixed(1);
+        setElapsedTime(elapsed);
+      }, 100);
+    }
+
+    // Stop timer and save duration when response is complete
+    if (response?.done) {
+      const duration = ((Date.now() - (startTimeRef.current || Date.now())) / 1000).toFixed(1);
+      setElapsedTime(duration);
+      if (response && typeof response === 'object') {
+        response.duration = duration;
+      }
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    }
+
+    // Cleanup
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [response?.loading, response?.done, response?.duration]);
+
+  // Clean up timer when component unmounts
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, []);
+
+  // Enhanced timer display component
+  const renderTimer = (time) => (
+    <div className="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700/50 ml-2 border border-gray-200 dark:border-gray-600">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" 
+        className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400 mr-1">
+        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .27.144.518.378.651l3.5 2a.75.75 0 00.744-1.302L11 9.677V5z" clipRule="evenodd" />
+      </svg>
+      <span className="text-xs font-medium text-gray-600 dark:text-gray-300 tabular-nums">
+        {time || '—'}s
+      </span>
+    </div>
+  );
 
   const copyToClipboard = () => {
     const textToCopy = response?.text || displayedText;
@@ -303,7 +378,7 @@ export default function ResponseColumn({ model, response, streaming, className, 
     }
   };
 
-  // Updated CodeBlock component
+  // Updated CodeBlock component with fixed JSX structure
   const CodeBlock = ({ node, inline, className, children, ...props }) => {
     const match = /language-(\w+)/.exec(className || '');
     const language = match ? match[1] : '';
@@ -368,59 +443,54 @@ export default function ResponseColumn({ model, response, streaming, className, 
   };
 
   const renderError = () => {
-    const isApiKeyError = response.error?.toLowerCase().includes('api key');
-    const isTimeoutError = response.error?.toLowerCase().includes('high traffic') || 
-                          response.error?.toLowerCase().includes('try again');
+    const errorType = response.errorType || 'UNKNOWN';
+    const isApiKeyError = errorType === 'API_KEY';
+    const isTimeoutError = errorType === 'TIMEOUT';
+    const isModelUnavailable = errorType === 'MODEL_UNAVAILABLE';
     
+    const getErrorStyles = () => {
+      switch (errorType) {
+        case 'API_KEY':
+          return 'border-yellow-600/30 bg-yellow-900/20 cursor-pointer hover:bg-yellow-900/30';
+        case 'MODEL_UNAVAILABLE':
+          return 'border-orange-600/30 bg-orange-900/20';
+        case 'TIMEOUT':
+          return 'border-orange-600/30 bg-orange-900/20';
+        default:
+          return 'border-red-800/30 bg-red-900/20';
+      }
+    };
+
+    const getErrorTitle = () => {
+      if (isApiKeyError) return 'API Key Required';
+      if (isModelUnavailable) return 'Model Unavailable';
+      if (isTimeoutError) return 'Response Timeout';
+      return 'Error encountered';
+    };
+
+    const getErrorMessage = () => {
+      if (response.retryCount) {
+        return `${response.error} (Retry ${response.retryCount}/${response.maxRetries})`;
+      }
+      return response.error;
+    };
+
     return (
-      <div 
-        onClick={(e) => {
-          if (isApiKeyError) {
-            e.preventDefault();
-            e.stopPropagation();
-            handleApiKeyWarning();
-          }
-        }}
-        className={`p-4 rounded-lg border ${
-          isApiKeyError 
-            ? 'border-yellow-600/30 bg-yellow-900/20 cursor-pointer hover:bg-yellow-900/30'
-            : isTimeoutError
-              ? 'border-orange-600/30 bg-orange-900/20'
-              : 'border-red-800/30 bg-red-900/20'
-        } transition-colors duration-200`}
-      >
+      <div className={`p-4 rounded-lg border ${getErrorStyles()} transition-colors duration-200`}>
         <div className="flex items-start space-x-3">
-          {isApiKeyError ? (
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-yellow-500 mt-0.5">
-              <path fillRule="evenodd" d="M8 7a5 5 0 113.61 4.804l-1.903 1.903A1 1 0 019 14H8v1a1 1 0 01-1 1H6v1a1 1 0 01-1 1H3a1 1 0 01-1-1v-2a1 1 0 01.293-.707L8.196 8.39A5.002 5.002 0 018 7z" clipRule="evenodd" />
-            </svg>
-          ) : isTimeoutError ? (
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-orange-500 mt-0.5">
-              <path fillRule="evenodd" d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8zm1-13a1 1 0 10-2 0v4c0 .28.116.52.306.682L14 15.243a1 1 0 001.414-1.414l-2.707-2.708V7z" clipRule="evenodd" />
-            </svg>
-          ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-red-500 mt-0.5">
-              <path fillRule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zm-1.72 6.97a.75.75 0 10-1.06 1.06L10.94 12l-1.72 1.72a.75.75 0 101.06 1.06L12 13.06l-1.72-1.72z" clipRule="evenodd" />
-            </svg>
-          )}
           <div>
             <p className={`font-medium ${
               isApiKeyError ? 'text-yellow-400' : 
+              isModelUnavailable ? 'text-orange-400' :
               isTimeoutError ? 'text-orange-400' : 
               'text-red-400'
             }`}>
-              {isApiKeyError ? 'API Key Required' : 
-               isTimeoutError ? 'Model Temporarily Unavailable' : 
-               'Error encountered'}
+              {getErrorTitle()}
             </p>
-            <p className="mt-1 text-sm text-gray-300">{response.error}</p>
+            <p className="mt-1 text-sm text-gray-300">{getErrorMessage()}</p>
             {isApiKeyError && (
               <button 
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleApiKeyWarning();
-                }}
+                onClick={handleApiKeyWarning}
                 className="mt-2 text-xs text-yellow-500 hover:text-yellow-400 font-medium flex items-center"
               >
                 Add API key →
@@ -442,34 +512,114 @@ export default function ResponseColumn({ model, response, streaming, className, 
     </div>
   );
 
+  // Update the thinking animation in header
+  const renderThinkingState = () => (
+    <span className="ml-2 text-xs text-gray-400 thinking-pulse">
+      Thinking
+      <span className="thinking-dots">
+        <span className="thinking-dot"></span>
+        <span className="thinking-dot"></span>
+        <span className="thinking-dot"></span>
+      </span>
+    </span>
+  );
+
+  const toggleCollapse = (e) => {
+    e.stopPropagation();
+    setIsCollapsed(!isCollapsed);
+    if (isExpanded) setIsExpanded(false);
+  };
+
+  const toggleExpand = (e) => {
+    e.stopPropagation();
+    setIsExpanded(!isExpanded);
+    if (isCollapsed) setIsCollapsed(false);
+  };
+
   return (
-    <div className={`rounded-xl overflow-hidden flex flex-col h-full shadow-lg transition-all duration-200 ${className}`}>
+    <div className={`rounded-xl overflow-hidden flex flex-col transition-all duration-300 ${
+      isExpanded 
+        ? 'fixed inset-6 z-50 bg-gray-900/90 backdrop-blur-md shadow-2xl' 
+        : isCollapsed
+          ? 'h-[56px]' 
+          : 'h-full'
+    } ${className}`}>
       <div className="px-4 py-3 flex justify-between items-center border-b border-gray-800">
         <div className="flex items-center space-x-2">
           <div className="w-2 h-2 rounded-full bg-primary-500"></div>
-          <h3 className="text-lg font-medium text-gray-200">{modelDisplayName}</h3>
-          {isLoading && (
-            <span className="ml-2 text-xs text-gray-400">
-              Thinking...
-            </span>
+          <div className="flex items-center">
+            <h3 className="text-lg font-medium text-gray-200">{modelDisplayName}</h3>
+            {elapsedTime && renderTimer(elapsedTime)}
+            {isLoading && renderThinkingState()}
+          </div>
+        </div>
+        <div className="flex items-center space-x-2">
+          {hasText && (
+            <>
+              <button
+                onClick={toggleCollapse}
+                className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all duration-200"
+                title={isCollapsed ? "Show response" : "Hide response"}
+              >
+                <svg 
+                  xmlns="http://www.w3.org/2000/svg" 
+                  viewBox="0 0 20 20" 
+                  fill="currentColor" 
+                  className={`w-5 h-5 transform transition-transform duration-300 ${
+                    isCollapsed ? 'rotate-180' : ''
+                  }`}
+                >
+                  <path 
+                    fillRule="evenodd" 
+                    d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" 
+                    clipRule="evenodd" 
+                  />
+                </svg>
+              </button>
+              <button
+                onClick={toggleExpand}
+                className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all duration-200"
+                title={isExpanded ? "Exit fullscreen" : "Enter fullscreen"}
+              >
+                <svg 
+                  xmlns="http://www.w3.org/2000/svg" 
+                  viewBox="0 0 20 20" 
+                  fill="currentColor" 
+                  className="w-5 h-5"
+                >
+                  {isExpanded ? (
+                    <path d="M3 3h4v4H3V3zM13 3h4v4h-4V3zM3 13h4v4H3v-4zM13 13h4v4h-4v-4z"/>
+                  ) : (
+                    <path fillRule="evenodd" d="M3.25 3.25a.5.5 0 0 1 .5-.5h4a.5.5 0 0 1 .5.5v.5h-4v4h-.5a.5.5 0 0 1-.5-.5v-4Zm9 0a.5.5 0 0 1 .5-.5h4a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-.5.5h-.5v-4h-4v-.5Zm-9 9a.5.5 0 0 1 .5-.5h.5v4h4v.5a.5.5 0 0 1-.5.5h-4a.5.5 0 0 1-.5-.5v-4Zm9-.5a.5.5 0 0 0-.5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 0-.5-.5h-4Z" />
+                  )}
+                </svg>
+              </button>
+              <button
+                onClick={copyToClipboard}
+                className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                title="Copy response"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" />
+                </svg>
+              </button>
+            </>
           )}
         </div>
-        {hasText && (
-          <button
-            onClick={copyToClipboard}
-            className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-            title="Copy response"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" />
-            </svg>
-          </button>
-        )}
       </div>
       <div 
         ref={contentRef}
-        className="p-4 overflow-auto flex-grow scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent"
-        style={{ minHeight: "200px", maxHeight: "600px" }}
+        className={`overflow-auto flex-grow scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent transition-all duration-300 ease-in-out ${
+          isCollapsed ? 'h-0 opacity-0 scale-95' : 'opacity-100 scale-100'
+        }`}
+        style={{ 
+          padding: isCollapsed ? '0' : '1rem',
+          minHeight: isCollapsed ? "0" : "200px", 
+          maxHeight: isExpanded ? "calc(100vh - 140px)" : "600px",
+          pointerEvents: isCollapsed ? 'none' : 'auto',
+          transform: `scale(${isCollapsed ? '0.95' : '1'})`,
+          transformOrigin: 'top'
+        }}
       >
         {(isLoading && !hasText) || (response?.isSlowModel && !hasText) ? (
           renderLoading(response?.isSlowModel)
@@ -480,9 +630,7 @@ export default function ResponseColumn({ model, response, streaming, className, 
             <ReactMarkdown
               components={{
                 code: CodeBlock,
-                // Process text nodes to identify math expressions
                 text: ({ children }) => processMathInText(children),
-                // Override for links to open in new tab
                 a: ({ node, ...props }) => (
                   <a target="_blank" rel="noopener noreferrer" className="text-primary-600 dark:text-primary-400 hover:underline" {...props} />
                 ),
@@ -492,7 +640,6 @@ export default function ResponseColumn({ model, response, streaming, className, 
             >
               {displayedText || response.text}
             </ReactMarkdown>
-            {/* Only show cursor when this column is actively receiving updates */}
             {isActive && (
               <span className="typing-cursor">|</span>
             )}

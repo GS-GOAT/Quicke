@@ -9,6 +9,11 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen,
     Ubuntu, Cantarell, Fira Sans, Droid Sans, Helvetica Neue, sans-serif;
   @apply antialiased text-gray-900 dark:text-gray-100;
+  @apply overflow-hidden;
+  height: 100vh;
+  /* Prevent elastic scroll on iOS */
+  position: fixed;
+  width: 100%;
 }
 
 html {
@@ -556,4 +561,100 @@ a {
 .prompt-input-hover:hover {
   @apply bg-gray-50 dark:bg-gray-800/50;
   box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.1);
+}
+
+/* Add pulsating thinking animation */
+@keyframes pulsateThinking {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+.thinking-pulse {
+  animation: pulsateThinking 1.5s ease-in-out infinite;
+}
+
+/* Replace existing thinking animation with more stable version */
+@keyframes thinkingPulse {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
+}
+
+.thinking-pulse {
+  animation: thinkingPulse 2s ease-in-out infinite;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.thinking-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.thinking-dot {
+  width: 3px;
+  height: 3px;
+  background-color: currentColor;
+  border-radius: 50%;
+  opacity: 0.7;
+}
+
+.thinking-dot:nth-child(1) { animation: thinkingPulse 2s ease-in-out infinite; }
+.thinking-dot:nth-child(2) { animation: thinkingPulse 2s ease-in-out infinite 0.3s; }
+.thinking-dot:nth-child(3) { animation: thinkingPulse 2s ease-in-out infinite 0.6s; }
+
+/* Thinking animation */
+@keyframes thinkingPulse {
+  0% { opacity: 0.4; }
+  50% { opacity: 1; }
+  100% { opacity: 0.4; }
+}
+
+.thinking-pulse {
+  animation: thinkingPulse 1.5s ease-in-out infinite;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Add a small dot animation as well
+.thinking-pulse::after {
+  content: '';
+  width: 3px;
+  height: 3px;
+  background-color: currentColor;
+  border-radius: 50%;
+  margin-left: 4px;
+  animation: dotPulse 1.5s ease-in-out infinite;
+} */
+
+@keyframes dotPulse {
+  0% { transform: scale(0.5); opacity: 0.4; }
+  50% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0.5); opacity: 0.4; }
+}
+
+main {
+  @apply overflow-y-auto;
+  /* Ensure content doesn't scroll under footer */
+  padding-bottom: env(safe-area-inset-bottom, 80px);
+  /* Prevent elastic scroll on iOS */
+  -webkit-overflow-scrolling: touch;
+}
+
+footer {
+  @apply sticky bottom-0 z-10;
+  /* Ensure footer stays above content */
+  background: linear-gradient(to top,
+    rgba(255, 255, 255, 1) 0%,
+    rgba(255, 255, 255, 0.9) 100%
+  );
+}
+
+.dark footer {
+  background: linear-gradient(to top,
+    rgba(17, 17, 17, 1) 0%,
+    rgba(17, 17, 17, 0.9) 100%
+  );
 }

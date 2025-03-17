@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
+import { signIn } from 'next-auth/react';  // Add this import
 
 export default function SignUp() {
   const [email, setEmail] = useState('');
@@ -23,7 +24,19 @@ export default function SignUp() {
       });
 
       if (res.ok) {
-        router.push('/auth/signin');
+        // After successful signup, immediately sign in and redirect to home
+        const result = await signIn('credentials', {
+          email,
+          password,
+          redirect: false
+        });
+
+        if (result.ok) {
+          router.push('/');  // Redirect to main page
+        } else {
+          setError('Error signing in after registration');
+          setIsLoading(false);
+        }
       } else {
         const data = await res.json();
         setError(data.error || 'Signup failed');
