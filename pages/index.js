@@ -8,6 +8,7 @@ import ApiKeyManager from '../components/ApiKeyManager';
 import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { useLocalStorage } from '../hooks/useLocalStorage'; // Add this import
 
 export default function Home() {
   const router = useRouter();
@@ -31,6 +32,7 @@ export default function Home() {
   const [visibleSuggestions, setVisibleSuggestions] = useState([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [responseLayout, setResponseLayout] = useLocalStorage('responseLayout', 'grid'); // Add layout state
 
   const promptSuggestions = {
     writing: [
@@ -467,6 +469,12 @@ export default function Home() {
     fetchConversations(nextPage);
   };
 
+  const getResponseLayoutClass = () => {
+    return responseLayout === 'grid'
+      ? 'grid grid-cols-1 md:grid-cols-2 gap-6' // Increased gap and reduced columns
+      : 'flex flex-col space-y-6'; // Keep stack layout the same
+  };
+
   const renderConversationHistory = () => (
     <div className="space-y-10 pb-24 pt-4">
       {/* Load More button with updated styling */}
@@ -636,6 +644,39 @@ export default function Home() {
                     </button>
                     
                     <div className="border-t border-gray-200 dark:border-gray-700 mt-2 pt-2">
+                      <div className="px-4 py-2">
+                        <label className="text-sm text-gray-700 dark:text-gray-300 mb-2 block">
+                          Response Layout
+                        </label>
+                        <div className="flex items-center space-x-4">
+                          <button
+                            onClick={() => setResponseLayout('grid')}
+                            className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm ${
+                              responseLayout === 'grid'
+                                ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400'
+                                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                            }`}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                              <path d="M2 4.25A2.25 2.25 0 014.25 2h2.5A2.25 2.25 0 019 4.25v2.5A2.25 2.25 0 016.75 9h-2.5A2.25 2.25 0 012 6.75v-2.5zM2 13.25A2.25 2.25 0 014.25 11h2.5A2.25 2.25 0 019 13.25v2.5A2.25 2.25 0 016.75 18h-2.5A2.25 2.25 0 012 15.75v-2.5zM11 4.25A2.25 2.25 0 0113.25 2h2.5A2.25 2.25 0 0118 4.25v2.5A2.25 2.25 0 0115.75 9h-2.5A2.25 2.25 0 0111 6.75v-2.5zM11 13.25A2.25 2.25 0 0113.25 11h2.5A2.25 2.25 0 0118 13.25v2.5A2.25 2.25 0 0115.75 18h-2.5A2.25 2.25 0 0111 15.75v-2.5z" />
+                            </svg>
+                            <span>Grid</span>
+                          </button>
+                          <button
+                            onClick={() => setResponseLayout('stack')}
+                            className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm ${
+                              responseLayout === 'stack'
+                                ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400'
+                                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                            }`}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                              <path d="M2 4.25A2.25 2.25 0 014.25 2h11.5A2.25 2.25 0 0118 4.25v2.5A2.25 2.25 0 0115.75 9h-11.5A2.25 2.25 0 012 6.75v-2.5zM2 13.25A2.25 2.25 0 014.25 11h11.5A2.25 2.25 0 0118 13.25v2.5A2.25 2.25 0 0115.75 18h-11.5A2.25 2.25 0 012 15.75v-2.5z" />
+                            </svg>
+                            <span>Stack</span>
+                          </button>
+                        </div>
+                      </div>
                       <button 
                         onClick={() => signOut()}
                         className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
