@@ -137,7 +137,17 @@ class ErrorService {
     // Extract message and status properly
     const message = typeof error === 'string' ? error : 
                    (error.message || error.toString());
-    const status = error.status || error.statusCode || 0;
+    const status = error.status || error.statusCode || error.code || 0;
+    
+    // OpenRouter specific error handling
+    if (error.error && typeof error.error === 'object') {
+      // Handle nested error objects from OpenRouter
+      if (error.error.message && error.error.code) {
+        if (error.error.code === 429 || error.error.message.includes('rate limit')) {
+          return ERROR_TYPES.RATE_LIMIT;
+        }
+      }
+    }
     
     // Classify by status code
     if (status === 401 || status === 403) {
@@ -166,7 +176,8 @@ class ErrorService {
       
       if (messageLower.includes('rate limit') || 
           messageLower.includes('quota') ||
-          messageLower.includes('too many requests')) {
+          messageLower.includes('too many requests') ||
+          messageLower.includes('free-models-per-day')) {
         return ERROR_TYPES.RATE_LIMIT;
       }
       

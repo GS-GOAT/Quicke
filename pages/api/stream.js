@@ -5,13 +5,28 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "./auth/[...nextauth]";
 import { ParallelRequestProcessor } from '../../utils/parallelProcessor';
 import prisma from '../../lib/prisma';
-import errorService, { ERROR_TYPES, TIMEOUT_SETTINGS } from '../../utils/errorService';
+import errorService, { ERROR_TYPES as IMPORTED_ERROR_TYPES, TIMEOUT_SETTINGS } from '../../utils/errorService';
 
 const streamProcessor = new ParallelRequestProcessor({
   maxConcurrentRequests: 8,
   retryCount: 1,
   retryDelay: 500
 });
+
+// Fallback error types in case errorService isn't initialized
+const FALLBACK_ERROR_TYPES = {
+  API_KEY_MISSING: 'API_KEY_MISSING',
+  MODEL_UNAVAILABLE: 'MODEL_UNAVAILABLE',
+  TIMEOUT: 'TIMEOUT',
+  MAX_RETRIES_EXCEEDED: 'MAX_RETRIES_EXCEEDED',
+  EMPTY_RESPONSE: 'EMPTY_RESPONSE',
+  RATE_LIMIT: 'RATE_LIMIT',
+  NETWORK_ERROR: 'NETWORK_ERROR',
+  UNKNOWN_ERROR: 'UNKNOWN_ERROR'
+};
+
+// Use the imported values with a fallback if needed
+const ERROR_TYPES = errorService?.ERROR_TYPES || IMPORTED_ERROR_TYPES || FALLBACK_ERROR_TYPES;
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -32,6 +47,101 @@ export default async function handler(req, res) {
   const { prompt, models } = req.query;
   const modelArray = models ? models.split(',') : [];
   
+  // Define providerMap at the top level to ensure it's in scope everywhere
+  const providerMap = {
+    'gpt-4': 'openai',
+    'claude': 'anthropic',
+    'gemini': 'google',
+    // Map all OpenRouter models to the openrouter provider
+    'deepseek-r1': 'openrouter',
+    'mistral-7b': 'openrouter',
+    'llama2-70b': 'openrouter',
+    'phi3': 'openrouter',
+    'qwen-32b': 'openrouter',
+    'openchat': 'openrouter'
+  };
+  
+  // Helper function to get provider name from model ID
+  const getLLMProvider = (modelId) => {
+    if (providerMap[modelId]) {
+      return providerMap[modelId].charAt(0).toUpperCase() + providerMap[modelId].slice(1);
+    }
+    
+    if (modelId && modelId.startsWith('custom-')) {
+      return 'Custom Model';
+    }
+    
+    return modelId || 'Unknown';
+  };
+  
+  // Helper function to send SSE with immediate flush
+  const sendEvent = (data) => {
+    try {
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+      if (res.flush) res.flush();
+    } catch (error) {
+      console.error('Error sending event:', error);
+    }
+  };
+
+  // Define sendErrorEvent at the top level to ensure it's in scope everywhere
+  const sendErrorEvent = (modelId, errorType, text = '') => {
+    try {
+      const provider = getLLMProvider(modelId);
+      let retryCount = 0;
+      if (errorService && typeof errorService.getRetryCount === 'function') {
+        retryCount = errorService.getRetryCount(modelId);
+      }
+      
+      let errorMessage = '';
+      if (errorService && typeof errorService.getErrorMessage === 'function') {
+        errorMessage = errorService.getErrorMessage(errorType, modelId, provider);
+      } else {
+        // Fallback error messages if errorService isn't available
+        switch(errorType) {
+          case 'RATE_LIMIT':
+            errorMessage = `${provider} rate limit exceeded. Please try again later.`;
+            break;
+          case 'API_KEY_MISSING':
+            errorMessage = `${provider} API key is missing or invalid.`;
+            break;
+          case 'TIMEOUT':
+            errorMessage = `${provider} response timed out.`;
+            break;
+          case 'EMPTY_RESPONSE':
+            errorMessage = `${provider} returned an empty response.`;
+            break;
+          default:
+            errorMessage = `Error with ${provider}: ${errorType}`;
+        }
+      }
+      
+      sendEvent({
+        model: modelId,
+        error: errorMessage,
+        errorType,
+        text,
+        loading: false,
+        streaming: false,
+        done: true,
+        retryCount: retryCount > 0 ? retryCount : undefined,
+        maxRetries: (errorService && errorService.TIMEOUT_SETTINGS) ? 
+          errorService.TIMEOUT_SETTINGS.MAX_RETRIES : 2
+      });
+    } catch (sendError) {
+      console.error(`Failed to send error event for ${modelId}:`, sendError);
+      // Emergency fallback - send a basic error message
+      sendEvent({
+        model: modelId,
+        error: `Error with ${modelId}: ${errorType}`,
+        errorType: 'UNKNOWN_ERROR',
+        loading: false,
+        streaming: false,
+        done: true
+      });
+    }
+  };
+
   // Get user's API keys from database
   const userApiKeys = {};
   try {
@@ -91,66 +201,6 @@ export default async function handler(req, res) {
       id: 'deepseek/deepseek-r1:free',
       name: 'DeepSeek R1'
     }
-  };
-
-  // Helper function to send SSE with immediate flush
-  const sendEvent = (data) => {
-    try {
-      res.write(`data: ${JSON.stringify(data)}\n\n`);
-      if (res.flush) res.flush();
-    } catch (error) {
-      console.error('Error sending event:', error);
-    }
-  };
-
-  const sendErrorEvent = (modelId, errorType, text = '') => {
-    const provider = getLLMProvider(modelId);
-    let retryCount = 0;
-    if (errorService && typeof errorService.getRetryCount === 'function') {
-      retryCount = errorService.getRetryCount(modelId);
-    }
-    
-    sendEvent({
-      model: modelId,
-      error: errorService?.getErrorMessage(errorType, modelId, provider) || `Error: ${errorType}`,
-      errorType,
-      text,
-      loading: false,
-      streaming: false,
-      done: true,
-      retryCount: retryCount > 0 ? retryCount : undefined,
-      maxRetries: retryCount > 0 ? TIMEOUT_SETTINGS.MAX_RETRIES : undefined
-    });
-  };
-
-  const providerMap = {
-    'gpt-4': 'openai',
-    'claude': 'anthropic',
-    'gemini': 'google',
-    // Map all OpenRouter models to the openrouter provider
-    'deepseek-r1': 'openrouter',
-    'mistral-7b': 'openrouter',
-    'llama2-70b': 'openrouter',
-    'phi3': 'openrouter',
-    'qwen-32b': 'openrouter',
-    'openchat': 'openrouter'
-  };
-
-  // Helper function to check if a model has its required API key
-  const hasRequiredApiKey = (modelId) => {
-    const provider = providerMap[modelId];
-    
-    // Check if there's a valid API key
-    if (!provider) return false;
-    
-    const apiKey = userApiKeys[provider];
-    return Boolean(apiKey && apiKey.trim().length > 0);
-  };
-
-  // Helper function to verify if user has the required API key
-  const verifyApiKey = (modelId) => {
-    const provider = providerMap[modelId];
-    return userApiKeys[provider] ? true : false;
   };
 
   let completedResponses = 0;
@@ -228,7 +278,7 @@ export default async function handler(req, res) {
     // Process each model stream independently
     const modelPromises = modelArray.map(async (modelId) => {
       // First verify if user has the required API key
-      if (!verifyApiKey(modelId)) {
+      if (!verifyApiKey(modelId, providerMap, userApiKeys)) {
         sendErrorEvent(modelId, ERROR_TYPES.API_KEY_MISSING);
         handleModelCompletion(modelId);
         return;
@@ -506,8 +556,9 @@ async function handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, op
       throw new Error(`Model ${modelId} not found in OpenRouter models`);
     }
 
-    // Use standard timeout for all models
-    const timeoutDuration = TIMEOUT_SETTINGS.INITIAL_RESPONSE;
+    // Use standard timeout (60 seconds as fallback if TIMEOUT_SETTINGS not available)
+    const timeoutDuration = (errorService && errorService.TIMEOUT_SETTINGS) ? 
+      errorService.TIMEOUT_SETTINGS.INITIAL_RESPONSE : 60000;
     
     // Create a promise that rejects after timeout
     const timeoutPromise = new Promise((_, reject) => {
@@ -519,18 +570,33 @@ async function handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, op
       }, timeoutDuration);
     });
 
-    // Create the stream promise
-    const streamPromise = openRouter.chat.completions.create({
-      model: openRouterModels[modelId].id,
-      messages: [{ role: 'user', content: prompt }],
-      stream: true,
-      temperature: 0.7,
-      max_tokens: 4000,
-      presence_penalty: 0,
-      frequency_penalty: 0,
-      stop: null,
-      signal: abortController.signal
-    });
+    // Wrap the OpenRouter API call in a try/catch to handle specific errors
+    let streamPromise;
+    try {
+      streamPromise = openRouter.chat.completions.create({
+        model: openRouterModels[modelId].id,
+        messages: [{ role: 'user', content: prompt }],
+        stream: true,
+        temperature: 0.7,
+        max_tokens: 4000,
+        presence_penalty: 0,
+        frequency_penalty: 0,
+        stop: null,
+        signal: abortController.signal
+      });
+    } catch (err) {
+      // Handle initialization errors (like invalid API key)
+      console.error(`[${modelId}] Error creating OpenRouter stream:`, err);
+      
+      // Check for specific error types
+      if (err.status === 401 || err.status === 403) {
+        throw new Error('API_KEY_MISSING');
+      } else if (err.status === 429 || (err.message && err.message.toLowerCase().includes('rate limit'))) {
+        throw new Error('RATE_LIMIT');
+      } else {
+        throw err; // Re-throw for general error handling
+      }
+    }
 
     // Race between timeout and stream
     const stream = await Promise.race([streamPromise, timeoutPromise]);
@@ -538,42 +604,56 @@ async function handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, op
     let text = '';
     let lastUpdateTime = Date.now();
     
-    for await (const chunk of stream) {
-      if (chunk.choices[0]?.delta?.content) {
-        if (!hasStartedResponse) {
-          hasStartedResponse = true;
-          clearTimeout(timeoutCheck);
-          console.log(`[${modelId}] First chunk received`);
-        }
+    // Add another try/catch specifically for stream processing
+    try {
+      for await (const chunk of stream) {
+        if (chunk.choices[0]?.delta?.content) {
+          if (!hasStartedResponse) {
+            hasStartedResponse = true;
+            clearTimeout(timeoutCheck);
+            console.log(`[${modelId}] First chunk received`);
+          }
 
-        const content = chunk.choices[0].delta.content;
-        
-        // Update stream status in error service (with safety check)
-        if (errorService && typeof errorService.updateStream === 'function') {
-          errorService.updateStream(modelId);
-        }
-        
-        // Mark as received content if not just whitespace
-        if (content.trim()) {
-          hasReceivedContent = true;
-        }
-        
-        text += content;
-        tokenCount++;
-        
-        // Throttle updates to reduce client load
-        const currentTime = Date.now();
-        if (currentTime - lastUpdateTime > 50) {
-          sendEvent({ 
-            model: modelId, 
-            text, 
-            loading: false,
-            streaming: true,
-            error: null // Clear any previous errors
-          });
-          lastUpdateTime = currentTime;
+          const content = chunk.choices[0].delta.content;
+          
+          // Update stream status in error service (with safety check)
+          if (errorService && typeof errorService.updateStream === 'function') {
+            errorService.updateStream(modelId);
+          }
+          
+          // Mark as received content if not just whitespace
+          if (content.trim()) {
+            hasReceivedContent = true;
+          }
+          
+          text += content;
+          tokenCount++;
+          
+          // Throttle updates to reduce client load
+          const currentTime = Date.now();
+          if (currentTime - lastUpdateTime > 50) {
+            sendEvent({ 
+              model: modelId, 
+              text, 
+              loading: false,
+              streaming: true,
+              error: null // Clear any previous errors
+            });
+            lastUpdateTime = currentTime;
+          }
         }
       }
+    } catch (streamError) {
+      console.error(`[${modelId}] Error processing stream:`, streamError);
+      
+      // Check for rate limit errors
+      if (streamError.code === 429 || 
+          (streamError.message && streamError.message.toLowerCase().includes('rate limit')) ||
+          (streamError.error && streamError.error.code === 429)) {
+        throw new Error('RATE_LIMIT');
+      }
+      
+      throw streamError; // Re-throw for general error handling
     }
     
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
@@ -607,11 +687,12 @@ async function handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, op
           streaming: false,
           retrying: true,
           retryCount: retryCount,
-          maxRetries: TIMEOUT_SETTINGS.MAX_RETRIES
+          maxRetries: (errorService && errorService.TIMEOUT_SETTINGS) ? 
+            errorService.TIMEOUT_SETTINGS.MAX_RETRIES : 2
         });
         
         // Wait before retrying
-        await new Promise(resolve => setTimeout(resolve, TIMEOUT_SETTINGS.RETRY_DELAY));
+        await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second fallback retry delay
         
         // Try again
         return handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, openRouterModels);
@@ -657,20 +738,34 @@ async function handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, op
     
     console.error(`[${modelId}] Error:`, error);
     
-    // Classify the error (with safety check)
+    // Classify the error with robust error type detection
     let errorType = ERROR_TYPES.UNKNOWN_ERROR;
     
     if (error.message === 'TIMEOUT') {
       errorType = ERROR_TYPES.TIMEOUT;
+    } else if (error.message === 'API_KEY_MISSING') {
+      errorType = ERROR_TYPES.API_KEY_MISSING;
+    } else if (error.message === 'RATE_LIMIT') {
+      errorType = ERROR_TYPES.RATE_LIMIT;
     } else if (error.message === 'NO_RESPONSE' || (error.message && error.message.includes('NO_RESPONSE'))) {
       errorType = ERROR_TYPES.EMPTY_RESPONSE;
+    } else if (error.code === 429 || (error.error && error.error.code === 429)) {
+      errorType = ERROR_TYPES.RATE_LIMIT;
+    } else if (error.message && error.message.toLowerCase().includes('rate limit')) {
+      errorType = ERROR_TYPES.RATE_LIMIT;
+    } else if (error.message && error.message.toLowerCase().includes('free-models-per-day')) {
+      errorType = ERROR_TYPES.RATE_LIMIT;
     } else if (errorService && typeof errorService.classifyError === 'function') {
       errorType = errorService.classifyError(error);
     }
     
     // Handle retry logic (with safety check)
     let shouldRetry = false;
-    if (errorService && typeof errorService.shouldRetry === 'function') {
+    
+    // Don't retry rate limit errors - they won't succeed
+    if (errorType === ERROR_TYPES.RATE_LIMIT) {
+      shouldRetry = false;
+    } else if (errorService && typeof errorService.shouldRetry === 'function') {
       shouldRetry = errorService.shouldRetry(modelId, errorType);
     }
     
@@ -687,24 +782,26 @@ async function handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, op
         streaming: false,
         retrying: true,
         retryCount: retryCount,
-        maxRetries: TIMEOUT_SETTINGS.MAX_RETRIES
+        maxRetries: (errorService && errorService.TIMEOUT_SETTINGS) ? 
+          errorService.TIMEOUT_SETTINGS.MAX_RETRIES : 2
       });
       
       // Wait before retrying
-      await new Promise(resolve => setTimeout(resolve, TIMEOUT_SETTINGS.RETRY_DELAY));
+      await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second fallback retry delay
       
       // Try again
       return handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, openRouterModels);
     }
     
     // If we've exhausted retries or should not retry, send appropriate error
-    let maxRetries = TIMEOUT_SETTINGS.MAX_RETRIES;
+    const maxRetries = (errorService && errorService.TIMEOUT_SETTINGS) ? 
+      errorService.TIMEOUT_SETTINGS.MAX_RETRIES : 2;
     let retryCount = 0;
     if (errorService && typeof errorService.getRetryCount === 'function') {
       retryCount = errorService.getRetryCount(modelId);
     }
     
-    if (retryCount >= maxRetries) {
+    if (retryCount >= maxRetries && errorType !== ERROR_TYPES.RATE_LIMIT) {
       sendErrorEvent(modelId, ERROR_TYPES.MAX_RETRIES_EXCEEDED);
     } else {
       sendErrorEvent(modelId, errorType);
@@ -921,15 +1018,8 @@ async function streamModelResponse(model, prompt, apiKeys, streamTracker) {
   }
 }
 
-// Helper function to get provider name from model ID
-const getLLMProvider = (modelId) => {
-  if (providerMap[modelId]) {
-    return providerMap[modelId].charAt(0).toUpperCase() + providerMap[modelId].slice(1);
-  }
-  
-  if (modelId.startsWith('custom-')) {
-    return 'Custom Model';
-  }
-  
-  return modelId;
+// Helper function to verify if user has the required API key
+const verifyApiKey = (modelId, providerMap, userApiKeys) => {
+  const provider = providerMap[modelId];
+  return provider && userApiKeys[provider] ? true : false;
 };
