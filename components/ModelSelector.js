@@ -48,11 +48,56 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         icon: '🔮'
       },
       {
+        id: 'deepseek-v3',
+        name: 'DeepSeek V3',
+        provider: 'DeepSeek',
+        description: 'Latest DeepSeek chat model optimized for performance',
+        context: '32K',
+        color: 'from-purple-400 to-purple-600',
+        icon: '🌌'
+      },
+      {
+        id: 'nemotron-70b',
+        name: 'Nemotron 70B',
+        provider: 'NVIDIA',
+        description: 'NVIDIA\'s advanced Llama 3.1 based instruction model',
+        context: '32K',
+        color: 'from-green-500 to-green-700',
+        icon: '🎮'
+      },
+      {
+        id: 'mistral-small-3',
+        name: 'Mistral Small 3',
+        provider: 'Mistral AI',
+        description: 'Compact yet powerful 24B parameter instruction model',
+        context: '32K',
+        color: 'from-blue-400 to-blue-600',
+        icon: '🌪️'
+      },
+      {
+        id: 'mistral-nemo',
+        name: 'Mistral Nemo',
+        provider: 'Mistral AI',
+        description: 'Advanced Mistral model with enhanced capabilities',
+        context: '32K',
+        color: 'from-indigo-400 to-indigo-600',
+        icon: '🌊'
+      },
+      {
+        id: 'olympiccoder',
+        name: 'OlympicCoder 7B',
+        provider: 'OpenRouter',
+        description: 'Specialized coding model optimized for programming tasks',
+        context: '16K',
+        color: 'from-yellow-400 to-yellow-600',
+        icon: '🏆'
+      },
+      {
         id: 'qwen-32b',
-        name: 'Qwen QwQ 32B',
+        name: 'Qwen Coder 32B',
         provider: 'Alibaba',
-        description: 'Large multilingual model',
-        context:'131K',
+        description: 'Code-Specific Qwen large language models',
+        context:'32K',
         color: 'from-red-400 to-red-600',
         icon: '🌏'
       },

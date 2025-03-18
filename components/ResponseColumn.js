@@ -15,9 +15,14 @@ const modelDisplayNames = {
   'mistral-7b': 'Mistral Medium',
   'llama2-70b': 'Llama-2 70B',
   'phi3': 'Phi-3',
-  'qwen-32b': 'Qwen QwQ 32B',
-  'openchat': 'OpenChat 3.5' ,
-  'deepseek-r1': 'DeepSeek R1'
+  'qwen-32b': 'Qwen Coder 32B',
+  'openchat': 'OpenChat 3.5',
+  'deepseek-r1': 'DeepSeek R1',
+  'deepseek-v3': 'DeepSeek V3',
+  'nemotron-70b': 'Nemotron 70B',
+  'mistral-small-3': 'Mistral Small 3',
+  'mistral-nemo': 'Mistral Nemo',
+  'olympiccoder': 'OlympicCoder 7B'
 };
 
 export default function ResponseColumn({ model, response, streaming, className, conversationId }) {  // Add conversationId prop

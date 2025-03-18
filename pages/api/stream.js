@@ -54,11 +54,16 @@ export default async function handler(req, res) {
     'gemini': 'google',
     // Map all OpenRouter models to the openrouter provider
     'deepseek-r1': 'openrouter',
+    'deepseek-v3': 'openrouter',
     'mistral-7b': 'openrouter',
     'llama2-70b': 'openrouter',
     'phi3': 'openrouter',
     'qwen-32b': 'openrouter',
-    'openchat': 'openrouter'
+    'openchat': 'openrouter',
+    'nemotron-70b': 'openrouter',
+    'mistral-small-3': 'openrouter',
+    'mistral-nemo': 'openrouter',
+    'olympiccoder': 'openrouter'
   };
   
   // Helper function to get provider name from model ID
@@ -209,8 +214,8 @@ export default async function handler(req, res) {
       name: 'Phi-3'
     },
     'qwen-32b': {
-      id: 'qwen/qwq-32b:free',
-      name: 'Qwen QwQ 32B'
+      id: 'qwen/qwen-2.5-coder-32b-instruct:free',
+      name: 'Qwen Coder 32B'
     },
     'openchat': {
       id: 'openchat/openchat-7b:free',
@@ -219,6 +224,26 @@ export default async function handler(req, res) {
     'deepseek-r1': {  
       id: 'deepseek/deepseek-r1-distill-llama-70b:free',
       name: 'DeepSeek R1'
+    },
+    'deepseek-v3': {
+      id: 'deepseek/deepseek-chat:free',
+      name: 'DeepSeek V3'
+    },
+    'nemotron-70b': {
+      id: 'nvidia/llama-3.1-nemotron-70b-instruct:free',
+      name: 'Nemotron 70B'
+    },
+    'mistral-small-3': {
+      id: 'mistralai/mistral-small-24b-instruct-2501:free',
+      name: 'Mistral Small 3'
+    },
+    'mistral-nemo': {
+      id: 'mistralai/mistral-nemo',
+      name: 'Mistral Nemo'
+    },
+    'olympiccoder': {
+      id: 'open-r1/olympiccoder-7b:free',
+      name: 'OlympicCoder 7B'
     }
   };
 
