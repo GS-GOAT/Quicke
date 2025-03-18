@@ -87,6 +87,8 @@ export default async function handler(req, res) {
   // Define sendErrorEvent at the top level to ensure it's in scope everywhere
   const sendErrorEvent = (modelId, errorType, text = '') => {
     try {
+      console.log(`[${modelId}] Sending error event: ${errorType}`);
+      
       const provider = getLLMProvider(modelId);
       let retryCount = 0;
       if (errorService && typeof errorService.getRetryCount === 'function') {
@@ -108,6 +110,9 @@ export default async function handler(req, res) {
           case 'TIMEOUT':
             errorMessage = `${provider} response timed out.`;
             break;
+          case 'MODEL_UNAVAILABLE':
+            errorMessage = `${provider} is currently unavailable.`;
+            break;
           case 'EMPTY_RESPONSE':
             errorMessage = `${provider} returned an empty response.`;
             break;
@@ -128,6 +133,13 @@ export default async function handler(req, res) {
         maxRetries: (errorService && errorService.TIMEOUT_SETTINGS) ? 
           errorService.TIMEOUT_SETTINGS.MAX_RETRIES : 2
       });
+      
+      // After sending the error event, make sure the model is marked as completed
+      if (typeof handleModelCompletion === 'function') {
+        setTimeout(() => {
+          handleModelCompletion(modelId);
+        }, 0);
+      }
     } catch (sendError) {
       console.error(`Failed to send error event for ${modelId}:`, sendError);
       // Emergency fallback - send a basic error message
@@ -139,6 +151,13 @@ export default async function handler(req, res) {
         streaming: false,
         done: true
       });
+      
+      // Make sure to mark as completed even if sending the error event fails
+      if (typeof handleModelCompletion === 'function') {
+        setTimeout(() => {
+          handleModelCompletion(modelId);
+        }, 0);
+      }
     }
   };
 
@@ -197,8 +216,8 @@ export default async function handler(req, res) {
       id: 'openchat/openchat-7b:free',
       name: 'OpenChat 3.5'
     },
-    'deepseek-r1': {  // Add DeepSeek to OpenRouter models
-      id: 'deepseek/deepseek-r1:free',
+    'deepseek-r1': {  
+      id: 'deepseek/deepseek-r1-distill-llama-70b:free',
       name: 'DeepSeek R1'
     }
   };
@@ -245,27 +264,40 @@ export default async function handler(req, res) {
       
       // Create a timeout that will fire if model hasn't responded in time
       const timerId = setTimeout(() => {
-        if (!errorService) {
-          console.error('Error service is not initialized');
-          return;
-        }
-        
-        const stream = errorService.activeStreams.get(modelId);
-        
-        // Only timeout if we haven't received any chunks yet
-        if (stream && !stream.hasReceivedChunk) {
-          console.log(`[${modelId}] Model availability timeout after ${timeoutDuration/1000}s`);
+        try {
+          console.log(`[${modelId}] Checking if model timed out after ${timeoutDuration/1000}s`);
           
-          // Send model unavailable error
-          sendErrorEvent(modelId, ERROR_TYPES.MODEL_UNAVAILABLE);
-          
-          // THIS IS CRITICAL: Mark this model as completed for the counter
-          handleModelCompletion(modelId);
-          
-          // Clean up the stream - with safety check
-          if (errorService && typeof errorService.unregisterStream === 'function') {
-            errorService.unregisterStream(modelId);
+          if (!errorService) {
+            console.error('Error service is not initialized');
+            // Even if error service isn't initialized, we should still handle timeout
+            sendErrorEvent(modelId, ERROR_TYPES.MODEL_UNAVAILABLE);
+            handleModelCompletion(modelId);
+            return;
           }
+          
+          const stream = errorService.activeStreams.get(modelId);
+          
+          // In production, the stream might not exist yet or might have a different structure
+          // So make sure to handle that case
+          if (!stream || !stream.hasReceivedChunk) {
+            console.log(`[${modelId}] Model availability timeout after ${timeoutDuration/1000}s`);
+            
+            // Send model unavailable error
+            sendErrorEvent(modelId, ERROR_TYPES.MODEL_UNAVAILABLE);
+            
+            // THIS IS CRITICAL: Mark this model as completed for the counter
+            handleModelCompletion(modelId);
+            
+            // Clean up the stream - with safety check
+            if (errorService && typeof errorService.unregisterStream === 'function') {
+              errorService.unregisterStream(modelId);
+            }
+          }
+        } catch (timeoutError) {
+          // Log but don't rethrow - ensure the timeout logic completes
+          console.error(`[${modelId}] Error in timeout handler:`, timeoutError);
+          sendErrorEvent(modelId, ERROR_TYPES.MODEL_UNAVAILABLE);
+          handleModelCompletion(modelId);
         }
       }, timeoutDuration);
       
@@ -324,6 +356,14 @@ export default async function handler(req, res) {
 
     // Process all streams concurrently
     await Promise.all(modelPromises);
+
+    // Add a final check to make sure all models were marked as completed
+    modelArray.forEach(modelId => {
+      if (!completedModels.has(modelId)) {
+        console.log(`[${modelId}] Was not marked as completed - forcing completion`);
+        handleModelCompletion(modelId);
+      }
+    });
 
     // Make sure to clear timeouts at the end of processing
     try {
@@ -525,13 +565,19 @@ async function handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, op
   let timeoutCheck;
   let hasReceivedContent = false;
   let tokenCount = 0;
+  
+  // Add a promise rejection tracker to avoid unhandled promise rejection
+  let timeoutRejected = false;
 
   // Create abort controller for manual cancellation
   const abortController = new AbortController();
   
   // Set up cleanup function
   const cleanup = () => {
-    if (timeoutCheck) clearTimeout(timeoutCheck);
+    if (timeoutCheck) {
+      clearTimeout(timeoutCheck);
+      console.log(`[${modelId}] Cleared timeout check`);
+    }
     abortController.abort();
     console.log(`[${modelId}] Stream cleanup completed`);
   };
@@ -560,15 +606,19 @@ async function handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, op
     const timeoutDuration = (errorService && errorService.TIMEOUT_SETTINGS) ? 
       errorService.TIMEOUT_SETTINGS.INITIAL_RESPONSE : 60000;
     
-    // Create a promise that rejects after timeout
+    // Create a promise that rejects after timeout - ensure it works in production environment
     const timeoutPromise = new Promise((_, reject) => {
       timeoutCheck = setTimeout(() => {
         if (!hasStartedResponse) {
-          console.log(`[${modelId}] Initial response timeout after ${timeoutDuration}ms`);
+          console.log(`[${modelId}] Initial response timeout after ${timeoutDuration}ms in OpenRouterStream`);
+          timeoutRejected = true;
           reject(new Error('TIMEOUT'));
         }
       }, timeoutDuration);
     });
+
+    // Log that we're about to make the OpenRouter API call
+    console.log(`[${modelId}] Starting OpenRouter API call, timeout set for ${timeoutDuration}ms`);
 
     // Wrap the OpenRouter API call in a try/catch to handle specific errors
     let streamPromise;
@@ -598,8 +648,38 @@ async function handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, op
       }
     }
 
+    // Set up safeguard timeout - extra protection in case Promise.race doesn't resolve properly in production
+    const safeguardTimerId = setTimeout(() => {
+      if (!hasStartedResponse) {
+        console.log(`[${modelId}] Safeguard timeout triggered after ${timeoutDuration + 5000}ms`);
+        if (!timeoutRejected) {
+          cleanup();
+          handleModelCompletion(modelId);
+          sendErrorEvent(modelId, ERROR_TYPES.TIMEOUT);
+        }
+      }
+    }, timeoutDuration + 5000);  // Give extra 5 seconds after the main timeout
+
     // Race between timeout and stream
-    const stream = await Promise.race([streamPromise, timeoutPromise]);
+    let stream;
+    try {
+      console.log(`[${modelId}] Racing timeout vs stream promises`);
+      stream = await Promise.race([streamPromise, timeoutPromise]);
+      console.log(`[${modelId}] Promise.race completed, stream obtained:`, !!stream);
+    } catch (raceError) {
+      // This is important - in production, sometimes the Promise.race error handling is different
+      console.error(`[${modelId}] Error in Promise.race:`, raceError);
+      clearTimeout(safeguardTimerId);
+      
+      if (raceError.message === 'TIMEOUT' || timeoutRejected) {
+        console.log(`[${modelId}] Detected timeout from Promise.race rejection`);
+        throw new Error('TIMEOUT');
+      }
+      throw raceError;
+    }
+    
+    // If we got here, clear the safeguard timeout since the race completed successfully
+    clearTimeout(safeguardTimerId);
 
     let text = '';
     let lastUpdateTime = Date.now();
