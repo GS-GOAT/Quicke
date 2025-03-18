@@ -443,52 +443,115 @@ export default function ResponseColumn({ model, response, streaming, className, 
   };
 
   const renderError = () => {
-    const errorType = response.errorType || 'UNKNOWN';
-    const isApiKeyError = errorType === 'API_KEY';
-    const isTimeoutError = errorType === 'TIMEOUT';
-    const isModelUnavailable = errorType === 'MODEL_UNAVAILABLE';
+    const errorType = response.errorType || 'UNKNOWN_ERROR';
     
     const getErrorStyles = () => {
       switch (errorType) {
-        case 'API_KEY':
+        case 'API_KEY_MISSING':
           return 'border-yellow-600/30 bg-yellow-900/20 cursor-pointer hover:bg-yellow-900/30';
         case 'MODEL_UNAVAILABLE':
           return 'border-orange-600/30 bg-orange-900/20';
         case 'TIMEOUT':
           return 'border-orange-600/30 bg-orange-900/20';
+        case 'RATE_LIMIT':
+          return 'border-purple-600/30 bg-purple-900/20';
+        case 'MAX_RETRIES_EXCEEDED':
+          return 'border-red-600/30 bg-red-900/20';
+        case 'EMPTY_RESPONSE':
+          return 'border-blue-600/30 bg-blue-900/20';
         default:
           return 'border-red-800/30 bg-red-900/20';
       }
     };
 
     const getErrorTitle = () => {
-      if (isApiKeyError) return 'API Key Required';
-      if (isModelUnavailable) return 'Model Unavailable';
-      if (isTimeoutError) return 'Response Timeout';
-      return 'Error encountered';
+      switch (errorType) {
+        case 'API_KEY_MISSING':
+          return 'API Key Required';
+        case 'MODEL_UNAVAILABLE':
+          return 'Model Unavailable';
+        case 'TIMEOUT':
+          return 'Response Timeout';
+        case 'RATE_LIMIT':
+          return 'Rate Limit Exceeded';
+        case 'MAX_RETRIES_EXCEEDED':
+          return 'Max Retries Exceeded';
+        case 'EMPTY_RESPONSE':
+          return 'Empty Response';
+        case 'NETWORK_ERROR':
+          return 'Network Error';
+        default:
+          return 'Error Encountered';
+      }
     };
 
     const getErrorMessage = () => {
-      if (response.retryCount) {
-        return `${response.error} (Retry ${response.retryCount}/${response.maxRetries})`;
+      if (response.retryCount > 0) {
+        return `${response.error} (Retry ${response.retryCount}/${response.maxRetries || 2})`;
       }
       return response.error;
+    };
+
+    const getErrorIcon = () => {
+      switch (errorType) {
+        case 'API_KEY_MISSING':
+          return (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+              <path fillRule="evenodd" d="M8 7a5 5 0 113.61 4.804l-1.903 1.903A1 1 0 019 14H8v1a1 1 0 01-1 1H6v1a1 1 0 01-1 1H3a1 1 0 01-1-1v-2a1 1 0 01.293-.707L8.196 8.39A5.002 5.002 0 018 7zm5-3a.75.75 0 000 1.5A1.5 1.5 0 0114.5 7 .75.75 0 0016 7a3 3 0 00-3-3z" clipRule="evenodd" />
+            </svg>
+          );
+        case 'TIMEOUT':
+        case 'MODEL_UNAVAILABLE':
+          return (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z" clipRule="evenodd" />
+            </svg>
+          );
+        case 'EMPTY_RESPONSE':
+          return (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+              <path d="M3.75 3A1.75 1.75 0 002 4.75v3.26a3.235 3.235 0 011.75-.51h12.5c.644 0 1.245.188 1.75.51V6.75A1.75 1.75 0 0016.25 5h-4.836a.25.25 0 01-.177-.073L9.823 3.513A1.75 1.75 0 008.586 3H3.75zM3.75 9A1.75 1.75 0 002 10.75v4.5c0 .966.784 1.75 1.75 1.75h12.5A1.75 1.75 0 0018 15.25v-4.5A1.75 1.75 0 0016.25 9H3.75z" />
+            </svg>
+          );
+        default:
+          return (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+            </svg>
+          );
+      }
+    };
+
+    const errorTextClass = () => {
+      switch (errorType) {
+        case 'API_KEY_MISSING':
+          return 'text-yellow-400';
+        case 'MODEL_UNAVAILABLE':
+        case 'TIMEOUT':
+          return 'text-orange-400';
+        case 'RATE_LIMIT':
+          return 'text-purple-400';
+        case 'MAX_RETRIES_EXCEEDED':
+          return 'text-red-400';
+        case 'EMPTY_RESPONSE':
+          return 'text-blue-400';
+        default:
+          return 'text-red-400';
+      }
     };
 
     return (
       <div className={`p-4 rounded-lg border ${getErrorStyles()} transition-colors duration-200`}>
         <div className="flex items-start space-x-3">
+          <div className={`p-1.5 rounded-full ${errorTextClass()} bg-opacity-20`}>
+            {getErrorIcon()}
+          </div>
           <div>
-            <p className={`font-medium ${
-              isApiKeyError ? 'text-yellow-400' : 
-              isModelUnavailable ? 'text-orange-400' :
-              isTimeoutError ? 'text-orange-400' : 
-              'text-red-400'
-            }`}>
+            <p className={`font-medium ${errorTextClass()}`}>
               {getErrorTitle()}
             </p>
             <p className="mt-1 text-sm text-gray-300">{getErrorMessage()}</p>
-            {isApiKeyError && (
+            {errorType === 'API_KEY_MISSING' && (
               <button 
                 onClick={handleApiKeyWarning}
                 className="mt-2 text-xs text-yellow-500 hover:text-yellow-400 font-medium flex items-center"

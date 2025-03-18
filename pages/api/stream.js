@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "./auth/[...nextauth]";
 import { ParallelRequestProcessor } from '../../utils/parallelProcessor';
 import prisma from '../../lib/prisma';
+import errorService, { ERROR_TYPES, TIMEOUT_SETTINGS } from '../../utils/errorService';
 
 const streamProcessor = new ParallelRequestProcessor({
   maxConcurrentRequests: 8,
@@ -102,13 +103,23 @@ export default async function handler(req, res) {
     }
   };
 
-  const sendErrorEvent = (model, message) => {
+  const sendErrorEvent = (modelId, errorType, text = '') => {
+    const provider = getLLMProvider(modelId);
+    let retryCount = 0;
+    if (errorService && typeof errorService.getRetryCount === 'function') {
+      retryCount = errorService.getRetryCount(modelId);
+    }
+    
     sendEvent({
-      model,
-      error: message,
+      model: modelId,
+      error: errorService?.getErrorMessage(errorType, modelId, provider) || `Error: ${errorType}`,
+      errorType,
+      text,
       loading: false,
       streaming: false,
-      done: true
+      done: true,
+      retryCount: retryCount > 0 ? retryCount : undefined,
+      maxRetries: retryCount > 0 ? TIMEOUT_SETTINGS.MAX_RETRIES : undefined
     });
   };
 
@@ -144,11 +155,25 @@ export default async function handler(req, res) {
 
   let completedResponses = 0;
   const totalModels = modelArray.length;
+  
+  // Track which models have completed to avoid double-counting
+  const completedModels = new Set();
 
-  const handleModelCompletion = () => {
+  const handleModelCompletion = (modelId) => {
+    // Skip if this model was already marked as completed
+    if (completedModels.has(modelId)) {
+      return;
+    }
+    
+    // Mark this model as completed
+    completedModels.add(modelId);
     completedResponses++;
+    
+    console.log(`[${modelId}] Completed (${completedResponses}/${totalModels})`);
+    
     if (completedResponses === totalModels) {
       // All models have completed - send single completion event
+      console.log('All models have completed, ending response');
       sendEvent({
         done: true,
         allComplete: true  // This flag indicates all models are done
@@ -161,18 +186,51 @@ export default async function handler(req, res) {
     // Get custom models from localStorage (passed in request)
     const customModels = JSON.parse(req.query.customModels || '[]');
 
+    // Set up timeouts for each model - with proper completion handling
+    modelArray.forEach(modelId => {
+      // Use a standard timeout for all models
+      const timeoutDuration = TIMEOUT_SETTINGS.INITIAL_RESPONSE;
+      
+      console.log(`[${modelId}] Setting up availability timeout for ${timeoutDuration/1000}s`);
+      
+      // Create a timeout that will fire if model hasn't responded in time
+      const timerId = setTimeout(() => {
+        if (!errorService) {
+          console.error('Error service is not initialized');
+          return;
+        }
+        
+        const stream = errorService.activeStreams.get(modelId);
+        
+        // Only timeout if we haven't received any chunks yet
+        if (stream && !stream.hasReceivedChunk) {
+          console.log(`[${modelId}] Model availability timeout after ${timeoutDuration/1000}s`);
+          
+          // Send model unavailable error
+          sendErrorEvent(modelId, ERROR_TYPES.MODEL_UNAVAILABLE);
+          
+          // THIS IS CRITICAL: Mark this model as completed for the counter
+          handleModelCompletion(modelId);
+          
+          // Clean up the stream - with safety check
+          if (errorService && typeof errorService.unregisterStream === 'function') {
+            errorService.unregisterStream(modelId);
+          }
+        }
+      }, timeoutDuration);
+      
+      // Store the timer ID
+      if (errorService && errorService.modelTimers) {
+        errorService.modelTimers.set(`timeout_${modelId}`, timerId);
+      }
+    });
+
     // Process each model stream independently
     const modelPromises = modelArray.map(async (modelId) => {
       // First verify if user has the required API key
       if (!verifyApiKey(modelId)) {
-        sendEvent({
-          model: modelId,
-          error: `No API key found for ${modelId}. Please add your API key in settings.`,
-          loading: false,
-          streaming: false,
-          done: true
-        });
-        handleModelCompletion();
+        sendErrorEvent(modelId, ERROR_TYPES.API_KEY_MISSING);
+        handleModelCompletion(modelId);
         return;
       }
 
@@ -185,7 +243,7 @@ export default async function handler(req, res) {
       });
 
       try {
-        // Directly attempt to use the model - let API errors handle missing/invalid keys
+        // Process model-specific streams
         if (modelId === 'gpt-4') {
           await handleOpenAIStream(modelId, prompt, sendEvent, openai);
         } else if (modelId === 'claude') {
@@ -199,27 +257,56 @@ export default async function handler(req, res) {
         }
       } catch (error) {
         console.error(`Error with ${modelId}:`, error);
-        const errorMessage = error.status === 401 || error.status === 403
-          ? `Invalid API key for ${modelId}. Please check your settings.`
-          : `Error: ${error.message}`;
-        sendEvent({
-          model: modelId,
-          error: errorMessage,
-          loading: false,
-          streaming: false,
-          done: true
-        });
+        
+        // Determine error type
+        let errorType = ERROR_TYPES.UNKNOWN_ERROR;
+        if (errorService && typeof errorService.classifyError === 'function') {
+          errorType = errorService.classifyError(error);
+        }
+        
+        // Send error event
+        sendErrorEvent(modelId, errorType);
       }
 
-      handleModelCompletion();
+      // Always mark as completed, regardless of success or failure
+      handleModelCompletion(modelId);
     });
 
     // Process all streams concurrently
     await Promise.all(modelPromises);
+
+    // Make sure to clear timeouts at the end of processing
+    try {
+      modelArray.forEach(modelId => {
+        if (errorService && errorService.modelTimers) {
+          const timerId = errorService.modelTimers.get(`timeout_${modelId}`);
+          if (timerId) {
+            clearTimeout(timerId);
+            errorService.modelTimers.delete(`timeout_${modelId}`);
+          }
+        }
+      });
+    } catch (cleanupError) {
+      console.error('Error during timeout cleanup:', cleanupError);
+    }
+    
+    // If we get here and still haven't ended the response, do it now
+    if (!res.writableEnded) {
+      console.log('Forcing response completion');
+      sendEvent({
+        done: true,
+        allComplete: true
+      });
+      res.end();
+    }
   } catch (error) {
     console.error('Streaming error:', error);
     sendEvent({ error: 'Failed to process streaming requests' });
-    res.end();
+    
+    // Force ending the response in case of overall error
+    if (!res.writableEnded) {
+      res.end();
+    }
   }
 }
 
@@ -371,21 +458,11 @@ async function handleGeminiStream(prompt, sendEvent, genAI) {
 
     if (!success) {
       console.error('All Gemini model attempts failed');
-      sendEvent({ 
-        model: 'gemini', 
-        error: 'Failed to generate content with Gemini models. Please check your API key and quota limits.',
-        loading: false,
-        done: true
-      });
+      sendErrorEvent('gemini', ERROR_TYPES.MODEL_UNAVAILABLE);
     }
   } catch (error) {
     console.error('Gemini streaming error:', error);
-    sendEvent({ 
-      model: 'gemini', 
-      error: `${error.message} - Please check your API key and model access.`,
-      loading: false,
-      done: true
-    });
+    sendErrorEvent('gemini', ERROR_TYPES.UNKNOWN_ERROR);
   }
 }
 
@@ -396,30 +473,50 @@ async function handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, op
   const startTime = Date.now();
   let hasStartedResponse = false;
   let timeoutCheck;
-  const isSlowModel = SLOW_MODELS.includes(modelId);
   let hasReceivedContent = false;
+  let tokenCount = 0;
+
+  // Create abort controller for manual cancellation
+  const abortController = new AbortController();
+  
+  // Set up cleanup function
+  const cleanup = () => {
+    if (timeoutCheck) clearTimeout(timeoutCheck);
+    abortController.abort();
+    console.log(`[${modelId}] Stream cleanup completed`);
+  };
 
   try {
-    // Send initial loading state with special flag for slow models
+    // Add safety check for errorService
+    if (errorService && typeof errorService.registerStream === 'function') {
+      errorService.registerStream(modelId, cleanup);
+    } else {
+      console.warn(`[${modelId}] Error service not available for registration`);
+    }
+    
+    // Send initial loading state
     sendEvent({ 
       model: modelId, 
       loading: true, 
       streaming: true,
-      text: '',
-      isSlowModel // Add this flag
+      text: ''
     });
     
     if (!openRouterModels[modelId]) {
       throw new Error(`Model ${modelId} not found in OpenRouter models`);
     }
 
+    // Use standard timeout for all models
+    const timeoutDuration = TIMEOUT_SETTINGS.INITIAL_RESPONSE;
+    
     // Create a promise that rejects after timeout
     const timeoutPromise = new Promise((_, reject) => {
       timeoutCheck = setTimeout(() => {
         if (!hasStartedResponse) {
+          console.log(`[${modelId}] Initial response timeout after ${timeoutDuration}ms`);
           reject(new Error('TIMEOUT'));
         }
-      }, TIMEOUT_THRESHOLD);
+      }, timeoutDuration);
     });
 
     // Create the stream promise
@@ -428,17 +525,17 @@ async function handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, op
       messages: [{ role: 'user', content: prompt }],
       stream: true,
       temperature: 0.7,
-      max_tokens: 1000,
+      max_tokens: 4000,
       presence_penalty: 0,
       frequency_penalty: 0,
-      stop: null
+      stop: null,
+      signal: abortController.signal
     });
 
     // Race between timeout and stream
     const stream = await Promise.race([streamPromise, timeoutPromise]);
 
     let text = '';
-    let tokenCount = 0;
     let lastUpdateTime = Date.now();
     
     for await (const chunk of stream) {
@@ -446,15 +543,25 @@ async function handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, op
         if (!hasStartedResponse) {
           hasStartedResponse = true;
           clearTimeout(timeoutCheck);
+          console.log(`[${modelId}] First chunk received`);
         }
 
         const content = chunk.choices[0].delta.content;
+        
+        // Update stream status in error service (with safety check)
+        if (errorService && typeof errorService.updateStream === 'function') {
+          errorService.updateStream(modelId);
+        }
+        
+        // Mark as received content if not just whitespace
         if (content.trim()) {
           hasReceivedContent = true;
         }
+        
         text += content;
         tokenCount++;
         
+        // Throttle updates to reduce client load
         const currentTime = Date.now();
         if (currentTime - lastUpdateTime > 50) {
           sendEvent({ 
@@ -470,49 +577,165 @@ async function handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, op
     }
     
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.log(`[OpenRouter] ${modelId} completed in ${duration}s with ${tokenCount} tokens`);
+    console.log(`[${modelId}] Completed in ${duration}s with ${tokenCount} tokens`);
     
-    // Only consider it a NO_RESPONSE if we haven't received any meaningful content
-    if (!text.trim() && !hasReceivedContent) {
-      throw new Error('NO_RESPONSE');
+    // Handle empty responses - if no meaningful content was received
+    if (tokenCount === 0 || (!text.trim() && !hasReceivedContent)) {
+      console.log(`[${modelId}] Empty response detected (0 tokens)`);
+      
+      // Clean up resources (with safety check)
+      if (errorService && typeof errorService.unregisterStream === 'function') {
+        errorService.unregisterStream(modelId);
+      }
+      
+      // Try again if we should retry empty responses (with safety check)
+      let shouldRetry = false;
+      if (errorService && typeof errorService.shouldRetry === 'function') {
+        shouldRetry = errorService.shouldRetry(modelId, ERROR_TYPES.EMPTY_RESPONSE);
+      }
+      
+      if (shouldRetry) {
+        let retryCount = 0;
+        if (errorService && typeof errorService.getRetryCount === 'function') {
+          retryCount = errorService.getRetryCount(modelId);
+        }
+        
+        sendEvent({
+          model: modelId,
+          text: '',
+          loading: true,
+          streaming: false,
+          retrying: true,
+          retryCount: retryCount,
+          maxRetries: TIMEOUT_SETTINGS.MAX_RETRIES
+        });
+        
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, TIMEOUT_SETTINGS.RETRY_DELAY));
+        
+        // Try again
+        return handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, openRouterModels);
+      }
+      
+      // If we've exhausted retries, send empty response error
+      sendErrorEvent(modelId, ERROR_TYPES.EMPTY_RESPONSE);
+      return null;
     }
 
+    // Stream completed successfully with content
+    if (errorService && typeof errorService.unregisterStream === 'function') {
+      errorService.unregisterStream(modelId);
+    }
+    
     // Send final update
     sendEvent({ 
       model: modelId, 
-      text: text || ' ',  // Send a space if text is empty but we had content
+      text, 
       loading: false, 
       streaming: false,
       error: null,
       done: true 
     });
-  } catch (error) {
-    clearTimeout(timeoutCheck);
-    console.error(`[OpenRouter] ${modelId} error:`, error);
     
-    const errorMessage = error.message === 'TIMEOUT' 
-      ? `Model is taking too long to respond (>${TIMEOUT_THRESHOLD/60000} minutes). Please try again later.`
-      : error.message === 'NO_RESPONSE'
-        ? `The model failed to generate a response. Please try again.`
-        : error.message || 'Failed to get response';
-
-    sendEvent({ 
-      model: modelId, 
-      error: errorMessage,
+    return {
+      text,
       loading: false,
       streaming: false,
-      done: true 
-    });
+      done: true,
+      duration
+    };
+  } catch (error) {
+    // Clean up
+    if (timeoutCheck) clearTimeout(timeoutCheck);
+    
+    // Unregister stream (with safety check)
+    if (errorService && typeof errorService.unregisterStream === 'function') {
+      errorService.unregisterStream(modelId);
+    } else {
+      console.warn(`[${modelId}] Error service not available for error handling`);
+    }
+    
+    console.error(`[${modelId}] Error:`, error);
+    
+    // Classify the error (with safety check)
+    let errorType = ERROR_TYPES.UNKNOWN_ERROR;
+    
+    if (error.message === 'TIMEOUT') {
+      errorType = ERROR_TYPES.TIMEOUT;
+    } else if (error.message === 'NO_RESPONSE' || (error.message && error.message.includes('NO_RESPONSE'))) {
+      errorType = ERROR_TYPES.EMPTY_RESPONSE;
+    } else if (errorService && typeof errorService.classifyError === 'function') {
+      errorType = errorService.classifyError(error);
+    }
+    
+    // Handle retry logic (with safety check)
+    let shouldRetry = false;
+    if (errorService && typeof errorService.shouldRetry === 'function') {
+      shouldRetry = errorService.shouldRetry(modelId, errorType);
+    }
+    
+    if (shouldRetry) {
+      let retryCount = 0;
+      if (errorService && typeof errorService.getRetryCount === 'function') {
+        retryCount = errorService.getRetryCount(modelId);
+      }
+      
+      sendEvent({
+        model: modelId,
+        text: '',
+        loading: true,
+        streaming: false,
+        retrying: true,
+        retryCount: retryCount,
+        maxRetries: TIMEOUT_SETTINGS.MAX_RETRIES
+      });
+      
+      // Wait before retrying
+      await new Promise(resolve => setTimeout(resolve, TIMEOUT_SETTINGS.RETRY_DELAY));
+      
+      // Try again
+      return handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, openRouterModels);
+    }
+    
+    // If we've exhausted retries or should not retry, send appropriate error
+    let maxRetries = TIMEOUT_SETTINGS.MAX_RETRIES;
+    let retryCount = 0;
+    if (errorService && typeof errorService.getRetryCount === 'function') {
+      retryCount = errorService.getRetryCount(modelId);
+    }
+    
+    if (retryCount >= maxRetries) {
+      sendErrorEvent(modelId, ERROR_TYPES.MAX_RETRIES_EXCEEDED);
+    } else {
+      sendErrorEvent(modelId, errorType);
+    }
+    
+    return null;
   }
 }
 
 async function handleCustomModelStream(modelId, prompt, sendEvent, customModels) {
-  try {
-    const customModel = customModels.find(model => model.id === modelId);
-    if (!customModel) {
-      throw new Error('Custom model configuration not found');
-    }
+  const customModel = customModels.find(model => model.id === modelId);
+  if (!customModel) {
+    sendErrorEvent(modelId, ERROR_TYPES.UNKNOWN_ERROR, 'Custom model configuration not found');
+    return null;
+  }
 
+  // Create abort controller for manual cancellation
+  const abortController = new AbortController();
+  let accumulatedText = '';
+  
+  // Setup cleanup function
+  const cleanup = () => {
+    abortController.abort();
+    console.log(`[${modelId}] Stream cleanup completed`);
+  };
+  
+  try {
+    // Register with error service
+    errorService.registerStream(modelId, cleanup);
+    
+    // Send initial loading state
     sendEvent({
       model: modelId,
       loading: true,
@@ -520,7 +743,8 @@ async function handleCustomModelStream(modelId, prompt, sendEvent, customModels)
       text: ''
     });
 
-    const response = await fetch(customModel.apiEndpoint, {
+    // Set up request with timeout
+    const fetchPromise = fetch(customModel.apiEndpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -529,64 +753,139 @@ async function handleCustomModelStream(modelId, prompt, sendEvent, customModels)
       body: JSON.stringify({
         prompt: prompt,
         stream: true
-      })
+      }),
+      signal: abortController.signal
     });
+    
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Custom model API timeout')), 
+      TIMEOUT_SETTINGS.INITIAL_RESPONSE)
+    );
+    
+    // Race between fetch and timeout
+    const response = await Promise.race([fetchPromise, timeoutPromise]);
 
     if (!response.ok) {
-      throw new Error(`API request failed: ${response.statusText}`);
+      throw new Error(`Custom model API error: ${response.status} ${response.statusText}`);
     }
 
     const reader = response.body.getReader();
-    let text = '';
-
+    
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
 
-      // Assume UTF-8 encoding for the stream
+      // Update stream status
+      errorService.updateStream(modelId);
+      
+      // Decode chunk
       const chunk = new TextDecoder().decode(value);
       try {
         // Try to parse JSON response
         const data = JSON.parse(chunk);
         if (data.text || data.content || data.response) {
           const newContent = data.text || data.content || data.response;
-          text += newContent;
+          accumulatedText += newContent;
           sendEvent({
             model: modelId,
-            text,
+            text: accumulatedText,
             loading: false,
             streaming: true
           });
         }
       } catch (e) {
         // If not JSON, treat as raw text
-        text += chunk;
+        accumulatedText += chunk;
         sendEvent({
           model: modelId,
-          text,
+          text: accumulatedText,
           loading: false,
           streaming: true
         });
       }
     }
 
+    // Check if we got any content
+    if (!accumulatedText.trim()) {
+      console.log(`[${modelId}] Empty response received`);
+      errorService.unregisterStream(modelId);
+      
+      // Try again if we should retry empty responses
+      const retryCount = errorService.getRetryCount(modelId);
+      if (errorService.shouldRetry(modelId, ERROR_TYPES.EMPTY_RESPONSE)) {
+        sendEvent({
+          model: modelId,
+          text: '',
+          loading: true,
+          streaming: false,
+          retrying: true,
+          retryCount: retryCount,
+          maxRetries: TIMEOUT_SETTINGS.MAX_RETRIES
+        });
+        
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, TIMEOUT_SETTINGS.RETRY_DELAY));
+        return handleCustomModelStream(modelId, prompt, sendEvent, customModels);
+      } else {
+        sendErrorEvent(modelId, ERROR_TYPES.EMPTY_RESPONSE);
+        return null;
+      }
+    }
+    
+    // Stream completed successfully
+    errorService.unregisterStream(modelId);
+    
     sendEvent({
       model: modelId,
-      text,
+      text: accumulatedText,
       loading: false,
       streaming: false,
       done: true
     });
-
+    
+    return {
+      text: accumulatedText,
+      loading: false,
+      streaming: false,
+      done: true,
+      duration: ((Date.now() - errorService.activeStreams.get(modelId)?.startTime || 0) / 1000).toFixed(1)
+    };
   } catch (error) {
-    console.error(`Custom model error:`, error);
-    sendEvent({
-      model: modelId,
-      error: error.message || 'Failed to get response from custom model',
-      loading: false,
-      streaming: false,
-      done: true
-    });
+    console.error(`[${modelId}] Custom model error:`, error);
+    errorService.unregisterStream(modelId);
+    
+    // Classify the error
+    const errorType = errorService.classifyError(error);
+    
+    // Handle retry logic
+    if (errorService.shouldRetry(modelId, errorType)) {
+      const retryCount = errorService.getRetryCount(modelId);
+      
+      sendEvent({
+        model: modelId,
+        text: '',
+        loading: true,
+        streaming: false,
+        retrying: true,
+        retryCount: retryCount,
+        maxRetries: TIMEOUT_SETTINGS.MAX_RETRIES
+      });
+      
+      // Wait before retrying
+      await new Promise(resolve => setTimeout(resolve, TIMEOUT_SETTINGS.RETRY_DELAY));
+      
+      // Try again
+      return handleCustomModelStream(modelId, prompt, sendEvent, customModels);
+    }
+    
+    // If we've run out of retries, send final error
+    if (errorService.getRetryCount(modelId) >= TIMEOUT_SETTINGS.MAX_RETRIES) {
+      sendErrorEvent(modelId, ERROR_TYPES.MAX_RETRIES_EXCEEDED);
+    } else {
+      sendErrorEvent(modelId, errorType);
+    }
+    
+    return null;
   }
 }
 
@@ -621,3 +920,16 @@ async function streamModelResponse(model, prompt, apiKeys, streamTracker) {
     streamTracker.handleError(model, error);
   }
 }
+
+// Helper function to get provider name from model ID
+const getLLMProvider = (modelId) => {
+  if (providerMap[modelId]) {
+    return providerMap[modelId].charAt(0).toUpperCase() + providerMap[modelId].slice(1);
+  }
+  
+  if (modelId.startsWith('custom-')) {
+    return 'Custom Model';
+  }
+  
+  return modelId;
+};
