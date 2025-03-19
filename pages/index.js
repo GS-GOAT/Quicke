@@ -982,7 +982,10 @@ export default function Home() {
               {session?.user ? (
                 <div className="relative group">
                   <button className="flex items-center space-x-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center text-white font-medium">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#e6dfd3] via-[#f5efe7] to-[#d4cbbe] flex items-center justify-center text-gray-800 font-medium shadow-sm"
+                      style={{
+                        boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.5), inset 0 -2px 4px rgba(0,0,0,0.05)'
+                      }}>
                       {session.user.email.charAt(0).toUpperCase()}
                     </div>
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-gray-400">
@@ -990,16 +993,22 @@ export default function Home() {
                     </svg>
                   </button>
                   
-                  <div className="absolute right-0 mt-2 w-56 py-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-50 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all duration-200">
-                    <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Signed in as</p>
-                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{session.user.email}</p>
+                  <div className="absolute right-0 mt-2 w-56 py-2 rounded-lg shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-50 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all duration-200"
+                    style={{
+                      backgroundColor: 'rgba(28, 28, 32, 0.75)',
+                      backdropFilter: 'blur(20px)',
+                      WebkitBackdropFilter: 'blur(20px)',
+                      borderRight: '1px solid rgba(75, 75, 80, 0.2)',
+                      boxShadow: '0 0 20px rgba(0, 0, 0, 0.4)'
+                    }}>
+                    <div className="px-4 py-2 border-b border-gray-700/30">
+                      <p className="text-sm text-gray-400">Signed in as</p>
+                      <p className="text-sm font-medium text-gray-200 truncate">{session.user.email}</p>
                     </div>
                     
-                    {/* Added API Keys option */}
                     <button 
                       onClick={() => setShowApiKeyManager(true)}
-                      className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
+                      className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700/50 flex items-center transition-colors"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 mr-2">
                         <path fillRule="evenodd" d="M8 7a5 5 0 113.61 4.804l-1.903 1.903A1 1 0 019 14H8v1a1 1 0 01-1 1H6v1a1 1 0 01-1 1H3a1 1 0 01-1-1v-2a1 1 0 01.293-.707L8.196 8.39A5.002 5.002 0 018 7zm5-3a.75.75 0 000 1.5A1.5 1.5 0 0114.5 7 .75.75 0 0016 7a3 3 0 00-3-3z" clipRule="evenodd" />
@@ -1007,7 +1016,7 @@ export default function Home() {
                       API Keys
                     </button>
                     
-                    <div className="border-t border-gray-200 dark:border-gray-700 mt-2 pt-2">
+                    <div className="border-t border-gray-700/30 mt-2 pt-2">
                       <div className="px-4 py-2">
                         <label className="text-sm text-gray-700 dark:text-gray-300 mb-2 block">
                           Response Layout
@@ -1061,9 +1070,47 @@ export default function Home() {
                   </Link>
                   <Link 
                     href="/auth/signup"
-                    className="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg shadow-sm hover:shadow-lg hover:shadow-primary-500/25 transition-all duration-200"
+                    className="relative px-4 py-2 text-sm font-medium text-white rounded-lg transition-all duration-300 overflow-hidden group"
+                    style={{
+                      background: 'linear-gradient(165deg, rgba(79, 70, 229, 0.4) 0%, rgba(55, 48, 163, 0.4) 100%)',
+                      backdropFilter: 'blur(8px)',
+                      WebkitBackdropFilter: 'blur(8px)',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      boxShadow: `
+                        0 2px 4px rgba(79, 70, 229, 0.1),
+                        0 4px 8px rgba(79, 70, 229, 0.1),
+                        inset 0 1px 1px rgba(255, 255, 255, 0.4),
+                        inset 0 -1px 1px rgba(0, 0, 0, 0.1)
+                      `
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-1px)';
+                      e.currentTarget.style.boxShadow = `
+                        0 4px 8px rgba(79, 70, 229, 0.2),
+                        0 8px 16px rgba(79, 70, 229, 0.2),
+                        inset 0 1px 1px rgba(255, 255, 255, 0.4),
+                        inset 0 -1px 1px rgba(0, 0, 0, 0.1)
+                      `;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = `
+                        0 2px 4px rgba(79, 70, 229, 0.1),
+                        0 4px 8px rgba(79, 70, 229, 0.1),
+                        inset 0 1px 1px rgba(255, 255, 255, 0.4),
+                        inset 0 -1px 1px rgba(0, 0, 0, 0.1)
+                      `;
+                    }}
                   >
-                    Start Free
+                    {/* Glass highlight effect */}
+                    <div 
+                      className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                      style={{
+                        background: 'linear-gradient(165deg, rgba(255, 255, 255, 0.2) 0%, transparent 100%)',
+                        borderRadius: '7px'
+                      }}
+                    />
+                    <span className="relative z-10">Start Free</span>
                   </Link>
                 </div>
               )}

@@ -223,7 +223,7 @@ export default function ResponseColumn({ model, response, streaming, className, 
                   (response?.text && response.text.length > 0);
   const waitingForPrompt = !isLoading && !hasError && !hasText;
 
-  // Enhanced math processing function with more comprehensive patterns
+  // Replace the current processMathInText function with this robust version
   const processMathInText = (text) => {
     if (!text) return text;
     
@@ -239,34 +239,48 @@ export default function ResponseColumn({ model, response, streaming, className, 
       inlineCodes.push(match);
       return `INLINE_CODE_${inlineCodes.length - 1}`;
     });
+
+    // Fix the specific math patterns from the examples
     
-    // Handle specific math patterns - Add these new patterns
+    // 1. Fix \x2 and \x3 patterns (LaTeX-style exponents)
+    processedText = processedText.replace(/\\x\s*2/g, 'x^2');
+    processedText = processedText.replace(/\\x\s*3/g, 'x^3');
     
-    // 1. Handle x^2 notation
-    processedText = processedText.replace(/\b([a-zA-Z0-9]+)\^([a-zA-Z0-9]+)\b/g, '$$\\$1^{$2}$$');
+    // 2. Handle integration expressions with commas and boxed results
+    processedText = processedText.replace(
+      /\[\s*\\int\s+([^\],]+),?\s*dx\s*=\s*\\boxed\{\\dfrac\{([^{}]+)\}\{([^{}]+)\}\s*\+\s*C\s*\}\s*\]/g,
+      '$$\\int $1\\,dx = \\boxed{\\dfrac{$2}{$3} + C}$$'
+    );
     
-    // 2. Handle LaTeX commands like \times, \boxed, etc.
-    const texCommands = [
-      '\\times', '\\div', '\\cdot', '\\pm', '\\mp', 
-      '\\leq', '\\geq', '\\neq', '\\approx', '\\equiv',
-      '\\sum', '\\prod', '\\int', '\\boxed', '\\sqrt',
-      '\\frac', '\\alpha', '\\beta', '\\gamma', '\\delta',
-      '\\epsilon', '\\theta', '\\lambda', '\\mu', '\\pi'
-    ];
+    // 3. Handle simpler integration expressions
+    processedText = processedText.replace(
+      /\[\s*\\int\s+([^\],]+),?\s*dx\s*=\s*\\frac\{([^{}]+)\}\{([^{}]+)\}\s*\+\s*C\s*\]/g,
+      '$$\\int $1\\,dx = \\frac{$2}{$3} + C$$'
+    );
     
-    texCommands.forEach(cmd => {
-      const regex = new RegExp(`\\${cmd}`, 'g');
-      processedText = processedText.replace(regex, match => {
-        // If already in math delimiters, don't add more
-        if (/(^|[^\\])\$.*\\.*\$/.test(processedText)) {
-          return match;
-        }
-        return `$${match}$`;
-      });
-    });
+    // 4. Handle integration with Unicode symbol
+    processedText = processedText.replace(
+      /∫\s+([^\n,]+),?\s*dx\s*=\s*\(([^)]+)\)\/([^+]+)\s*\+\s*C/g,
+      '$$\\int $1\\,dx = \\frac{$2}{$3} + C$$'
+    );
     
-    // 3. Handle square brackets for math expressions: [ ... ]
-    processedText = processedText.replace(/\[(.*?\\boxed\{.*?\}.*?)\]/g, '$$[$1]$$');
+    // 5. Handle standalone fraction expressions
+    processedText = processedText.replace(
+      /\\frac\{([^{}]+)\}\{([^{}]+)\}/g,
+      '$$\\frac{$1}{$2}$$'
+    );
+    
+    // 6. Handle standalone boxed expressions
+    processedText = processedText.replace(
+      /\\boxed\{([^{}]+)\}/g,
+      '$$\\boxed{$1}$$'
+    );
+    
+    // 7. Handle special square bracket notations for integrals
+    processedText = processedText.replace(
+      /\[\s*(\\int|∫)\s+([^,=]+),?\s*d([a-z])\s*=\s*([^\\[\]]+)\s*\]/g,
+      '$$\\int $2\\,d$3 = $4$$'
+    );
     
     // Restore code blocks and inline code
     processedText = processedText.replace(/CODE_BLOCK_(\d+)/g, (_, i) => codeBlocks[parseInt(i)]);
@@ -432,7 +446,6 @@ export default function ResponseColumn({ model, response, streaming, className, 
                 padding: '1rem',
                 margin: 0,
                 borderRadius: 0,
-                fontSize: '0.9rem',
               }}
               wrapLongLines={true}
               showLineNumbers={false}
@@ -791,6 +804,41 @@ export default function ResponseColumn({ model, response, streaming, className, 
           </div>
         ) : null}
       </div>
+      
+      {/* Add the KaTeX styling inside the component */}
+      <style jsx global>{`
+        /* Make math expressions bold and larger */
+        .katex {
+          font-size: 1.15em !important;
+          font-weight: 500 !important;
+        }
+        
+        .katex-display > .katex {
+          font-size: 1.25em !important;
+          font-weight: 600 !important;
+        }
+        
+        /* Improve spacing for math display blocks */
+        .katex-display {
+          margin: 1.5em 0 !important;
+          padding: 0.5em 0 !important;
+          overflow-x: auto;
+          overflow-y: hidden;
+        }
+        
+        /* Make fractions more readable */
+        .katex .mfrac .frac-line {
+          border-bottom-width: 0.08em !important;
+        }
+        
+        /* Make boxed expressions stand out more */
+        .katex .boxed {
+          border: 0.08em solid !important;
+          border-radius: 0.1em !important;
+          padding: 0.1em 0.2em !important;
+          border-color: #6c6 !important;
+        }
+      `}</style>
     </div>
   );
 }

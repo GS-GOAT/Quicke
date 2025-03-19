@@ -300,21 +300,35 @@ export default function ApiKeyManager({ isOpen, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={handleClose} />
+      <div 
+        className="absolute inset-0 bg-black/30 backdrop-blur-sm" 
+        onClick={handleClose} 
+      />
       
       <div className="fixed inset-0 flex items-center justify-center p-4">
-        <div className="bg-white dark:bg-darksurface rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-hidden">
+        <div className="bg-transparent rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-hidden"
+          style={{
+            backgroundColor: 'rgba(28, 28, 32, 0.75)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            borderRight: '1px solid rgba(75, 75, 80, 0.2)',
+            boxShadow: '0 0 20px rgba(0, 0, 0, 0.4)'
+          }}>
+          
           {/* Header */}
-          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <div className="px-6 py-4 border-b border-gray-700/30"
+            style={{
+              backgroundColor: 'rgba(24, 24, 28, 0.6)',
+            }}>
             <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">API Keys</h2>
-              <button onClick={handleClose} className="text-gray-500 hover:text-gray-700 dark:text-gray-400">
+              <h2 className="text-xl font-semibold text-gray-100">API Keys</h2>
+              <button onClick={handleClose} className="text-gray-400 hover:text-gray-200 transition-colors">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                 </svg>
               </button>
             </div>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            <p className="mt-1 text-sm text-gray-400">
               Configure your API keys for each model provider
             </p>
           </div>
@@ -322,6 +336,18 @@ export default function ApiKeyManager({ isOpen, onClose }) {
           {/* Content area */}
           <div className="overflow-y-auto p-6" style={{ maxHeight: 'calc(80vh - 180px)' }}>
             <div className="space-y-6">
+              {/* Update input styles */}
+              <style jsx>{`
+                input {
+                  background: rgba(35, 35, 38, 0.5) !important;
+                  border-color: rgba(75, 75, 80, 0.3) !important;
+                  color: rgba(220, 220, 225, 0.9) !important;
+                }
+                input:focus {
+                  box-shadow: 0 0 0 2px rgba(125, 125, 255, 0.3) !important;
+                  border-color: rgba(125, 125, 255, 0.5) !important;
+                }
+              `}</style>
               {renderKeyInput('openai', 'OpenAI API Key', 'sk-...', 'https://platform.openai.com/api-keys')}
               {renderKeyInput('anthropic', 'Anthropic API Key', 'sk-ant-...', 'https://console.anthropic.com/')}
               {renderKeyInput('google', 'Google AI API Key', 'AIza...', 'https://makersuite.google.com/app/apikey')}
@@ -341,25 +367,34 @@ export default function ApiKeyManager({ isOpen, onClose }) {
           </div>
 
           {/* Footer */}
-          <div className="px-6 py-4 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex justify-end space-x-3">
-            <button
-              type="button"
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white dark:bg-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600"
-              onClick={handleClose}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              className={`px-4 py-2 text-sm font-medium text-white border border-transparent rounded-lg ${
-                hasModifications 
-                  ? 'bg-primary-600 hover:bg-primary-700'
-                  : 'bg-green-600 hover:bg-green-700'
-              }`}
-              onClick={saveApiKeys}
-            >
-              {hasModifications ? 'Save Changes' : 'Done'}
-            </button>
+          <div className="px-6 py-4 border-t border-gray-700/30"
+            style={{
+              backgroundColor: 'rgba(24, 24, 28, 0.6)',
+            }}>
+            <div className="flex justify-end space-x-3">
+              <button
+                type="button"
+                className="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-800/50 border border-gray-700/50 rounded-lg hover:bg-gray-700/50 transition-colors"
+                onClick={handleClose}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={`px-4 py-2 text-sm font-medium text-white border border-transparent rounded-lg transition-colors ${
+                  hasModifications 
+                    ? 'bg-primary-600/90 hover:bg-primary-700/90'
+                    : 'bg-green-600/90 hover:bg-green-700/90'
+                }`}
+                style={{
+                  backdropFilter: 'blur(8px)',
+                  WebkitBackdropFilter: 'blur(8px)'
+                }}
+                onClick={saveApiKeys}
+              >
+                {hasModifications ? 'Save Changes' : 'Done'}
+              </button>
+            </div>
           </div>
         </div>
       </div>
