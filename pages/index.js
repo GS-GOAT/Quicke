@@ -33,6 +33,9 @@ export default function Home() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [responseLayout, setResponseLayout] = useLocalStorage('responseLayout', 'grid'); // Add layout state
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [threads, setThreads] = useState([]);
+  const [activeThreadId, setActiveThreadId] = useState(null);
 
   const promptSuggestions = {
     writing: [
@@ -362,15 +365,24 @@ export default function Home() {
 
           // Only save if there are valid responses
           if (Object.keys(validResponses).length > 0) {
-            await fetch('/api/conversations/save', {
+            const saveResponse = await fetch('/api/conversations/save', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 prompt: currentPrompt,
                 responses: validResponses,
-                conversationId: id
+                threadId: activeThreadId, // Use active thread if present
               }),
             });
+            
+            const saveData = await saveResponse.json();
+            
+            // If no active thread, we created a new one
+            if (!activeThreadId && saveData.threadId) {
+              setActiveThreadId(saveData.threadId);
+              // Refresh thread list
+              fetchThreads();
+            }
           }
         } catch (error) {
           console.error('Error saving conversation:', error);
@@ -572,6 +584,110 @@ export default function Home() {
     </div>
   );
 
+  // Add this component definition before your main return statement
+
+  const ThreadSidebar = ({ isOpen, onClose, threads, onNewThread, onThreadSelect, activeThreadId }) => {
+    return (
+      <div 
+        className={`fixed top-16 left-0 w-64 h-[calc(100vh-64px)] bg-white/95 dark:bg-gray-900/95 shadow-lg transform transition-transform duration-300 ease-in-out z-40 backdrop-blur-sm border-r border-gray-200 dark:border-gray-800 ${
+          isOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+        onMouseLeave={onClose}
+      >
+        <div className="p-4">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-semibold text-gray-800 dark:text-white">Threads</h2>
+          </div>
+          
+          {/* New Thread Button */}
+          <button
+            onClick={onNewThread}
+            className="flex items-center space-x-2 w-full px-3 py-2 mb-4 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg shadow-sm transition-all duration-200"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            <span>New Thread</span>
+          </button>
+          
+          {/* Thread List */}
+          <div className="space-y-2 mt-4">
+            {threads.length === 0 ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No threads yet</p>
+            ) : (
+              threads.map(thread => (
+                <button
+                  key={thread.id}
+                  onClick={() => onThreadSelect(thread.id)}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                    activeThreadId === thread.id
+                      ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 font-medium'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  <div className="truncate">{thread.title}</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    {new Date(thread.updatedAt).toLocaleDateString()}
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Fetch threads on component mount
+  useEffect(() => {
+    if (session?.user) {
+      fetchThreads();
+    }
+  }, [session]);
+
+  // Function to fetch threads
+  const fetchThreads = async () => {
+    try {
+      const response = await fetch('/api/threads/list');
+      if (!response.ok) throw new Error('Failed to fetch threads');
+      
+      const data = await response.json();
+      // Only keep the last 5 threads
+      setThreads(data.threads.slice(0, 5));
+    } catch (error) {
+      console.error('Error fetching threads:', error);
+    }
+  };
+
+  // Function to handle new thread creation
+  const handleNewThread = () => {
+    // Clear the current conversation
+    setHistory([]);
+    setActiveThreadId(null);
+    setSidebarOpen(false);
+  };
+
+  // Function to handle thread selection
+  const handleThreadSelect = async (threadId) => {
+    if (threadId === activeThreadId) return;
+    
+    try {
+      setLoading(true);
+      const response = await fetch(`/api/threads/retrieve?id=${threadId}`);
+      
+      if (!response.ok) throw new Error('Failed to load thread');
+      
+      const data = await response.json();
+      setHistory(data.conversations);
+      setActiveThreadId(threadId);
+      setSidebarOpen(false);
+    } catch (error) {
+      console.error('Error loading thread:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen bg-gray-50 dark:bg-[#111111] transition-colors duration-200">
       <Head>
@@ -585,6 +701,16 @@ export default function Home() {
           <div className="flex items-center justify-between h-16">
             {/* Logo & Brand */}
             <div className="flex items-center space-x-3">
+              {/* Add Hamburger Menu */}
+              <button 
+                className="p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 group relative"
+                aria-label="Thread menu"
+                onMouseEnter={() => setSidebarOpen(true)}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+                </svg>
+              </button>
               <div className="h-10 w-10 relative group">
                 <div className="absolute inset-0 bg-gradient-to-tr from-primary-600 to-primary-400 rounded-xl transform group-hover:scale-105 transition-transform duration-200"></div>
                 <div className="relative h-full w-full flex items-center justify-center">
@@ -801,6 +927,15 @@ export default function Home() {
           </div>
         </div>
       </footer>
+
+      <ThreadSidebar 
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        threads={threads}
+        onNewThread={handleNewThread}
+        onThreadSelect={handleThreadSelect}
+        activeThreadId={activeThreadId}
+      />
     </div>
   );
 }
