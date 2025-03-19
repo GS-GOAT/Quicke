@@ -658,3 +658,128 @@ footer {
     rgba(17, 17, 17, 0.9) 100%
   );
 }
+
+/* Add hover behaviors for thread sidebar */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.thread-sidebar-hover {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+/* Thread library button hover effect */
+.thread-button-hover:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+/* Scrolling prompts animation */
+@keyframes scroll {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-50%); }
+}
+
+.animate-scroll {
+  animation: scroll 15s linear infinite;
+}
+
+.scrolling-prompts-container {
+  mask-image: linear-gradient(to bottom, transparent, black 10%, black 90%, transparent);
+}
+
+/* Thread sidebar animations */
+.thread-sidebar-enter {
+  transform: translateX(-100%);
+}
+
+.thread-sidebar-enter-active {
+  transform: translateX(0);
+  transition: transform 300ms ease-out;
+}
+
+.thread-sidebar-exit {
+  transform: translateX(0);
+}
+
+.thread-sidebar-exit-active {
+  transform: translateX(-100%);
+  transition: transform 300ms ease-in;
+}
+
+/* Thread panel glass effect and animations */
+@keyframes fadeInGlass {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(8px);
+  }
+}
+
+.glass-panel {
+  background-color: rgba(31, 41, 55, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  animation: fadeInGlass 0.3s ease-out forwards;
+}
+
+.glass-sidebar-enter {
+  opacity: 0;
+  transform: translateX(-20px);
+  backdrop-filter: blur(0);
+}
+
+.glass-sidebar-enter-active {
+  opacity: 1;
+  transform: translateX(0);
+  backdrop-filter: blur(8px);
+  transition: opacity 300ms, transform 300ms, backdrop-filter 300ms;
+}
+
+.glass-sidebar-exit {
+  opacity: 1;
+  transform: translateX(0);
+  backdrop-filter: blur(8px);
+}
+
+.glass-sidebar-exit-active {
+  opacity: 0;
+  transform: translateX(-20px);
+  backdrop-filter: blur(0);
+  transition: opacity 300ms, transform 300ms, backdrop-filter 300ms;
+}
+
+/* Improve scrolling for prompts */
+.scrolling-prompts-container {
+  mask-image: linear-gradient(to bottom, transparent, black 10%, black 90%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, black 10%, black 90%, transparent);
+}
+
+.animate-scroll {
+  animation: scroll 15s linear infinite;
+}
+
+@keyframes scroll {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-50%); }
+}
+
+/* Enhanced glassmorphism for dark theme */
+.dark .glass-effect {
+  background: rgba(17, 24, 39, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}

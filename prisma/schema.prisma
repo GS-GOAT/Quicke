@@ -12,8 +12,9 @@ model User {
   name          String?
   email         String       @unique
   password      String?
-  apiKeys       ApiKey[]       @relation(name: "UserApiKeys", fields: [], references: [])
-  conversations Conversation[] @relation(name: "UserConversations", fields: [], references: [])
+  apiKeys       ApiKey[]     
+  conversations Conversation[]
+  threads       Thread[]     
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 }
@@ -23,7 +24,7 @@ model ApiKey {
   provider     String
   encryptedKey String
   userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade, name: "UserApiKeys") 
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade) 
   createdAt    DateTime @default(now())
 
   // Add unique constraint for userId + provider combination
@@ -31,11 +32,13 @@ model ApiKey {
 }
 
 model Conversation {
-  id        String    @id @default(cuid())
-  userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade, name: "UserConversations")
-  messages  Message[]
-  createdAt DateTime  @default(now())
+  id          String        @id @default(cuid())
+  userId      String
+  threadId    String       
+  createdAt   DateTime      @default(now())
+  messages    Message[]
+  user        User          @relation(fields: [userId], references: [id])
+  thread      Thread        @relation(fields: [threadId], references: [id], onDelete: Cascade)
 }
 
 model Message {
@@ -45,4 +48,14 @@ model Message {
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   createdAt      DateTime     @default(now())
+}
+
+model Thread {
+  id            String        @id @default(cuid())
+  userId        String
+  title         String
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  conversations Conversation[]
+  user          User          @relation(fields: [userId], references: [id])
 }
