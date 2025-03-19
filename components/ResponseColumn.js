@@ -22,17 +22,17 @@ const modelDisplayNames = {
   'nemotron-70b': 'Nemotron 70B',
   'mistral-small-3': 'Mistral Small 3',
   'mistral-nemo': 'Mistral Nemo',
-  'olympiccoder': 'OlympicCoder 7B'
+  // 'olympiccoder': 'OlympicCoder 7B'
 };
 
 export default function ResponseColumn({ model, response, streaming, className, conversationId }) {  // Add conversationId prop
   const contentRef = useRef(null);
   const [displayedText, setDisplayedText] = useState('');
-  const [copiedCode, setCopiedCode] = useState(null);  // Add this state for code copy functionality
+  const [copiedCode, setCopiedCode] = useState(null);  // state for code copy functionality
   const lastResponseRef = useRef('');
   const processingTimeoutRef = useRef(null);
-  const [isActive, setIsActive] = useState(false);  // Add this to track if this column is currently receiving updates
-  const previousResponseRef = useRef('');  // Add this to track previous response
+  const [isActive, setIsActive] = useState(false);  // to track if this column is currently receiving updates
+  const previousResponseRef = useRef('');  // to track previous response
   const currentConversationRef = useRef(conversationId);  // Add ref to track conversation
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);

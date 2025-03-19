@@ -83,15 +83,15 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         color: 'from-indigo-400 to-indigo-600',
         icon: '🌊'
       },
-      {
-        id: 'olympiccoder',
-        name: 'OlympicCoder 7B',
-        provider: 'OpenRouter',
-        description: 'Specialized coding model optimized for programming tasks',
-        context: '16K',
-        color: 'from-yellow-400 to-yellow-600',
-        icon: '🏆'
-      },
+      // {
+      //   id: 'olympiccoder',
+      //   name: 'OlympicCoder 7B',
+      //   provider: 'OpenRouter',
+      //   description: 'Specialized coding model optimized for programming tasks',
+      //   context: '16K',
+      //   color: 'from-yellow-400 to-yellow-600',
+      //   icon: '🏆'
+      // },
       {
         id: 'qwen-32b',
         name: 'Qwen Coder 32B',

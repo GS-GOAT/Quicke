@@ -63,7 +63,7 @@ export default async function handler(req, res) {
     'nemotron-70b': 'openrouter',
     'mistral-small-3': 'openrouter',
     'mistral-nemo': 'openrouter',
-    'olympiccoder': 'openrouter'
+    // 'olympiccoder': 'openrouter'
   };
   
   // Helper function to get provider name from model ID
@@ -241,10 +241,10 @@ export default async function handler(req, res) {
       id: 'mistralai/mistral-nemo',
       name: 'Mistral Nemo'
     },
-    'olympiccoder': {
-      id: 'open-r1/olympiccoder-7b:free',
-      name: 'OlympicCoder 7B'
-    }
+    // 'olympiccoder': {
+    //   id: 'open-r1/olympiccoder-7b:free',
+    //   name: 'OlympicCoder 7B'
+    // }
   };
 
   let completedResponses = 0;
@@ -264,6 +264,16 @@ export default async function handler(req, res) {
     completedResponses++;
     
     console.log(`[${modelId}] Completed (${completedResponses}/${totalModels})`);
+    
+    // Clear any pending timeouts for this model
+    if (errorService && errorService.modelTimers) {
+      const timerId = errorService.modelTimers.get(`timeout_${modelId}`);
+      if (timerId) {
+        clearTimeout(timerId);
+        errorService.modelTimers.delete(`timeout_${modelId}`);
+        console.log(`[${modelId}] Cleared timeout on completion`);
+      }
+    }
     
     if (completedResponses === totalModels) {
       // All models have completed - send single completion event
@@ -291,6 +301,12 @@ export default async function handler(req, res) {
       const timerId = setTimeout(() => {
         try {
           console.log(`[${modelId}] Checking if model timed out after ${timeoutDuration/1000}s`);
+          
+          // Skip if this model is already completed
+          if (completedModels.has(modelId)) {
+            console.log(`[${modelId}] Skipping timeout - model already completed`);
+            return;
+          }
           
           if (!errorService) {
             console.error('Error service is not initialized');
@@ -803,8 +819,23 @@ async function handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, op
         return handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, openRouterModels);
       }
       
-      // If we've exhausted retries, send empty response error
-      sendErrorEvent(modelId, ERROR_TYPES.EMPTY_RESPONSE);
+      if (typeof sendErrorEvent === 'function') {
+        sendErrorEvent(modelId, ERROR_TYPES.EMPTY_RESPONSE);
+      } else {
+        // Fallback direct event sending
+        console.log(`[${modelId}] Sending fallback error event: EMPTY_RESPONSE`);
+        sendEvent({
+          model: modelId,
+          error: `${getLLMProvider(modelId)} returned an empty response.`,
+          errorType: ERROR_TYPES.EMPTY_RESPONSE,
+          loading: false,
+          streaming: false,
+          done: true
+        });
+        
+        // Make sure to mark the model as completed
+        handleModelCompletion(modelId);
+      }
       return null;
     }
 
