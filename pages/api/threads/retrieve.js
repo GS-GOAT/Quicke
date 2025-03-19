@@ -22,10 +22,14 @@ export default async function handler(req, res) {
       },
       include: {
         conversations: {
-          orderBy: { createdAt: 'desc' },
+          orderBy: {
+            createdAt: 'asc' // Ensure chronological order
+          },
           include: {
             messages: {
-              orderBy: { createdAt: 'asc' }
+              orderBy: {
+                createdAt: 'asc' // Ensure messages are also in order
+              }
             }
           }
         }

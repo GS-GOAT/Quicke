@@ -125,10 +125,18 @@ export default function Home() {
 
   // Replace multiple useEffect hooks with a single one for session-based fetching
   useEffect(() => {
-    if (session?.user && history.length === 0) {  // Only fetch if no history exists
-      fetchConversations();
+    // Only initialize selectedModels and other state on mount
+    // Don't fetch conversations automatically
+    
+    // Check URL for thread ID
+    const { threadId } = router.query;
+    
+    if (threadId) {
+      // If URL has threadId, load that thread
+      setActiveThreadId(threadId);
+      loadThreadConversations(threadId);
     }
-  }, [session]);  // Remove history.length from dependencies
+  }, [router.query]);
 
   // Add to useEffect section
   useEffect(() => {
@@ -533,6 +541,7 @@ export default function Home() {
                   (responses[model]?.streaming || entry.responses?.[model]?.streaming)
                 }
                 className="light-response-column"
+                onRetry={handleModelRetry}
               />
             ))}
           </div>
@@ -576,6 +585,7 @@ export default function Home() {
                   (responses[model]?.streaming || entry.responses?.[model]?.streaming)
                 }
                 className="light-response-column"
+                onRetry={handleModelRetry}
               />
             ))}
           </div>
@@ -685,6 +695,112 @@ export default function Home() {
       console.error('Error loading thread:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleModelRetry = async (modelId, conversationId) => {
+    console.log(`Retrying model ${modelId} for conversation ${conversationId}`);
+    
+    // Find the conversation to retry
+    const conversation = history.find(entry => entry.id === conversationId);
+    if (!conversation) {
+      console.error("Conversation not found:", conversationId);
+      return;
+    }
+    
+    // Update UI to show loading
+    setHistory(prev => {
+      const updated = [...prev];
+      const entryIndex = updated.findIndex(entry => entry.id === conversationId);
+      if (entryIndex !== -1) {
+        updated[entryIndex].responses = {
+          ...updated[entryIndex].responses,
+          [modelId]: {
+            text: '',
+            loading: true,
+            error: null,
+            streaming: true
+          }
+        };
+      }
+      return updated;
+    });
+    
+    try {
+      // This would normally call an API endpoint to retry the model
+      // For now, we'll simulate it by re-submitting the prompt for this model only
+      
+      // Get custom models configuration
+      const customModels = JSON.parse(localStorage.getItem('customLLMs') || '[]');
+      
+      // Create a new EventSource
+      const newEventSource = new EventSource(
+        `/api/stream?prompt=${encodeURIComponent(conversation.prompt)}&models=${encodeURIComponent(modelId)}&customModels=${encodeURIComponent(JSON.stringify(customModels))}`
+      );
+      
+      newEventSource.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        
+        if (data.model === modelId) {
+          const update = {
+            text: data.text || '',
+            error: data.error || null,
+            loading: data.loading !== false,
+            streaming: data.streaming !== false
+          };
+          
+          setHistory(prev => {
+            const updated = [...prev];
+            const entryIndex = updated.findIndex(entry => entry.id === conversationId);
+            if (entryIndex !== -1) {
+              updated[entryIndex].responses[modelId] = update;
+            }
+            return updated;
+          });
+        }
+        
+        // Handle final completion
+        if (data.allComplete) {
+          newEventSource.close();
+        }
+      };
+      
+      // Handle errors
+      newEventSource.onerror = (error) => {
+        console.error('EventSource error:', error);
+        
+        setHistory(prev => {
+          const updated = [...prev];
+          const entryIndex = updated.findIndex(entry => entry.id === conversationId);
+          if (entryIndex !== -1) {
+            updated[entryIndex].responses[modelId] = {
+              text: '',
+              loading: false,
+              error: 'Failed to retry model',
+              streaming: false
+            };
+          }
+          return updated;
+        });
+        
+        newEventSource.close();
+      };
+    } catch (error) {
+      console.error("Error retrying model:", error);
+      
+      setHistory(prev => {
+        const updated = [...prev];
+        const entryIndex = updated.findIndex(entry => entry.id === conversationId);
+        if (entryIndex !== -1) {
+          updated[entryIndex].responses[modelId] = {
+            text: '',
+            loading: false,
+            error: `Failed to retry: ${error.message}`,
+            streaming: false
+          };
+        }
+        return updated;
+      });
     }
   };
 
