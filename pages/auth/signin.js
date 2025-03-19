@@ -8,7 +8,7 @@ export default function SignIn() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false); // Add this line
+  const [isLoading, setIsLoading] = useState(false); 
   const router = useRouter();
 
   const handleSubmit = async (e) => {

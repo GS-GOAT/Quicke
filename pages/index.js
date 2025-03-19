@@ -8,7 +8,7 @@ import ApiKeyManager from '../components/ApiKeyManager';
 import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useLocalStorage } from '../hooks/useLocalStorage'; // Add this import
+import { useLocalStorage } from '../hooks/useLocalStorage'; 
 
 export default function Home() {
   const router = useRouter();
@@ -26,9 +26,9 @@ export default function Home() {
   const modelSelectorRef = useRef(null);
   const [responses, setResponses] = useState({});
   const [responseModels, setResponseModels] = useState({});
-  const [isProcessing, setIsProcessing] = useState(false); // Add this state
+  const [isProcessing, setIsProcessing] = useState(false); 
   const [currentPromptId, setCurrentPromptId] = useState(null);
-  const [showContinueButton, setShowContinueButton] = useState(true); // Add this line
+  const [showContinueButton, setShowContinueButton] = useState(true); 
   const [visibleSuggestions, setVisibleSuggestions] = useState([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
@@ -405,7 +405,7 @@ export default function Home() {
       eventSourceRef.current = null;
     };
 
-    // Add this after setting the new history item
+    // after setting the new history item
     setTimeout(() => {
       const mainContent = document.querySelector('main');
       if (mainContent) {
@@ -584,7 +584,7 @@ export default function Home() {
     </div>
   );
 
-  // Add this component definition before your main return statement
+  // component definition before your main return statement
 
   const ThreadSidebar = ({ isOpen, onClose, threads, onNewThread, onThreadSelect, activeThreadId }) => {
     return (
@@ -920,8 +920,8 @@ export default function Home() {
                 setPrompt={setPrompt} 
                 onSubmit={handleSubmit}
                 onClear={handleClear}
-                disabled={loading || selectedModels.length === 0}  // Remove isProcessing from here
-                isProcessing={isProcessing}  // Add this separate prop
+                disabled={loading || selectedModels.length === 0}  
+                isProcessing={isProcessing}  
               />
             </div>
           </div>

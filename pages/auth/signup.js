@@ -2,13 +2,13 @@ import { useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
-import { signIn } from 'next-auth/react';  // Add this import
+import { signIn } from 'next-auth/react';  
 
 export default function SignUp() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false); // Add this line
+  const [isLoading, setIsLoading] = useState(false); 
   const router = useRouter();
 
   const handleSubmit = async (e) => {
