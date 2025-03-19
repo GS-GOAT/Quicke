@@ -145,7 +145,52 @@ export default function ThreadSidebar({
   const [loading, setLoading] = useState(true);
   const sidebarRef = useRef(null);
   const overlayRef = useRef(null);
-
+  
+  // Use direct DOM manipulation to apply styles
+  useEffect(() => {
+    if (sidebarRef.current) {
+      // Apply the translucent background directly
+      Object.assign(sidebarRef.current.style, {
+        backgroundColor: 'rgba(28, 28, 32, 0.75)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        boxShadow: '0 0 25px rgba(0, 0, 0, 0.3)',
+        borderRight: '1px solid rgba(64, 64, 70, 0.2)',
+      });
+      
+      // Find header and content elements to style them directly
+      const headerEl = sidebarRef.current.querySelector('[data-header]');
+      if (headerEl) {
+        Object.assign(headerEl.style, {
+          backgroundColor: 'rgba(24, 24, 28, 0.6)',
+          borderBottom: '1px solid rgba(64, 64, 70, 0.2)',
+        });
+      }
+      
+      const contentEl = sidebarRef.current.querySelector('[data-content]');
+      if (contentEl) {
+        Object.assign(contentEl.style, {
+          backgroundColor: 'transparent',
+        });
+      }
+      
+      // Style all thread items
+      const threadItems = sidebarRef.current.querySelectorAll('[data-thread-item]');
+      threadItems.forEach(item => {
+        Object.assign(item.style, {
+          backgroundColor: 'rgba(40, 40, 45, 0.4)',
+        });
+        
+        if (item.classList.contains('active')) {
+          Object.assign(item.style, {
+            backgroundColor: 'rgba(50, 50, 60, 0.7)',
+            borderLeft: '2px solid rgba(125, 125, 200, 0.7)',
+          });
+        }
+      });
+    }
+  }, [isOpen, threads, activeThreadId]); // Update when relevant props change
+  
   // Handle click outside
   useEffect(() => {
     function handleClickOutside(event) {
@@ -217,10 +262,31 @@ export default function ThreadSidebar({
     }
   };
 
+  // Apply a mask to fix backdrop filter in some browsers
+  const ApplyBackdropMask = () => (
+    <style jsx global>{`
+      @supports (backdrop-filter: blur(20px)) or (-webkit-backdrop-filter: blur(20px)) {
+        .backdropfix {
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          background-color: rgba(28, 28, 32, 0.75) !important;
+        }
+      }
+      
+      @supports not ((backdrop-filter: blur(20px)) or (-webkit-backdrop-filter: blur(20px))) {
+        .backdropfix {
+          background-color: rgba(25, 25, 30, 0.95) !important;
+        }
+      }
+    `}</style>
+  );
+
   return (
     <>
       <ForceStyles />
-      {/* Overlay */}
+      <ApplyBackdropMask />
+      
+      {/* Glass Overlay */}
       {isOpen && (
         <div 
           ref={overlayRef}
@@ -238,46 +304,21 @@ export default function ThreadSidebar({
         />
       )}
       
-      {/* Glass Sidebar with ID for targeted styling */}
+      {/* Glass Sidebar with direct DOM ref styling */}
       <div 
-        id="thread-sidebar"
         ref={sidebarRef}
+        className="fixed inset-y-0 left-0 z-40 w-72 flex flex-col backdropfix"
         style={{
-          position: 'fixed',
-          top: 0,
-          bottom: 0,
-          left: 0,
-          width: '18rem',
-          zIndex: 40,
-          backgroundColor: 'rgba(28, 28, 32, 0.75)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          borderRight: '1px solid rgba(64, 64, 70, 0.2)',
-          boxShadow: '0 0 25px rgba(0, 0, 0, 0.3)',
-          display: 'flex',
-          flexDirection: 'column',
-          transition: 'transform 0.3s ease-out, opacity 0.3s ease-out',
           transform: isOpen ? 'translateX(0)' : 'translateX(-100%)',
           opacity: isOpen ? 1 : 0,
+          transition: 'transform 0.3s ease-out, opacity 0.3s ease-out',
         }}
       >
-        {/* Header with ID for targeted styling */}
-        <div 
-          id="thread-header"
-          style={{
-            padding: '1rem',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            backgroundColor: 'rgba(24, 24, 28, 0.6)',
-            borderBottom: '1px solid rgba(64, 64, 70, 0.2)',
-          }}
-        >
-          <h3 style={{
-            fontSize: '1.125rem',
-            fontWeight: 500,
-            color: 'rgba(220, 220, 225, 0.9)',
-          }}>Library</h3>
+        {/* Header with data attribute for ref styling */}
+        <div data-header style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 style={{ fontSize: '1.125rem', fontWeight: 500, color: 'rgba(220, 220, 225, 0.9)' }}>
+            Library
+          </h3>
           <button 
             onClick={onClose}
             style={{
@@ -295,19 +336,17 @@ export default function ThreadSidebar({
           </button>
         </div>
         
-        {/* Content with ID for targeted styling */}
+        {/* Content with data attribute for ref styling */}
         <div 
-          id="thread-content"
+          data-content
           style={{
             flexGrow: 1,
             overflow: 'auto',
             padding: '0.75rem',
-            backgroundColor: 'transparent',
           }}
         >
-          {/* New Thread Button with ID for targeted styling */}
+          {/* New Thread Button */}
           <button
-            id="thread-new-button"
             onClick={onNewThread}
             style={{
               width: '100%',
@@ -333,7 +372,7 @@ export default function ThreadSidebar({
             <span>New Thread</span>
           </button>
           
-          {/* Thread list with class for targeted styling */}
+          {/* Thread list */}
           {loading ? (
             <div style={{textAlign: 'center', padding: '2rem', color: 'rgba(180, 180, 190, 0.8)'}}>
               <div style={{
@@ -377,15 +416,13 @@ export default function ThreadSidebar({
             threads.map(thread => (
               <div 
                 key={thread.id}
+                data-thread-item
+                className={activeThreadId === thread.id ? 'active' : ''}
                 onClick={() => onSelect(thread.id)}
-                className={`thread-item ${activeThreadId === thread.id ? 'active' : ''}`}
                 style={{
                   padding: '0.75rem',
                   borderRadius: '0.5rem',
                   marginBottom: '0.5rem',
-                  backgroundColor: 'rgba(40, 40, 45, 0.4)',
-                  borderLeft: '2px solid',
-                  borderLeftColor: activeThreadId === thread.id ? 'rgba(125, 125, 200, 0.7)' : 'transparent',
                   cursor: 'pointer',
                   transition: 'all 0.2s',
                 }}

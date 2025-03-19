@@ -221,22 +221,40 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
 
   return (
     <div className="overflow-hidden model-selector-scrollbar">
-      <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700/50 bg-gradient-to-b from-white to-gray-50 dark:from-gray-900 dark:to-gray-800/50">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Select Models</h3>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+      <div 
+        className="px-5 py-4 border-b border-gray-700/30"
+        style={{
+          backgroundColor: 'rgba(28, 28, 32, 0.85)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+        }}
+      >
+        <h3 className="text-lg font-semibold text-gray-200">Select Models</h3>
+        <p className="text-sm text-gray-400 mt-1">
           Select models to be prompted
         </p>
       </div>
       
-      <div className="p-5">
+      <div 
+        className="p-5"
+        style={{
+          backgroundColor: 'rgba(24, 24, 28, 0.75)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+        }}
+      >
         <div className="flex space-x-2 mb-4 overflow-x-auto pb-2 scrollbar-thin">
           <button
             onClick={() => setActiveCategory('all')}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
               activeCategory === 'all'
-                ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300'
-                : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+                ? 'bg-primary-900/50 text-primary-300 border border-primary-700/50'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50'
             }`}
+            style={{
+              backdropFilter: activeCategory === 'all' ? 'blur(4px)' : 'none',
+              WebkitBackdropFilter: activeCategory === 'all' ? 'blur(4px)' : 'none',
+            }}
           >
             All Models
           </button>
@@ -244,30 +262,39 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
             <button
               key={category}
               onClick={() => setActiveCategory(category)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium capitalize whitespace-nowrap transition-colors ${
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium capitalize whitespace-nowrap transition-all duration-150 ${
                 activeCategory === category
-                  ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300'
-                  : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+                  ? 'bg-primary-900/50 text-primary-300 border border-primary-700/50'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50'
               }`}
+              style={{
+                backdropFilter: activeCategory === category ? 'blur(4px)' : 'none',
+                WebkitBackdropFilter: activeCategory === category ? 'blur(4px)' : 'none',
+                transition: 'background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease',
+              }}
             >
               {category}
             </button>
           ))}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
           {filteredModels.map(model => (
             <div 
               key={model.id}
               onClick={() => toggleModel(model.id)}
-              className={`group relative overflow-hidden rounded-xl cursor-pointer transition-all duration-200 transform hover:scale-[1.02] ${
+              className={`p-3 rounded-lg border transition-all duration-150 ${
                 selectedModels.includes(model.id)
-                  ? 'ring-2 ring-primary-500 dark:ring-primary-400 bg-primary-50 dark:bg-primary-900/10'
-                  : 'ring-1 ring-gray-200 dark:ring-gray-700 hover:ring-gray-300 dark:hover:ring-gray-600 bg-white dark:bg-gray-800'
+                  ? 'border-primary-700/50 bg-primary-900/30'
+                  : 'border-gray-700/30 bg-gray-800/30 hover:bg-gray-700/30'
               }`}
+              style={{
+                backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
+                transition: 'background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease',
+                transform: selectedModels.includes(model.id) ? 'scale(1.02)' : 'scale(1)',
+              }}
             >
-              <div className={`absolute inset-0 bg-gradient-to-br ${model.color} opacity-10 group-hover:opacity-20 transition-opacity duration-200`} />
-              
               <div className="relative p-4">
                 <div className="flex items-center justify-between mb-3">
                   <div className={`p-2 rounded-lg bg-gradient-to-br ${model.color} text-white shadow-sm`}>
@@ -363,8 +390,14 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         </div>
       </div>
       
-      <div className="px-5 py-3 bg-gray-50 dark:bg-gray-800/50 text-xs text-gray-500 dark:text-gray-400">
-      </div>
+      <style jsx>{`
+        @supports (backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px)) {
+          div[style*="backdrop-filter"] {
+            backdrop-filter: blur(12px) !important;
+            -webkit-backdrop-filter: blur(12px) !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

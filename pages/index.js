@@ -598,53 +598,109 @@ export default function Home() {
 
   const ThreadSidebar = ({ isOpen, onClose, threads, onNewThread, onThreadSelect, activeThreadId }) => {
     return (
-      <div 
-        className={`fixed top-16 left-0 w-64 h-[calc(100vh-64px)] bg-white/95 dark:bg-gray-900/95 shadow-lg transform transition-transform duration-300 ease-in-out z-40 backdrop-blur-sm border-r border-gray-200 dark:border-gray-800 ${
-          isOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
-        onMouseLeave={onClose}
-      >
-        <div className="p-4">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-semibold text-gray-800 dark:text-white">Threads</h2>
+      <>
+        {/* Glass overlay backdrop */}
+        {isOpen && (
+          <div 
+            className="fixed inset-0 bg-black/30 backdrop-blur-sm z-30"
+            onClick={onClose}
+          />
+        )}
+        
+        {/* Glass sidebar */}
+        <div 
+          className={`fixed top-0 left-0 w-64 h-full z-40 border-r border-gray-700/30 shadow-xl transform transition-transform duration-300 ease-in-out ${
+            isOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+          style={{
+            backgroundColor: 'rgba(28, 28, 32, 0.75)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+          }}
+        >
+          <div className="p-4 border-b border-gray-700/30" style={{ backgroundColor: 'rgba(24, 24, 28, 0.6)' }}>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-lg font-semibold text-gray-200">Library</h2>
+              <button 
+                onClick={onClose}
+                className="p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-800/50"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
           </div>
           
-          {/* New Thread Button */}
-          <button
-            onClick={onNewThread}
-            className="flex items-center space-x-2 w-full px-3 py-2 mb-4 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg shadow-sm transition-all duration-200"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-            </svg>
-            <span>New Thread</span>
-          </button>
-          
-          {/* Thread List */}
-          <div className="space-y-2 mt-4">
-            {threads.length === 0 ? (
-              <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No threads yet</p>
-            ) : (
-              threads.map(thread => (
-                <button
-                  key={thread.id}
-                  onClick={() => onThreadSelect(thread.id)}
-                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
-                    activeThreadId === thread.id
-                      ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 font-medium'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-                  }`}
-                >
-                  <div className="truncate">{thread.title}</div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {new Date(thread.updatedAt).toLocaleDateString()}
+          <div className="p-4">
+            {/* New Thread Button with enhanced hover */}
+            <button
+              onClick={onNewThread}
+              className="flex items-center justify-center w-full px-3 py-2 mb-6 text-sm font-medium text-white rounded-lg shadow-lg transition-all duration-200 hover:bg-gray-700/90 hover:transform hover:scale-[1.02] active:scale-[0.98]"
+              style={{
+                backgroundColor: 'rgba(45, 45, 50, 0.7)',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 mr-2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              <span>New Thread</span>
+            </button>
+            
+            {/* Thread List with purple accent border */}
+            <div className="space-y-2">
+              {threads.length === 0 ? (
+                <div className="text-center py-8 text-gray-400" style={{ backgroundColor: 'rgba(40, 40, 45, 0.3)', borderRadius: '0.5rem' }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 mx-auto mb-2 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  <p className="text-sm font-medium">No threads yet</p>
+                  <p className="text-xs mt-1">Start a new conversation</p>
+                </div>
+              ) : (
+                threads.map(thread => (
+                  <div 
+                    key={thread.id}
+                    onClick={() => onThreadSelect(thread.id)}
+                    className="transition-all duration-200 mb-2"
+                  >
+                    <div
+                      className={`p-3 rounded-lg cursor-pointer transition-all duration-150 border-l-2 ${
+                        activeThreadId === thread.id 
+                          ? 'bg-gray-700/70 border-purple-400' 
+                          : 'bg-gray-800/40 border-transparent hover:bg-gray-700/50 hover:border-gray-500'
+                      }`}
+                      style={{
+                        transition: "all 0.15s ease",
+                        transform: `scale(${activeThreadId === thread.id ? '1.02' : '1'})`,
+                        borderLeftColor: activeThreadId === thread.id 
+                          ? 'rgba(167, 139, 250, 0.8)'  // Purplish color for the left border
+                          : 'transparent',
+                      }}
+                    >
+                      <h3 className="text-sm font-medium text-gray-200 truncate">{thread.title}</h3>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {new Date(thread.updatedAt).toLocaleDateString()}
+                      </p>
+                    </div>
                   </div>
-                </button>
-              ))
-            )}
+                ))
+              )}
+            </div>
           </div>
         </div>
-      </div>
+        
+        {/* Add this style tag to ensure the glass effect works */}
+        <style jsx>{`
+          @supports (backdrop-filter: blur(20px)) or (-webkit-backdrop-filter: blur(20px)) {
+            div[style*="backdrop-filter"] {
+              backdrop-filter: blur(20px) !important;
+              -webkit-backdrop-filter: blur(20px) !important;
+            }
+          }
+        `}</style>
+      </>
     );
   };
 
@@ -691,6 +747,17 @@ export default function Home() {
       setHistory(data.conversations);
       setActiveThreadId(threadId);
       setSidebarOpen(false);
+      
+      // Add smooth scrolling to bottom
+      setTimeout(() => {
+        const mainContent = document.querySelector('main');
+        if (mainContent) {
+          mainContent.scrollTo({
+            top: mainContent.scrollHeight,
+            behavior: 'smooth'
+          });
+        }
+      }, 100);
     } catch (error) {
       console.error('Error loading thread:', error);
     } finally {
@@ -827,15 +894,70 @@ export default function Home() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
                 </svg>
               </button>
-              <div className="h-10 w-10 relative group">
-                <div className="absolute inset-0 bg-gradient-to-tr from-primary-600 to-primary-400 rounded-xl transform group-hover:scale-105 transition-transform duration-200"></div>
-                <div className="relative h-full w-full flex items-center justify-center">
-                  <span className="text-2xl font-bold text-white">Q</span>
-                </div>
-              </div>
-              <h1 className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-400 bg-clip-text text-transparent">
+              
+              {/* Updated Quicke text with improved animation */}
+              <h1 className="text-2xl font-bold quicke-text">
                 Quicke
               </h1>
+              
+              {/* Updated animation styles */}
+              <style jsx global>{`
+                .quicke-text {
+                  position: relative;
+                  background: linear-gradient(90deg, 
+                    rgba(255, 255, 255, 0.95) 0%, 
+                    rgba(240, 240, 255, 0.9) 40%, 
+                    rgba(225, 225, 245, 0.85) 60%, 
+                    rgba(210, 210, 235, 0.8) 100%
+                  );
+                  background-size: 200% 100%;
+                  -webkit-background-clip: text;
+                  background-clip: text;
+                  color: transparent;
+                  -webkit-text-fill-color: transparent;
+                  letter-spacing: 1px;
+                }
+                
+                /* Modify the wave effect to move in one direction only and slower */
+                .quicke-text::before {
+                  content: 'Quicke';
+                  position: absolute;
+                  top: 0;
+                  left: 0;
+                  width: 100%;
+                  height: 100%;
+                  background: linear-gradient(90deg, 
+                    transparent 0%,
+                    transparent 30%,
+                    rgba(255, 240, 220, 0.7) 50%, 
+                    transparent 70%,
+                    transparent 100%
+                  );
+                  background-size: 300% 100%;
+                  -webkit-background-clip: text;
+                  background-clip: text;
+                  color: transparent;
+                  -webkit-text-fill-color: transparent;
+                  animation: wave-through 12s linear infinite;
+                }
+                
+                /* Animation that moves in one direction only: right to left - REVERSED */
+                @keyframes wave-through {
+                  0% { background-position: 400% 0; }
+                  100% { background-position: -100% 0; }
+                }
+                
+                /* Keep the subtle underline */
+                .quicke-text::after {
+                  content: '';
+                  position: absolute;
+                  width: 100%;
+                  height: 1px;
+                  bottom: -2px;
+                  left: 0;
+                  background: linear-gradient(90deg, transparent, rgba(255, 220, 160, 0.5), transparent);
+                }
+              `}</style>
             </div>
 
             {/* Center - Model Selector */}
@@ -1022,7 +1144,7 @@ export default function Home() {
               <button
                 onClick={handleClear}
                 className="p-2.5 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all duration-200 group"
-                title="Clear all conversations"
+                title="Clear screen"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" 
                   className="w-5 h-5 transform group-hover:scale-110 transition-transform duration-200">

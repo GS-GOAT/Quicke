@@ -374,55 +374,73 @@ export default function ResponseColumn({ model, response, streaming, className, 
             </button>
           </div>
           
-          {/* Code content with dark background and NO line numbers */}
-          <div className="code-block-enhanced">
+          {/* Add these styles to fix the whitish line highlighting and make the background slightly lighter */}
+          <style jsx global>{`
+            .code-highlight-fix pre {
+              background-color: #222 !important; /* Slightly lighter dark background */
+            }
+            
+            .code-highlight-fix .token {
+              background: transparent !important; /* Remove any background from tokens */
+              text-shadow: none !important;
+            }
+            
+            .code-highlight-fix code {
+              background: transparent !important;
+            }
+            
+            /* Remove any line highlighting */
+            .code-highlight-fix .highlight-line {
+              background: transparent !important;
+            }
+            
+            /* Ensure code spans don't have any background */
+            .code-highlight-fix span {
+              background: transparent !important;
+            }
+            
+            /* Much brighter syntax highlighting colors with whiter whites */
+            .code-highlight-fix .token.comment { color: #9cdb9c !important; }
+            .code-highlight-fix .token.string { color: #ffff90 !important; }
+            .code-highlight-fix .token.number { color: #d0b0ff !important; }
+            .code-highlight-fix .token.operator { color: #ff9ce0 !important; }
+            .code-highlight-fix .token.keyword { color: #ff9ce0 !important; }
+            .code-highlight-fix .token.function { color: #90efff !important; }
+            .code-highlight-fix .token.boolean { color: #d0b0ff !important; }
+            .code-highlight-fix .token.property { color: #90efff !important; }
+            .code-highlight-fix .token.tag { color: #ff9ce0 !important; }
+            .code-highlight-fix .token.punctuation { color: #ffffff !important; } /* Brighter white */
+            .code-highlight-fix .token.class-name { color: #90efff !important; }
+            .code-highlight-fix .token.parameter { color: #ffcc90 !important; }
+            .code-highlight-fix .token.selector { color: #9cdb9c !important; }
+            .code-highlight-fix .token.important { color: #ff9c9c !important; font-weight: bold !important; }
+            .code-highlight-fix .token.variable { color: #c6e2ff !important; }
+            .code-highlight-fix .token.attr-name { color: #ffcc90 !important; }
+            .code-highlight-fix .token.attr-value { color: #ffff90 !important; }
+            .code-highlight-fix .token.plain-text { color: #ffffff !important; } /* Pure white for plain text */
+            .code-highlight-fix .token.doctype { color: #ffffff !important; }
+            .code-highlight-fix .token.entity { color: #ffffff !important; }
+          `}</style>
+          
+          {/* Code content with improved styling */}
+          <div className="code-highlight-fix">
             <SyntaxHighlighter
-              style={{
-                // Enhanced brightness for syntax highlighting
-                'code[class*="language-"]': { color: '#f8f8f2' },
-                'pre[class*="language-"]': { background: '#1a1a1a' },
-                '.token.comment': { color: '#6a9d68' },
-                '.token.string': { color: '#f1fa8c' },
-                '.token.number': { color: '#bd93f9' },
-                '.token.operator': { color: '#ff79c6' },
-                '.token.keyword': { color: '#ff79c6' },
-                '.token.function': { color: '#66d9ef' },
-                '.token.boolean': { color: '#bd93f9' },
-                '.token.property': { color: '#8be9fd' },
-                '.token.class-name': { color: '#8be9fd' },
-                '.token.tag': { color: '#ff79c6' },
-                '.token.punctuation': { color: '#f8f8f2' },
-                '.token.parameter': { color: '#ffb86c' },
-                '.token.regex': { color: '#ffb86c' },
-              }}
               language={language}
-              showLineNumbers={false} // No line numbers
-              wrapLongLines={true}
+              style={atomDark}
               customStyle={{
-                margin: 0,
+                background: '#222', // Slightly lighter background
                 padding: '1rem',
-                backgroundColor: '#1a1a1a',
+                margin: 0,
                 borderRadius: 0,
                 fontSize: '0.9rem',
               }}
+              wrapLongLines={true}
+              showLineNumbers={false}
               {...props}
             >
               {String(children).replace(/\n$/, '')}
             </SyntaxHighlighter>
           </div>
-          
-          {/* Add styles to enhance code block appearance */}
-          <style jsx global>{`
-            .code-block-enhanced .token {
-              font-weight: normal;
-              text-shadow: none;
-            }
-            .code-block-enhanced .token.keyword,
-            .code-block-enhanced .token.operator,
-            .code-block-enhanced .token.tag {
-              font-weight: bold;
-            }
-          `}</style>
         </div>
       );
     }
