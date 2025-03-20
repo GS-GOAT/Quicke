@@ -37,18 +37,9 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         icon: '🌟'
       }
     ],
-    openrouter: [
-      { 
-        id: 'deepseek-r1',
-        name: 'DeepSeek R1',
-        provider: 'DeepSeek',
-        description: 'Advanced reasoning and knowledge model',
-        context:'164K',
-        color: 'from-violet-400 to-violet-600',
-        icon: '🔮'
-      },
+    DeepSeek: [
       {
-        id: 'deepseek-v3',
+        id: 'deepseek-chat',
         name: 'DeepSeek V3',
         provider: 'DeepSeek',
         description: 'Latest DeepSeek chat model optimized for performance',
@@ -57,6 +48,26 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         icon: '🌌'
       },
       {
+        id: 'deepseek-coder',
+        name: 'DeepSeek Coder',
+        provider: 'DeepSeek',
+        description: 'Specialized model for coding tasks and technical discussions',
+        context: '32K',
+        color: 'from-indigo-400 to-indigo-600',
+        icon: '👨‍💻'
+      },
+      {
+        id: 'deepseek-reasoner',
+        name: 'DeepSeek R1',
+        provider: 'DeepSeek',
+        description: 'Advanced model with chain-of-thought reasoning',
+        context: '32K',
+        color: 'from-blue-400 to-blue-600',
+        icon: '🤔'
+      }
+    ],
+    openrouter: [
+      {
         id: 'nemotron-70b',
         name: 'Nemotron 70B',
         provider: 'NVIDIA',
@@ -64,6 +75,24 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         context: '32K',
         color: 'from-green-500 to-green-700',
         icon: '🎮'
+      },
+      {
+        id: 'deepseek-v3-openrouter',
+        name: 'DeepSeek V3 (Free)',
+        provider: 'DeepSeek',
+        description: 'Latest DeepSeek chat model optimized for performance',
+        context: '32K',
+        color: 'from-purple-400 to-purple-600',
+        icon: '🌌'
+      },
+      {
+        id: 'deepseek-distill',
+        name: 'DeepSeek R1 Distill 70B',
+        provider: 'DeepSeek',
+        description: 'Advanced reasoning model',
+        context: '164K',
+        color: 'from-violet-400 to-violet-600',
+        icon: '🔮'
       },
       {
         id: 'mistral-small-3',

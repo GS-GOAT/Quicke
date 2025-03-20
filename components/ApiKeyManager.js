@@ -7,7 +7,8 @@ export default function ApiKeyManager({ isOpen, onClose }) {
     openai: { key: '', usage: 0, limit: 0 },
     anthropic: { key: '', usage: 0, limit: 0 },
     google: { key: '', usage: 0, limit: 0 },
-    openrouter: { key: '', usage: 0, limit: 0 }
+    openrouter: { key: '', usage: 0, limit: 0 },
+    deepseek: { key: '', usage: 0, limit: 0 }  // Add DeepSeek
   });
   const [keyVisible, setKeyVisible] = useState({});
   const [saveStatus, setSaveStatus] = useState('');
@@ -15,7 +16,8 @@ export default function ApiKeyManager({ isOpen, onClose }) {
     openai: { exists: false, isValid: false },
     anthropic: { exists: false, isValid: false },
     google: { exists: false, isValid: false },
-    openrouter: { exists: false, isValid: false }
+    openrouter: { exists: false, isValid: false },
+    deepseek: { exists: false, isValid: false }  // Add DeepSeek
   });
   const [hasModifications, setHasModifications] = useState(false);
   const [originalKeys, setOriginalKeys] = useState({});
@@ -276,7 +278,8 @@ export default function ApiKeyManager({ isOpen, onClose }) {
       openai: { ...prev.openai, usage: Math.floor(Math.random() * prev.openai.limit) },
       anthropic: { ...prev.anthropic, usage: Math.floor(Math.random() * prev.anthropic.limit) },
       google: { ...prev.google, usage: Math.floor(Math.random() * prev.google.limit) },
-      openrouter: { ...prev.openrouter, usage: Math.floor(Math.random() * prev.openrouter.limit) }
+      openrouter: { ...prev.openrouter, usage: Math.floor(Math.random() * prev.openrouter.limit) },
+      deepseek: { ...prev.deepseek, usage: Math.floor(Math.random() * prev.deepseek.limit) }  // Add DeepSeek
     }));
   };
 
@@ -352,6 +355,7 @@ export default function ApiKeyManager({ isOpen, onClose }) {
               {renderKeyInput('anthropic', 'Anthropic API Key', 'sk-ant-...', 'https://console.anthropic.com/')}
               {renderKeyInput('google', 'Google AI API Key', 'AIza...', 'https://makersuite.google.com/app/apikey')}
               {renderKeyInput('openrouter', 'OpenRouter API Key', 'sk-or-...', 'https://openrouter.ai/keys')}
+              {renderKeyInput('deepseek', 'DeepSeek API Key', 'sk-ds-...', 'https://platform.deepseek.ai/')}  {/* Add DeepSeek */}
             </div>
 
             {/* Status message */}

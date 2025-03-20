@@ -16,7 +16,7 @@ export default function Home() {
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState([]);
-  const [selectedModels, setSelectedModels] = useState(['gemini', 'deepseek-r1']);
+  const [selectedModels, setSelectedModels] = useState(['gemini', 'deepseek-distill']);
   const [error, setError] = useState(null);
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [showApiKeyManager, setShowApiKeyManager] = useState(false);
@@ -444,15 +444,6 @@ export default function Home() {
     setShowContinueButton(true); // Now this will work
   };
 
-  function getLabelForModel(modelId) {
-    const labels = {
-      'gpt-4': 'GPT-4',
-      'claude': 'Claude 3 Sonnet',
-      'gemini': 'Gemini 2.0 Flash',
-      'deepseek-r1': 'DeepSeek R1'
-    };
-    return labels[modelId] || modelId;
-  }
 
   // Add separator component between conversations
   const ConversationSeparator = () => (
@@ -1143,7 +1134,7 @@ export default function Home() {
       />
       
       {error && (
-        <div className="mx-auto w-full max-w-4xl p-4 my-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg border border-red-200 dark:border-red-800/30">
+        <div className="mx-auto w-full max-w-4xl p-4 my-2 bg-yellow-900/20 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-lg border border-yellow-200/30 dark:border-yellow-800/30">
           <div className="flex items-center">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 mr-2">
               <path fillRule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 01.75.75v3.75a.75.75 0 01-1.5 0V9a.75.75 0 01.75-.75zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z" clipRule="evenodd" />

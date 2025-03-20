@@ -52,9 +52,13 @@ export default async function handler(req, res) {
     'gpt-4': 'openai',
     'claude': 'anthropic',
     'gemini': 'google',
+    // Official DeepSeek models
+    'deepseek-chat': 'deepseek',
+    'deepseek-coder': 'deepseek',
+    'deepseek-reasoner': 'deepseek',
     // Map all OpenRouter models to the openrouter provider
-    'deepseek-r1': 'openrouter',
-    'deepseek-v3': 'openrouter',
+    'deepseek-distill': 'openrouter',
+    'deepseek-v3-openrouter': 'openrouter',
     'mistral-7b': 'openrouter',
     'llama2-70b': 'openrouter',
     'phi3': 'openrouter',
@@ -199,6 +203,12 @@ export default async function handler(req, res) {
     }
   });
 
+  // Replace the DeepSeek client initialization
+  const deepseek = new OpenAI({
+    baseURL: 'https://api.deepseek.com/v1',  // Add v1 to match DeepSeek's docs
+    apiKey: userApiKeys.deepseek
+  });
+
   // Map of OpenRouter model IDs and their display names
   const openRouterModels = {
     'mistral-7b': {
@@ -221,7 +231,7 @@ export default async function handler(req, res) {
       id: 'openchat/openchat-7b:free',
       name: 'OpenChat 3.5'
     },
-    'deepseek-r1': {  
+    'deepseek-distill': {  
       id: 'deepseek/deepseek-r1-distill-llama-70b:free',
       name: 'DeepSeek R1'
     },
@@ -373,6 +383,9 @@ export default async function handler(req, res) {
           await handleClaudeStream(prompt, sendEvent, anthropic);
         } else if (modelId === 'gemini') {
           await handleGeminiStream(prompt, sendEvent, genAI);
+        } else if (modelId.startsWith('deepseek-') && !openRouterModels[modelId]) {
+          // Pass deepseek client to the function
+          await handleDeepSeekStream(modelId, prompt, sendEvent, deepseek);
         } else if (openRouterModels[modelId]) {
           await handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, openRouterModels);
         } else if (modelId.startsWith('custom-')) {
@@ -596,9 +609,6 @@ async function handleGeminiStream(prompt, sendEvent, genAI) {
     sendErrorEvent('gemini', ERROR_TYPES.UNKNOWN_ERROR);
   }
 }
-
-const SLOW_MODELS = ['qwen-32b', 'deepseek-r1'];
-const TIMEOUT_THRESHOLD = 180000; // 3 minutes in milliseconds
 
 async function handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, openRouterModels) {
   const startTime = Date.now();

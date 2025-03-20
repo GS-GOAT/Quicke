@@ -6,8 +6,14 @@ export const ERROR_TYPES = {
   MAX_RETRIES_EXCEEDED: 'MAX_RETRIES_EXCEEDED',
   EMPTY_RESPONSE: 'EMPTY_RESPONSE',
   RATE_LIMIT: 'RATE_LIMIT',
+  INSUFFICIENT_BALANCE: 'INSUFFICIENT_BALANCE',  // Add this error type
   NETWORK_ERROR: 'NETWORK_ERROR',
-  UNKNOWN_ERROR: 'UNKNOWN_ERROR'
+  UNKNOWN_ERROR: 'UNKNOWN_ERROR',
+  INSUFFICIENT_QUOTA: 'INSUFFICIENT_QUOTA',
+  INVALID_FORMAT: 'INVALID_FORMAT',
+  INVALID_PARAMETERS: 'INVALID_PARAMETERS',
+  SERVER_ERROR: 'SERVER_ERROR',
+  SERVER_OVERLOADED: 'SERVER_OVERLOADED'
 };
 
 // Timeout settings constants
@@ -108,6 +114,24 @@ class ErrorService {
       case ERROR_TYPES.NETWORK_ERROR:
         return `Network error while connecting to ${modelName}. Please check your internet connection.`;
       
+      case ERROR_TYPES.INSUFFICIENT_BALANCE:
+        return `${provider} account has insufficient credits. Please add more credits to continue.`;
+
+      case ERROR_TYPES.INSUFFICIENT_QUOTA:
+        return `${modelName} quota exceeded. Please check your billing details and add more credits.`;
+      
+      case ERROR_TYPES.INVALID_FORMAT:
+        return `Invalid request format for ${modelName}. Please try again.`;
+      
+      case ERROR_TYPES.INVALID_PARAMETERS:
+        return `Invalid parameters in request to ${modelName}. Please try again.`;
+      
+      case ERROR_TYPES.SERVER_ERROR:
+        return `${modelName} server error. Please try again later.`;
+      
+      case ERROR_TYPES.SERVER_OVERLOADED:
+        return `${modelName} is currently overloaded. Please try again in a few minutes.`;
+        
       default:
         return `Error with ${modelName}: ${errorType}`;
     }
@@ -149,6 +173,29 @@ class ErrorService {
       }
     }
     
+    // Handle OpenAI specific errors
+    if (errorType === 'insufficient_quota' || message.includes('exceeded your current quota')) {
+      return ERROR_TYPES.INSUFFICIENT_QUOTA;
+    }
+
+    // Handle DeepSeek specific errors by status code
+    switch (status) {
+      case 400:
+        return ERROR_TYPES.INVALID_FORMAT;
+      case 401:
+        return ERROR_TYPES.API_KEY_MISSING;
+      case 402:
+        return ERROR_TYPES.INSUFFICIENT_QUOTA;
+      case 422:
+        return ERROR_TYPES.INVALID_PARAMETERS;
+      case 429:
+        return ERROR_TYPES.RATE_LIMIT;
+      case 500:
+        return ERROR_TYPES.SERVER_ERROR;
+      case 503:
+        return ERROR_TYPES.SERVER_OVERLOADED;
+    }
+
     // Classify by status code
     if (status === 401 || status === 403) {
       return ERROR_TYPES.API_KEY_MISSING;
@@ -227,4 +274,4 @@ class ErrorService {
 
 // Create singleton instance
 const errorService = new ErrorService();
-export { errorService as default }; 
+export { errorService as default };
