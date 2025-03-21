@@ -31,10 +31,28 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         id: 'gemini',
         name: 'Gemini 2.0 Flash',
         provider: 'Google',
-        description: 'Google\'s most capable model',
-        context:0,
+        description: 'Fastest performance optimized model',
+        context: 0,
         color: 'from-blue-400 to-blue-600',
+        icon: '🚀'
+      },
+      {
+        id: 'gemini-pro',
+        name: 'Gemini 2.0 Pro',
+        provider: 'Google',
+        description: 'Full-featured model with enhanced capabilities',
+        context: 0,
+        color: 'from-indigo-400 to-indigo-600',
         icon: '🌟'
+      },
+      {
+        id: 'gemini-thinking',
+        name: 'Gemini 2.0 Flash Thinking',
+        provider: 'Google',
+        description: 'Advanced reasoning for more thoughtful responses',
+        context: 0,
+        color: 'from-purple-400 to-purple-600',
+        icon: '🤔'
       }
     ],
     DeepSeek: [

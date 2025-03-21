@@ -3,15 +3,8 @@ import { Anthropic } from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "./auth/[...nextauth]";
-import { ParallelRequestProcessor } from '../../utils/parallelProcessor';
 import prisma from '../../lib/prisma';
 import errorService, { ERROR_TYPES as IMPORTED_ERROR_TYPES, TIMEOUT_SETTINGS } from '../../utils/errorService';
-
-const streamProcessor = new ParallelRequestProcessor({
-  maxConcurrentRequests: 8,
-  retryCount: 1,
-  retryDelay: 500
-});
 
 // Fallback error types in case errorService isn't initialized
 const FALLBACK_ERROR_TYPES = {
@@ -52,6 +45,8 @@ export default async function handler(req, res) {
     'gpt-4': 'openai',
     'claude': 'anthropic',
     'gemini': 'google',
+    'gemini-pro': 'google',
+    'gemini-thinking': 'google',
     // Official DeepSeek models
     'deepseek-chat': 'deepseek',
     'deepseek-coder': 'deepseek',
@@ -257,6 +252,22 @@ export default async function handler(req, res) {
     // }
   };
 
+  // Update geminiModels with debug logging
+  const geminiModels = {
+    'gemini': {
+      id: 'gemini-2.0-flash',
+      name: 'Gemini 2.0 Flash'
+    },
+    'gemini-pro': {
+      id: 'gemini-2.0-pro-exp-02-05',
+      name: 'Gemini 2.0 Pro'
+    },
+    'gemini-thinking': {
+      id: 'gemini-2.0-flash-thinking-exp-01-21',
+      name: 'Gemini 2.0 Flash Thinking'
+    }
+  };
+
   let completedResponses = 0;
   const totalModels = modelArray.length;
   
@@ -381,10 +392,9 @@ export default async function handler(req, res) {
           await handleOpenAIStream(modelId, prompt, sendEvent, openai);
         } else if (modelId === 'claude') {
           await handleClaudeStream(prompt, sendEvent, anthropic);
-        } else if (modelId === 'gemini') {
-          await handleGeminiStream(prompt, sendEvent, genAI);
+        } else if (geminiModels[modelId]) {
+          await handleGeminiStream(modelId, prompt, sendEvent, genAI, geminiModels);
         } else if (modelId.startsWith('deepseek-') && !openRouterModels[modelId]) {
-          // Pass deepseek client to the function
           await handleDeepSeekStream(modelId, prompt, sendEvent, deepseek);
         } else if (openRouterModels[modelId]) {
           await handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, openRouterModels);
@@ -504,109 +514,73 @@ async function handleClaudeStream(prompt, sendEvent, anthropic) {
   }
 }
 
-async function handleGeminiStream(prompt, sendEvent, genAI) {
+async function handleGeminiStream(modelId, prompt, sendEvent, genAI, geminiModels) {
   try {
-    // First send an explicit loading state
-    sendEvent({ model: 'gemini', loading: true, text: '' });
+    sendEvent({ model: modelId, loading: true, text: '' });
     
-    const modelOptions = ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.0-pro', 'gemini-1.5-flash'];
-    let success = false;
+    const model = geminiModels[modelId];
+    if (!model) {
+      throw new Error(`Invalid Gemini model: ${modelId}`);
+    }
 
-    for (const modelName of modelOptions) {
-      try {
-        console.log(`Attempting to use Gemini model: ${modelName}`);
-        const geminiModel = genAI.getGenerativeModel({ 
-          model: modelName,
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 1024,
-          }
+    const geminiModel = genAI.getGenerativeModel({ model: model.id });
+    const result = await geminiModel.generateContentStream(prompt);
+    let text = '';
+    
+    for await (const chunk of result.stream) {
+      const chunkText = chunk.text();
+      if (chunkText !== undefined) {
+        text += chunkText;
+        sendEvent({ 
+          model: modelId, 
+          text, 
+          loading: false,
+          streaming: true 
         });
-        
-        try {
-          // Try the streaming method first
-          console.log(`Starting stream for Gemini model: ${modelName}`);
-          const result = await geminiModel.generateContentStream(prompt);
-          
-          let text = '';
-          let firstChunk = true;
-          
-          for await (const chunk of result.stream) {
-            const chunkText = chunk.text();
-            
-            // Log the first chunk to debug
-            if (firstChunk) {
-              console.log(`First chunk received from ${modelName}:`, chunkText !== undefined ? 'has content' : 'undefined content');
-              firstChunk = false;
-            }
-            
-            if (chunkText !== undefined) {
-              text += chunkText;
-              // Send the updated text with each chunk
-              sendEvent({ 
-                model: 'gemini', 
-                text, 
-                loading: false,
-                streaming: true 
-              });
-            }
-          }
-          
-          // Final update with streaming and done flags
-          if (text.length > 0) {
-            console.log(`Gemini model ${modelName} succeeded with ${text.length} characters`);
-            sendEvent({ 
-              model: 'gemini', 
-              text, 
-              loading: false,
-              streaming: false,  // Explicitly set streaming to false
-              done: true 
-            });
-            success = true;
-            break;
-          } else {
-            console.log(`Gemini model ${modelName} returned empty response`);
-          }
-        } catch (streamError) {
-          console.error(`Streaming error with Gemini model ${modelName}:`, streamError);
-          
-          // Fallback to non-streaming method if streaming fails
-          try {
-            console.log(`Trying non-streaming fallback for ${modelName}`);
-            const response = await geminiModel.generateContent(prompt);
-            const text = response.response.text();
-            
-            if (text && text.length > 0) {
-              // For non-streaming, send one update
-              sendEvent({ 
-                model: 'gemini', 
-                text, 
-                loading: false, 
-                streaming: false, 
-                done: true 
-              });
-              console.log(`Gemini model ${modelName} succeeded with non-streaming API`);
-              success = true;
-              break;
-            } else {
-              console.log(`Gemini model ${modelName} returned empty response with non-streaming API`);
-            }
-          } catch (nonStreamError) {
-            console.error(`Non-streaming error with Gemini model ${modelName}:`, nonStreamError);
-          }
-        }
-      } catch (modelError) {
-        console.error(`Error initializing Gemini model ${modelName}:`, modelError);
       }
     }
 
-    if (!success) {
-      console.error('All Gemini model attempts failed');
-      sendErrorEvent('gemini', ERROR_TYPES.MODEL_UNAVAILABLE);
-    }
+    sendEvent({ 
+      model: modelId, 
+      text, 
+      loading: false,
+      streaming: false,
+      done: true 
+    });
+
   } catch (error) {
-    console.error('Gemini streaming error:', error);
-    sendErrorEvent('gemini', ERROR_TYPES.UNKNOWN_ERROR);
+    console.error(`Gemini error (${modelId}):`, error);
+    sendEvent({ 
+      model: modelId, 
+      error: `Model error: ${error.message}`,
+      loading: false,
+      streaming: false,
+      done: true
+    });
+  }
+}
+
+async function handleDeepSeekStream(modelId, prompt, sendEvent, deepseek) {
+  try {
+    const stream = await deepseek.chat.completions.create({
+      model: modelId,
+      messages: [{ role: 'user', content: prompt }],
+      stream: true,
+    });
+
+    let text = '';
+    for await (const chunk of stream) {
+      if (chunk.choices[0]?.delta?.content) {
+        text += chunk.choices[0].delta.content;
+        sendEvent({ model: modelId, text });
+      }
+    }
+    sendEvent({ model: modelId, text, done: true });
+  } catch (error) {
+    const errorMessage = error.status === 401 
+      ? "Invalid or missing DeepSeek API key. Please check your API key in settings."
+      : error.message;
+    sendEvent({ model: modelId, error: errorMessage });
   }
 }
 
@@ -1129,38 +1103,6 @@ async function handleCustomModelStream(modelId, prompt, sendEvent, customModels)
     }
     
     return null;
-  }
-}
-
-// Update the streaming function to use the streamProcessor
-async function streamModelResponse(model, prompt, apiKeys, streamTracker) {
-  try {
-    const modelRequest = async () => {
-      let accumulatedText = '';
-      
-      if (model.startsWith('gpt-')) {
-        const openai = new OpenAI({ apiKey: apiKeys.openai });
-        const stream = await openai.chat.completions.create({
-          model,
-          messages: [{ role: 'user', content: prompt }],
-          stream: true,
-        });
-
-        for await (const chunk of stream) {
-          if (chunk.choices[0]?.delta?.content) {
-            accumulatedText += chunk.choices[0].delta.content;
-            streamTracker.updateResponse(model, accumulatedText);
-          }
-        }
-      }
-      // Add handlers for other models here
-      
-      streamTracker.updateResponse(model, accumulatedText, true);
-    };
-
-    await streamProcessor.processRequests({ [model]: modelRequest });
-  } catch (error) {
-    streamTracker.handleError(model, error);
   }
 }
 

@@ -13,6 +13,8 @@ const modelDisplayNames = {
   'gpt-4': 'GPT-4',
   'claude': 'Claude 3 Sonnet',
   'gemini': 'Gemini 2.0 Flash',
+  'gemini-pro': 'Gemini 2.0 Pro',
+  'gemini-thinking': 'Gemini 2.0 Flash Thinking',
   // Add DeepSeek official models
   'deepseek-chat': 'DeepSeek V3',
   'deepseek-coder': 'DeepSeek Coder',
