@@ -371,51 +371,51 @@ export default async function handler(req, res) {
 
     // Process each model stream independently
     const modelPromises = modelArray.map(async (modelId) => {
-      // First verify if user has the required API key
-      if (!verifyApiKey(modelId, providerMap, userApiKeys)) {
-        sendErrorEvent(modelId, ERROR_TYPES.API_KEY_MISSING);
-        handleModelCompletion(modelId);
-        return;
-      }
-
-      // Initial state for each model
-      sendEvent({
-        model: modelId,
-        text: '',
-        loading: true,
-        streaming: false
-      });
-
       try {
-        // Process model-specific streams
-        if (modelId === 'gpt-4') {
-          await handleOpenAIStream(modelId, prompt, sendEvent, openai);
-        } else if (modelId === 'claude') {
-          await handleClaudeStream(prompt, sendEvent, anthropic);
-        } else if (geminiModels[modelId]) {
-          await handleGeminiStream(modelId, prompt, sendEvent, genAI, geminiModels);
-        } else if (modelId.startsWith('deepseek-') && !openRouterModels[modelId]) {
-          await handleDeepSeekStream(modelId, prompt, sendEvent, deepseek);
-        } else if (openRouterModels[modelId]) {
-          await handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, openRouterModels);
-        } else if (modelId.startsWith('custom-')) {
-          await handleCustomModelStream(modelId, prompt, sendEvent, customModels);
+        // First verify if user has the required API key
+        if (!verifyApiKey(modelId, providerMap, userApiKeys)) {
+          sendErrorEvent(modelId, ERROR_TYPES.API_KEY_MISSING);
+          handleModelCompletion(modelId);
+          return;
         }
-      } catch (error) {
-        console.error(`Error with ${modelId}:`, error);
-        
-        // Determine error type
-        let errorType = ERROR_TYPES.UNKNOWN_ERROR;
-        if (errorService && typeof errorService.classifyError === 'function') {
-          errorType = errorService.classifyError(error);
-        }
-        
-        // Send error event
-        sendErrorEvent(modelId, errorType);
-      }
 
-      // Always mark as completed, regardless of success or failure
-      handleModelCompletion(modelId);
+        // Initial state for each model
+        sendEvent({
+          model: modelId,
+          text: '',
+          loading: true,
+          streaming: false
+        });
+
+        // Process model-specific streams with individual error handling
+        try {
+          if (modelId === 'gpt-4') {
+            await handleOpenAIStream(modelId, prompt, sendEvent, openai);
+          } else if (modelId === 'claude') {
+            await handleClaudeStream(prompt, sendEvent, anthropic);
+          } else if (geminiModels[modelId]) {
+            await handleGeminiStream(modelId, prompt, sendEvent, genAI, geminiModels);
+          } else if (modelId.startsWith('deepseek-') && !openRouterModels[modelId]) {
+            await handleDeepSeekStream(modelId, prompt, sendEvent, deepseek);
+          } else if (openRouterModels[modelId]) {
+            await handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, openRouterModels);
+          } else if (modelId.startsWith('custom-')) {
+            await handleCustomModelStream(modelId, prompt, sendEvent, customModels);
+          }
+        } catch (error) {
+          // Handle errors for individual models without affecting others
+          console.error(`Error with ${modelId}:`, error);
+          sendErrorEvent(modelId, ERROR_TYPES.UNKNOWN_ERROR);
+        }
+
+        // Always mark as completed
+        handleModelCompletion(modelId);
+      } catch (error) {
+        // Catch any unexpected errors and ensure model completion
+        console.error(`Unexpected error with ${modelId}:`, error);
+        sendErrorEvent(modelId, ERROR_TYPES.UNKNOWN_ERROR);
+        handleModelCompletion(modelId);
+      }
     });
 
     // Process all streams concurrently
@@ -464,471 +464,252 @@ export default async function handler(req, res) {
   }
 }
 
-async function handleOpenAIStream(model, prompt, sendEvent, openai) {
-  try {
-    const stream = await openai.chat.completions.create({
-      model,
-      messages: [{ role: 'user', content: prompt }],
-      stream: true,
-    });
+// Centralized stream handler utility
+const createStreamHandler = (options) => {
+  const { modelId, cleanup, timeoutDuration = 60000 } = options;
+  let hasStartedResponse = false;
+  let timeoutCheck;
+  let timeoutRejected = false;
 
-    let text = '';
-    for await (const chunk of stream) {
-      if (chunk.choices[0]?.delta?.content) {
-        text += chunk.choices[0].delta.content;
-        sendEvent({ model, text });
+  const handleTimeout = (resolve, reject) => {
+    timeoutCheck = setTimeout(() => {
+      if (!hasStartedResponse) {
+        timeoutRejected = true;
+        cleanup?.();
+        reject(new Error('TIMEOUT'));
+      }
+    }, timeoutDuration);
+    return timeoutCheck;
+  };
+
+  return {
+    init: async (streamPromise) => {
+      try {
+        const timeoutPromise = new Promise((_, reject) => handleTimeout(_, reject));
+        const stream = await Promise.race([streamPromise, timeoutPromise]);
+        clearTimeout(timeoutCheck);
+        return stream;
+      } catch (error) {
+        if (timeoutRejected) {
+          throw new Error('TIMEOUT');
+        }
+        throw error;
+      }
+    },
+    markStarted: () => {
+      hasStartedResponse = true;
+      clearTimeout(timeoutCheck);
+    },
+    cleanup: () => {
+      clearTimeout(timeoutCheck);
+    }
+  };
+};
+
+// Unified event sender with retry logic
+const sendStreamEvent = async ({
+  modelId,
+  text,
+  error,
+  loading = false,
+  streaming = false,
+  done = false,
+  sendEvent,
+  retryCount,
+  maxRetries
+}) => {
+  sendEvent({
+    model: modelId,
+    text,
+    error,
+    loading,
+    streaming,
+    done,
+    ...(retryCount !== undefined && { retryCount }),
+    ...(maxRetries !== undefined && { maxRetries })
+  });
+};
+
+// Replace individual handlers with unified handler
+async function handleModelStream(options) {
+  const {
+    modelId,
+    prompt,
+    sendEvent,
+    client,
+    generateStream,
+    processChunk,
+    processGeminiStream
+  } = options;
+
+  const streamHandler = createStreamHandler({
+    modelId,
+    cleanup: () => {
+      if (errorService?.unregisterStream) {
+        errorService.unregisterStream(modelId);
       }
     }
-    sendEvent({ model, text, done: true });
+  });
+
+  try {
+    await sendStreamEvent({
+      modelId,
+      loading: true,
+      sendEvent
+    });
+
+    const stream = await streamHandler.init(generateStream());
+    let text = '';
+
+    if (processGeminiStream) {
+      // Handle Gemini's unique stream format
+      for await (const chunk of stream.stream) {
+        const content = processChunk(chunk);
+        if (content) {
+          text += content;
+          streamHandler.markStarted();
+          await sendStreamEvent({
+            modelId,
+            text,
+            streaming: true,
+            sendEvent
+          });
+        }
+      }
+    } else {
+      // Handle standard streams
+      for await (const chunk of stream) {
+        const content = processChunk(chunk);
+        if (content) {
+          text += content;
+          streamHandler.markStarted();
+          await sendStreamEvent({
+            modelId,
+            text,
+            streaming: true,
+            sendEvent
+          });
+        }
+      }
+    }
+
+    await sendStreamEvent({
+      modelId,
+      text,
+      done: true,
+      sendEvent
+    });
+
   } catch (error) {
-    // Improve error message based on status code
-    const errorMessage = error.status === 401 
-      ? "Invalid or missing OpenAI API key. Please check your API key in settings."
-      : error.message;
-    sendEvent({ model, error: errorMessage });
+    console.error(`Stream error (${modelId}):`, error);
+    const errorType = error.message === 'TIMEOUT' ? ERROR_TYPES.TIMEOUT :
+                     error.message.includes('API key') ? ERROR_TYPES.API_KEY_MISSING :
+                     ERROR_TYPES.UNKNOWN_ERROR;
+    
+    await sendStreamEvent({
+      modelId,
+      error: `Model error: ${error.message}`,
+      errorType,
+      done: true,
+      sendEvent
+    });
+  } finally {
+    streamHandler.cleanup();
   }
 }
 
+// Replace individual model handlers with unified handler calls
+async function handleOpenAIStream(modelId, prompt, sendEvent, openai) {
+  return handleModelStream({
+    modelId,
+    prompt,
+    sendEvent,
+    client: openai,
+    generateStream: () => openai.chat.completions.create({
+      model: modelId,
+      messages: [{ role: 'user', content: prompt }],
+      stream: true,
+    }),
+    processChunk: chunk => chunk.choices[0]?.delta?.content
+  });
+}
+
 async function handleClaudeStream(prompt, sendEvent, anthropic) {
-  try {
-    const stream = await anthropic.messages.create({
+  return handleModelStream({
+    modelId: 'claude',
+    prompt,
+    sendEvent,
+    client: anthropic,
+    generateStream: () => anthropic.messages.create({
       model: 'claude-3-sonnet-20240229',
       max_tokens: 1000,
       messages: [{ role: 'user', content: prompt }],
       stream: true,
-    });
-
-    let text = '';
-    for await (const chunk of stream) {
-      if (chunk.type === 'content_block_delta' && chunk.delta.text) {
-        text += chunk.delta.text;
-        sendEvent({ model: 'claude', text });
-      }
-    }
-    sendEvent({ model: 'claude', text, done: true });
-  } catch (error) {
-    const errorMessage = error.status === 401 
-      ? "Invalid or missing Anthropic API key. Please check your API key in settings."
-      : error.message;
-    sendEvent({ model: 'claude', error: errorMessage });
-  }
+    }),
+    processChunk: chunk => chunk.type === 'content_block_delta' && chunk.delta.text ? chunk.delta.text : ''
+  });
 }
 
+// Update Gemini stream handler to properly handle the stream format
 async function handleGeminiStream(modelId, prompt, sendEvent, genAI, geminiModels) {
-  try {
-    sendEvent({ model: modelId, loading: true, text: '' });
-    
-    const model = geminiModels[modelId];
-    if (!model) {
-      throw new Error(`Invalid Gemini model: ${modelId}`);
-    }
-
-    const geminiModel = genAI.getGenerativeModel({ model: model.id });
-    const result = await geminiModel.generateContentStream(prompt);
-    let text = '';
-    
-    for await (const chunk of result.stream) {
-      const chunkText = chunk.text();
-      if (chunkText !== undefined) {
-        text += chunkText;
-        sendEvent({ 
-          model: modelId, 
-          text, 
-          loading: false,
-          streaming: true 
-        });
+  return handleModelStream({
+    modelId,
+    prompt,
+    sendEvent,
+    client: genAI,
+    generateStream: async () => {
+      const model = geminiModels[modelId];
+      if (!model) {
+        throw new Error(`Invalid Gemini model: ${modelId}`);
+      }
+      const geminiModel = genAI.getGenerativeModel({ model: model.id });
+      return await geminiModel.generateContentStream([{ text: prompt }]);
+    },
+    processGeminiStream: true, // Add flag to identify Gemini streams
+    processChunk: chunk => {
+      try {
+        return chunk.text?.() || '';
+      } catch (error) {
+        console.error('Error processing Gemini chunk:', error);
+        return '';
       }
     }
-
-    sendEvent({ 
-      model: modelId, 
-      text, 
-      loading: false,
-      streaming: false,
-      done: true 
-    });
-
-  } catch (error) {
-    console.error(`Gemini error (${modelId}):`, error);
-    sendEvent({ 
-      model: modelId, 
-      error: `Model error: ${error.message}`,
-      loading: false,
-      streaming: false,
-      done: true
-    });
-  }
+  });
 }
 
 async function handleDeepSeekStream(modelId, prompt, sendEvent, deepseek) {
-  try {
-    const stream = await deepseek.chat.completions.create({
+  return handleModelStream({
+    modelId,
+    prompt,
+    sendEvent,
+    client: deepseek,
+    generateStream: () => deepseek.chat.completions.create({
       model: modelId,
       messages: [{ role: 'user', content: prompt }],
       stream: true,
-    });
-
-    let text = '';
-    for await (const chunk of stream) {
-      if (chunk.choices[0]?.delta?.content) {
-        text += chunk.choices[0].delta.content;
-        sendEvent({ model: modelId, text });
-      }
-    }
-    sendEvent({ model: modelId, text, done: true });
-  } catch (error) {
-    const errorMessage = error.status === 401 
-      ? "Invalid or missing DeepSeek API key. Please check your API key in settings."
-      : error.message;
-    sendEvent({ model: modelId, error: errorMessage });
-  }
+    }),
+    processChunk: chunk => chunk.choices[0]?.delta?.content
+  });
 }
 
 async function handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, openRouterModels) {
-  const startTime = Date.now();
-  let hasStartedResponse = false;
-  let timeoutCheck;
-  let hasReceivedContent = false;
-  let tokenCount = 0;
-  
-  // Add a promise rejection tracker to avoid unhandled promise rejection
-  let timeoutRejected = false;
-
-  // Create abort controller for manual cancellation
-  const abortController = new AbortController();
-  
-  // Set up cleanup function
-  const cleanup = () => {
-    if (timeoutCheck) {
-      clearTimeout(timeoutCheck);
-      console.log(`[${modelId}] Cleared timeout check`);
-    }
-    abortController.abort();
-    console.log(`[${modelId}] Stream cleanup completed`);
-  };
-
-  try {
-    // Add safety check for errorService
-    if (errorService && typeof errorService.registerStream === 'function') {
-      errorService.registerStream(modelId, cleanup);
-    } else {
-      console.warn(`[${modelId}] Error service not available for registration`);
-    }
-    
-    // Send initial loading state
-    sendEvent({ 
-      model: modelId, 
-      loading: true, 
-      streaming: true,
-      text: ''
-    });
-    
-    if (!openRouterModels[modelId]) {
-      throw new Error(`Model ${modelId} not found in OpenRouter models`);
-    }
-
-    // Use standard timeout (60 seconds as fallback if TIMEOUT_SETTINGS not available)
-    const timeoutDuration = (errorService && errorService.TIMEOUT_SETTINGS) ? 
-      errorService.TIMEOUT_SETTINGS.INITIAL_RESPONSE : 60000;
-    
-    // Create a promise that rejects after timeout - ensure it works in production environment
-    const timeoutPromise = new Promise((_, reject) => {
-      timeoutCheck = setTimeout(() => {
-        if (!hasStartedResponse) {
-          console.log(`[${modelId}] Initial response timeout after ${timeoutDuration}ms in OpenRouterStream`);
-          timeoutRejected = true;
-          reject(new Error('TIMEOUT'));
-        }
-      }, timeoutDuration);
-    });
-
-    // Log that we're about to make the OpenRouter API call
-    console.log(`[${modelId}] Starting OpenRouter API call, timeout set for ${timeoutDuration}ms`);
-
-    // Wrap the OpenRouter API call in a try/catch to handle specific errors
-    let streamPromise;
-    try {
-      streamPromise = openRouter.chat.completions.create({
-        model: openRouterModels[modelId].id,
-        messages: [{ role: 'user', content: prompt }],
-        stream: true,
-        temperature: 0.7,
-        max_tokens: 4000,
-        presence_penalty: 0,
-        frequency_penalty: 0,
-        stop: null,
-        signal: abortController.signal
-      });
-    } catch (err) {
-      // Handle initialization errors (like invalid API key)
-      console.error(`[${modelId}] Error creating OpenRouter stream:`, err);
-      
-      // Check for specific error types
-      if (err.status === 401 || err.status === 403) {
-        throw new Error('API_KEY_MISSING');
-      } else if (err.status === 429 || (err.message && err.message.toLowerCase().includes('rate limit'))) {
-        throw new Error('RATE_LIMIT');
-      } else {
-        throw err; // Re-throw for general error handling
-      }
-    }
-
-    // Set up safeguard timeout - extra protection in case Promise.race doesn't resolve properly in production
-    const safeguardTimerId = setTimeout(() => {
-      if (!hasStartedResponse) {
-        console.log(`[${modelId}] Safeguard timeout triggered after ${timeoutDuration + 5000}ms`);
-        if (!timeoutRejected) {
-          cleanup();
-          handleModelCompletion(modelId);
-          sendErrorEvent(modelId, ERROR_TYPES.TIMEOUT);
-        }
-      }
-    }, timeoutDuration + 5000);  // Give extra 5 seconds after the main timeout
-
-    // Race between timeout and stream
-    let stream;
-    try {
-      console.log(`[${modelId}] Racing timeout vs stream promises`);
-      stream = await Promise.race([streamPromise, timeoutPromise]);
-      console.log(`[${modelId}] Promise.race completed, stream obtained:`, !!stream);
-    } catch (raceError) {
-      // This is important - in production, sometimes the Promise.race error handling is different
-      console.error(`[${modelId}] Error in Promise.race:`, raceError);
-      clearTimeout(safeguardTimerId);
-      
-      if (raceError.message === 'TIMEOUT' || timeoutRejected) {
-        console.log(`[${modelId}] Detected timeout from Promise.race rejection`);
-        throw new Error('TIMEOUT');
-      }
-      throw raceError;
-    }
-    
-    // If we got here, clear the safeguard timeout since the race completed successfully
-    clearTimeout(safeguardTimerId);
-
-    let text = '';
-    let lastUpdateTime = Date.now();
-    
-    // Add another try/catch specifically for stream processing
-    try {
-      for await (const chunk of stream) {
-        if (chunk.choices[0]?.delta?.content) {
-          if (!hasStartedResponse) {
-            hasStartedResponse = true;
-            clearTimeout(timeoutCheck);
-            console.log(`[${modelId}] First chunk received`);
-          }
-
-          const content = chunk.choices[0].delta.content;
-          
-          // Update stream status in error service (with safety check)
-          if (errorService && typeof errorService.updateStream === 'function') {
-            errorService.updateStream(modelId);
-          }
-          
-          // Mark as received content if not just whitespace
-          if (content.trim()) {
-            hasReceivedContent = true;
-          }
-          
-          text += content;
-          tokenCount++;
-          
-          // Throttle updates to reduce client load
-          const currentTime = Date.now();
-          if (currentTime - lastUpdateTime > 50) {
-            sendEvent({ 
-              model: modelId, 
-              text, 
-              loading: false,
-              streaming: true,
-              error: null // Clear any previous errors
-            });
-            lastUpdateTime = currentTime;
-          }
-        }
-      }
-    } catch (streamError) {
-      console.error(`[${modelId}] Error processing stream:`, streamError);
-      
-      // Check for rate limit errors
-      if (streamError.code === 429 || 
-          (streamError.message && streamError.message.toLowerCase().includes('rate limit')) ||
-          (streamError.error && streamError.error.code === 429)) {
-        throw new Error('RATE_LIMIT');
-      }
-      
-      throw streamError; // Re-throw for general error handling
-    }
-    
-    const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.log(`[${modelId}] Completed in ${duration}s with ${tokenCount} tokens`);
-    
-    // Handle empty responses - if no meaningful content was received
-    if (tokenCount === 0 || (!text.trim() && !hasReceivedContent)) {
-      console.log(`[${modelId}] Empty response detected (0 tokens)`);
-      
-      // Clean up resources (with safety check)
-      if (errorService && typeof errorService.unregisterStream === 'function') {
-        errorService.unregisterStream(modelId);
-      }
-      
-      // Try again if we should retry empty responses (with safety check)
-      let shouldRetry = false;
-      if (errorService && typeof errorService.shouldRetry === 'function') {
-        shouldRetry = errorService.shouldRetry(modelId, ERROR_TYPES.EMPTY_RESPONSE);
-      }
-      
-      if (shouldRetry) {
-        let retryCount = 0;
-        if (errorService && typeof errorService.getRetryCount === 'function') {
-          retryCount = errorService.getRetryCount(modelId);
-        }
-        
-        sendEvent({
-          model: modelId,
-          text: '',
-          loading: true,
-          streaming: false,
-          retrying: true,
-          retryCount: retryCount,
-          maxRetries: (errorService && errorService.TIMEOUT_SETTINGS) ? 
-            errorService.TIMEOUT_SETTINGS.MAX_RETRIES : 2
-        });
-        
-        // Wait before retrying
-        await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second fallback retry delay
-        
-        // Try again
-        return handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, openRouterModels);
-      }
-      
-      if (typeof sendErrorEvent === 'function') {
-        sendErrorEvent(modelId, ERROR_TYPES.EMPTY_RESPONSE);
-      } else {
-        // Fallback direct event sending
-        console.log(`[${modelId}] Sending fallback error event: EMPTY_RESPONSE`);
-        sendEvent({
-          model: modelId,
-          error: `${getLLMProvider(modelId)} returned an empty response.`,
-          errorType: ERROR_TYPES.EMPTY_RESPONSE,
-          loading: false,
-          streaming: false,
-          done: true
-        });
-        
-        // Make sure to mark the model as completed
-        handleModelCompletion(modelId);
-      }
-      return null;
-    }
-
-    // Stream completed successfully with content
-    if (errorService && typeof errorService.unregisterStream === 'function') {
-      errorService.unregisterStream(modelId);
-    }
-    
-    // Send final update
-    sendEvent({ 
-      model: modelId, 
-      text, 
-      loading: false, 
-      streaming: false,
-      error: null,
-      done: true 
-    });
-    
-    return {
-      text,
-      loading: false,
-      streaming: false,
-      done: true,
-      duration
-    };
-  } catch (error) {
-    // Clean up
-    if (timeoutCheck) clearTimeout(timeoutCheck);
-    
-    // Unregister stream (with safety check)
-    if (errorService && typeof errorService.unregisterStream === 'function') {
-      errorService.unregisterStream(modelId);
-    } else {
-      console.warn(`[${modelId}] Error service not available for error handling`);
-    }
-    
-    console.error(`[${modelId}] Error:`, error);
-    
-    // Classify the error with robust error type detection
-    let errorType = ERROR_TYPES.UNKNOWN_ERROR;
-    
-    if (error.message === 'TIMEOUT') {
-      errorType = ERROR_TYPES.TIMEOUT;
-    } else if (error.message === 'API_KEY_MISSING') {
-      errorType = ERROR_TYPES.API_KEY_MISSING;
-    } else if (error.message === 'RATE_LIMIT') {
-      errorType = ERROR_TYPES.RATE_LIMIT;
-    } else if (error.message === 'NO_RESPONSE' || (error.message && error.message.includes('NO_RESPONSE'))) {
-      errorType = ERROR_TYPES.EMPTY_RESPONSE;
-    } else if (error.code === 429 || (error.error && error.error.code === 429)) {
-      errorType = ERROR_TYPES.RATE_LIMIT;
-    } else if (error.message && error.message.toLowerCase().includes('rate limit')) {
-      errorType = ERROR_TYPES.RATE_LIMIT;
-    } else if (error.message && error.message.toLowerCase().includes('free-models-per-day')) {
-      errorType = ERROR_TYPES.RATE_LIMIT;
-    } else if (errorService && typeof errorService.classifyError === 'function') {
-      errorType = errorService.classifyError(error);
-    }
-    
-    // Handle retry logic (with safety check)
-    let shouldRetry = false;
-    
-    // Don't retry rate limit errors - they won't succeed
-    if (errorType === ERROR_TYPES.RATE_LIMIT) {
-      shouldRetry = false;
-    } else if (errorService && typeof errorService.shouldRetry === 'function') {
-      shouldRetry = errorService.shouldRetry(modelId, errorType);
-    }
-    
-    if (shouldRetry) {
-      let retryCount = 0;
-      if (errorService && typeof errorService.getRetryCount === 'function') {
-        retryCount = errorService.getRetryCount(modelId);
-      }
-      
-      sendEvent({
-        model: modelId,
-        text: '',
-        loading: true,
-        streaming: false,
-        retrying: true,
-        retryCount: retryCount,
-        maxRetries: (errorService && errorService.TIMEOUT_SETTINGS) ? 
-          errorService.TIMEOUT_SETTINGS.MAX_RETRIES : 2
-      });
-      
-      // Wait before retrying
-      await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second fallback retry delay
-      
-      // Try again
-      return handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, openRouterModels);
-    }
-    
-    // If we've exhausted retries or should not retry, send appropriate error
-    const maxRetries = (errorService && errorService.TIMEOUT_SETTINGS) ? 
-      errorService.TIMEOUT_SETTINGS.MAX_RETRIES : 2;
-    let retryCount = 0;
-    if (errorService && typeof errorService.getRetryCount === 'function') {
-      retryCount = errorService.getRetryCount(modelId);
-    }
-    
-    if (retryCount >= maxRetries && errorType !== ERROR_TYPES.RATE_LIMIT) {
-      sendErrorEvent(modelId, ERROR_TYPES.MAX_RETRIES_EXCEEDED);
-    } else {
-      sendErrorEvent(modelId, errorType);
-    }
-    
-    return null;
-  }
+  return handleModelStream({
+    modelId,
+    prompt,
+    sendEvent,
+    client: openRouter,
+    generateStream: () => openRouter.chat.completions.create({
+      model: openRouterModels[modelId].id,
+      messages: [{ role: 'user', content: prompt }],
+      stream: true,
+      temperature: 0.7,
+      max_tokens: 4000,
+      presence_penalty: 0,
+      frequency_penalty: 0,
+      stop: null
+    }),
+    processChunk: chunk => chunk.choices[0]?.delta?.content
+  });
 }
 
 async function handleCustomModelStream(modelId, prompt, sendEvent, customModels) {
