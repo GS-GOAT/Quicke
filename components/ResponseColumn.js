@@ -8,6 +8,8 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import katex from 'katex';
 import CodeBlock from './CodeBlock'; // Add this import
+import remarkGfm from 'remark-gfm';  // Add this import at the top with other imports
+import remarkParse from 'remark-parse';
 
 // Model display names mapping
 const modelDisplayNames = {
@@ -317,7 +319,7 @@ export default function ResponseColumn({ model, response, streaming, className, 
         "\\abs": "|#1|",
         "\\probability": "\\mathbb{P}\\left(#1\\right)",
         "\\expectation": "\\mathbb{E}\\left[#1\\right]",
-        "\\variance": "\\text{Var}\\left(#1\\right)",
+        "\\variance": "\\text{Var}\\left[#1\\right]",
         "\\diff": "\\mathrm{d}",
         "\\pd": "\\partial",
         "\\transpose": "^{\\mathsf{T}}",
@@ -366,6 +368,39 @@ export default function ResponseColumn({ model, response, streaming, className, 
           inline={inline} 
         />
       </div>
+    );
+  };
+
+  // Add these new components for table handling
+  const TableWrapper = ({ children }) => (
+    <div className="w-full overflow-x-auto my-6 rounded-lg border border-gray-700">
+      <table className="w-full border-collapse table-auto">
+        {children}
+      </table>
+    </div>
+  );
+
+  const TableRow = ({ children, isHeader }) => (
+    <tr className={`
+      ${isHeader ? 'bg-gray-800/50' : 'odd:bg-transparent even:bg-gray-800/20'} 
+      border-b border-gray-700 last:border-0
+    `}>
+      {children}
+    </tr>
+  );
+
+  const TableCell = ({ children, isHeader }) => {
+    const Component = isHeader ? 'th' : 'td';
+    return (
+      <Component className={`
+        px-4 py-2 text-sm border-r border-gray-700 last:border-r-0
+        ${isHeader 
+          ? 'font-semibold text-gray-200 whitespace-nowrap' 
+          : 'text-gray-300 break-words'
+        }
+      `}>
+        {children}
+      </Component>
     );
   };
 
@@ -541,6 +576,42 @@ export default function ResponseColumn({ model, response, streaming, className, 
     }
   };
 
+  // Define table components outside the main render
+  const MarkdownComponents = {
+    table: ({ children }) => (
+      <div className="w-full overflow-x-auto my-6 rounded-lg border border-gray-700/50 shadow-xl bg-gray-900/30">
+        <table className="min-w-full divide-y divide-gray-700/50">
+          {children}
+        </table>
+      </div>
+    ),
+    thead: ({ children }) => (
+      <thead className="bg-gray-800/70">
+        {children}
+      </thead>
+    ),
+    tbody: ({ children }) => (
+      <tbody className="divide-y divide-gray-700/50 bg-gray-900/20">
+        {children}
+      </tbody>
+    ),
+    tr: ({ children }) => (
+      <tr className="transition-all duration-150 hover:bg-gray-800/40">
+        {children}
+      </tr>
+    ),
+    th: ({ children }) => (
+      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider whitespace-nowrap bg-gray-800/50">
+        {children}
+      </th>
+    ),
+    td: ({ children }) => (
+      <td className="px-6 py-4 text-sm text-gray-300 font-normal align-middle">
+        {children}
+      </td>
+    ),
+  };
+
   return (
     <div className={`rounded-xl overflow-hidden flex flex-col transition-all duration-300 ${
       isExpanded 
@@ -645,55 +716,8 @@ export default function ResponseColumn({ model, response, streaming, className, 
         ) : hasText ? (
           <div >
             <ReactMarkdown
-              components={{
-                code: CodeBlockWrapper, // Use CodeBlockWrapper instead of CodeBlock
-                p: ({ node, ...props }) => {
-                  if (props.children) {
-                    const children = Array.isArray(props.children) 
-                      ? props.children 
-                      : [props.children];
-                    
-                    return (
-                      <p {...props}>
-                        {children.map((child, i) => {
-                          if (typeof child === 'string') {
-                            return (
-                              <span key={i} dangerouslySetInnerHTML={{ 
-                                __html: processMathInText(child)
-                                  .replace(/\$\$(.*?)\$\$/g, (_, math) => {
-                                    try {
-                                      return katex.renderToString(math, { 
-                                        displayMode: true,
-                                        throwOnError: false,
-                                        errorColor: '#aaa' // Less noticeable error color
-                                      });
-                                    } catch (e) {
-                                      return `<span class="font-mono text-gray-300 bg-gray-800/40 px-2 py-1 rounded">${math}</span>`;
-                                    }
-                                  })
-                                  .replace(/\$(.*?)\$/g, (_, math) => {
-                                    try {
-                                      return katex.renderToString(math, { 
-                                        displayMode: false,
-                                        throwOnError: false,
-                                        errorColor: '#aaa' // Less noticeable error color
-                                      });
-                                    } catch (e) {
-                                      return `<span class="font-mono text-gray-300 bg-gray-800/40 px-1 py-0.5 rounded">${math}</span>`;
-                                    }
-                                  })
-                              }} />
-                            );
-                          }
-                          return child;
-                        })}
-                      </p>
-                    );
-                  }
-                  return <p {...props} />;
-                }
-              }}
-              remarkPlugins={[remarkMath]}
+              components={MarkdownComponents}
+              remarkPlugins={[[remarkGfm, { tablePipeAlign: true }], remarkMath]}
               rehypePlugins={[rehypeKatex]}
             >
               {displayedText || response.text}
@@ -741,6 +765,172 @@ export default function ResponseColumn({ model, response, streaming, className, 
           border-radius: 0.1em !important;
           padding: 0.1em 0.2em !important;
           border-color: #6c6 !important;
+        }
+
+        /* Table-specific styles */
+        .markdown-table-wrapper {
+          margin: 1rem 0;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        /* Improve table scrollbar appearance */
+        .markdown-table-wrapper::-webkit-scrollbar {
+          height: 6px;
+        }
+
+        .markdown-table-wrapper::-webkit-scrollbar-track {
+          background: rgba(0, 0, 0, 0.1);
+        }
+
+        .markdown-table-wrapper::-webkit-scrollbar-thumb {
+          background: rgba(255, 255, 255, 0.2);
+          border-radius: 3px;
+        }
+
+        .markdown-table-wrapper::-webkit-scrollbar-thumb:hover {
+          background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Table styles */
+        .markdown-body table {
+          border-spacing: 0;
+          border-collapse: collapse;
+          margin: 1em 0;
+          width: 100%;
+        }
+
+        .markdown-body table tr {
+          border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .markdown-body table tr:nth-child(2n) {
+          background-color: rgba(255, 255, 255, 0.02);
+        }
+
+        .markdown-body table td,
+        .markdown-body table th {
+          padding: 12px 16px;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          line-height: 1.4;
+        }
+
+        .markdown-body table th {
+          font-weight: 600;
+          background-color: rgba(255, 255, 255, 0.05);
+        }
+
+        /* Table wrapper scrollbar styles */
+        .overflow-x-auto::-webkit-scrollbar {
+          height: 8px;
+        }
+
+        .overflow-x-auto::-webkit-scrollbar-track {
+          background: rgba(0, 0, 0, 0.1);
+          border-radius: 4px;
+        }
+
+        .overflow-x-auto::-webkit-scrollbar-thumb {
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 4px;
+        }
+
+        .overflow-x-auto::-webkit-scrollbar-thumb:hover {
+          background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Reset default table styles */
+        table {
+          border-spacing: 0;
+          border-collapse: separate;
+          width: 100%;
+        }
+
+        /* Ensure tables don't overflow their containers */
+        .overflow-x-auto {
+          max-width: 100%;
+          margin: 1rem 0;
+          border-radius: 0.5rem;
+        }
+
+        /* Basic table structure */
+        table td,
+        table th {
+          min-width: 100px; /* Prevent cells from becoming too narrow */
+        }
+
+        /* Preserve whitespace in code blocks within tables */
+        table code {
+          white-space: pre-wrap;
+        }
+
+        /* Enhanced table styles */
+        .markdown-body table {
+          border-spacing: 0;
+          border-collapse: separate;
+          border-radius: 0.5rem;
+          margin: 1.5em 0;
+          width: 100%;
+          overflow: hidden;
+          background: rgba(17, 24, 39, 0.3);
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        .markdown-body thead {
+          position: relative;
+        }
+
+        .markdown-body thead:after {
+          content: '';
+          position: absolute;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          height: 1px;
+          background: linear-gradient(90deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.2) 50%, rgba(255,255,255,0.1) 100%);
+        }
+
+        .markdown-body th {
+          font-weight: 600;
+          letter-spacing: 0.05em;
+          background: rgba(31, 41, 55, 0.5);
+        }
+
+        .markdown-body td {
+          background: transparent;
+          line-height: 1.6;
+          vertical-align: middle;
+        }
+
+        .markdown-body tr:last-child td:first-child {
+          border-bottom-left-radius: 0.5rem;
+        }
+
+        .markdown-body tr:last-child td:last-child {
+          border-bottom-right-radius: 0.5rem;
+        }
+
+        .markdown-body th:first-child {
+          border-top-left-radius: 0.5rem;
+        }
+
+        .markdown-body th:last-child {
+          border-top-right-radius: 0.5rem;
+        }
+
+        /* Improve table hover effects */
+        .markdown-body tr:hover td {
+          background: rgba(55, 65, 81, 0.3);
+        }
+
+        /* Add subtle transitions */
+        .markdown-body td, .markdown-body th {
+          transition: all 150ms ease-in-out;
+        }
+
+        /* Improve text readability in tables */
+        .markdown-body td, .markdown-body th {
+          text-shadow: 0 1px 2px rgba(0,0,0,0.1);
         }
       `}</style>
     </div>

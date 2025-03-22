@@ -355,7 +355,7 @@ export default function ApiKeyManager({ isOpen, onClose }) {
               {renderKeyInput('anthropic', 'Anthropic API Key', 'sk-ant-...', 'https://console.anthropic.com/')}
               {renderKeyInput('google', 'Google AI API Key', 'AIza...', 'https://makersuite.google.com/app/apikey')}
               {renderKeyInput('openrouter', 'OpenRouter API Key', 'sk-or-...', 'https://openrouter.ai/keys')}
-              {renderKeyInput('deepseek', 'DeepSeek API Key', 'sk-ds-...', 'https://platform.deepseek.ai/')}  {/* Add DeepSeek */}
+              {renderKeyInput('deepseek', 'DeepSeek API Key', 'sk-ds-...', 'https://platform.deepseek.com/api_keys')}  
             </div>
 
             {/* Status message */}
