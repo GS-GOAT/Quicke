@@ -7,6 +7,7 @@ import { InlineMath, BlockMath } from 'react-katex';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import katex from 'katex';
+import CodeBlock from './CodeBlock'; // Add this import
 
 // Model display names mapping
 const modelDisplayNames = {
@@ -352,123 +353,19 @@ export default function ResponseColumn({ model, response, streaming, className, 
   };
 
   // Updated CodeBlock component with fixed JSX structure
-  const CodeBlock = ({ node, inline, className, children, ...props }) => {
-    const [copied, setCopied] = useState(false);
+  const CodeBlockWrapper = ({ node, inline, className, children, ...props }) => {
     const match = /language-(\w+)/.exec(className || '');
     const language = match ? match[1] : '';
-
-    const copyToClipboard = () => {
-      navigator.clipboard.writeText(String(children));
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    };
-
-    if (!inline && language) {
-      return (
-        <div className="relative group my-4 rounded-lg overflow-hidden border border-gray-700/50 shadow-xl">
-          {/* Code header with language badge */}
-          <div className="flex items-center justify-between bg-gray-800 px-4 py-2 text-xs font-mono border-b border-gray-700/50">
-            <span className="text-gray-300 uppercase tracking-wide">
-              {language}
-            </span>
-            <button
-              onClick={copyToClipboard}
-              className="flex items-center text-gray-300 hover:text-primary-400 transition-colors"
-              aria-label="Copy code"
-            >
-              {copied ? (
-                <span className="flex items-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 mr-1">
-                    <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
-                  </svg>
-                  <span>Copied</span>
-                </span>
-              ) : (
-                <span className="flex items-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 mr-1">
-                    <path d="M7 3.5A1.5 1.5 0 018.5 2h3.879a1.5 1.5 0 011.06.44l3.122 3.12A1.5 1.5 0 0117 6.622V12.5a1.5 1.5 0 01-1.5 1.5h-1v-3.379a3 3 0 00-.879-2.121L10.5 5.379A3 3 0 008.379 4.5H7v-1z" />
-                    <path d="M4.5 6A1.5 1.5 0 003 7.5v9A1.5 1.5 0 004.5 18h7a1.5 1.5 0 001.5-1.5v-5.879a1.5 1.5 0 00-.44-1.06L9.44 6.439A1.5 1.5 0 008.378 6H4.5z" />
-                  </svg>
-                  <span>Copy</span>
-                </span>
-              )}
-            </button>
-          </div>
-          
-          {/* Add these styles to fix the whitish line highlighting and make the background slightly lighter */}
-          <style jsx global>{`
-            .code-highlight-fix pre {
-              background-color: #222 !important; /* Slightly lighter dark background */
-            }
-            
-            .code-highlight-fix .token {
-              background: transparent !important; /* Remove any background from tokens */
-              text-shadow: none !important;
-            }
-            
-            .code-highlight-fix code {
-              background: transparent !important;
-            }
-            
-            /* Remove any line highlighting */
-            .code-highlight-fix .highlight-line {
-              background: transparent !important;
-            }
-            
-            /* Ensure code spans don't have any background */
-            .code-highlight-fix span {
-              background: transparent !important;
-            }
-            
-            /* Much brighter syntax highlighting colors with whiter whites */
-            .code-highlight-fix .token.comment { color: #9cdb9c !important; }
-            .code-highlight-fix .token.string { color: #ffff90 !important; }
-            .code-highlight-fix .token.number { color: #d0b0ff !important; }
-            .code-highlight-fix .token.operator { color: #ff9ce0 !important; }
-            .code-highlight-fix .token.keyword { color: #ff9ce0 !important; }
-            .code-highlight-fix .token.function { color: #90efff !important; }
-            .code-highlight-fix .token.boolean { color: #d0b0ff !important; }
-            .code-highlight-fix .token.property { color: #90efff !important; }
-            .code-highlight-fix .token.tag { color: #ff9ce0 !important; }
-            .code-highlight-fix .token.punctuation { color: #ffffff !important; } /* Brighter white */
-            .code-highlight-fix .token.class-name { color: #90efff !important; }
-            .code-highlight-fix .token.parameter { color: #ffcc90 !important; }
-            .code-highlight-fix .token.selector { color: #9cdb9c !important; }
-            .code-highlight-fix .token.important { color: #ff9c9c !important; font-weight: bold !important; }
-            .code-highlight-fix .token.variable { color: #c6e2ff !important; }
-            .code-highlight-fix .token.attr-name { color: #ffcc90 !important; }
-            .code-highlight-fix .token.attr-value { color: #ffff90 !important; }
-            .code-highlight-fix .token.plain-text { color: #ffffff !important; } /* Pure white for plain text */
-            .code-highlight-fix .token.doctype { color: #ffffff !important; }
-            .code-highlight-fix .token.entity { color: #ffffff !important; }
-          `}</style>
-          
-          {/* Code content with improved styling */}
-          <div className="code-highlight-fix">
-            <SyntaxHighlighter
-              language={language}
-              style={atomDark}
-              customStyle={{
-                background: '#222', // Slightly lighter background
-                padding: '1rem',
-                margin: 0,
-                borderRadius: 0,
-              }}
-              wrapLongLines={true}
-              showLineNumbers={false}
-              {...props}
-            >
-              {String(children).replace(/\n$/, '')}
-            </SyntaxHighlighter>
-          </div>
-        </div>
-      );
-    }
-
+    const code = String(children).replace(/\n$/, '');
+    
     return (
-      <code className={`${className || ''} bg-gray-800/50 px-1.5 py-0.5 rounded text-primary-300 font-mono text-sm`} {...props}>
-        {children}
-      </code>
+      <div>
+        <CodeBlock 
+          language={language} 
+          value={code} 
+          inline={inline} 
+        />
+      </div>
     );
   };
 
@@ -746,10 +643,10 @@ export default function ResponseColumn({ model, response, streaming, className, 
         ) : hasError ? (
           renderError()
         ) : hasText ? (
-          <div className="prose prose-sm prose-invert max-w-none prose-pre:bg-[#1a1a1a] prose-pre:border prose-pre:border-gray-800">
+          <div >
             <ReactMarkdown
               components={{
-                code: CodeBlock,
+                code: CodeBlockWrapper, // Use CodeBlockWrapper instead of CodeBlock
                 p: ({ node, ...props }) => {
                   if (props.children) {
                     const children = Array.isArray(props.children) 

@@ -624,7 +624,7 @@ a {
   width: 3px;
   height: 3px;
   background-color: currentColor;
-  border-radius: 50%;
+  border-radius: 50%;   
   margin-left: 4px;
   animation: dotPulse 1.5s ease-in-out infinite;
 } */
@@ -633,6 +633,79 @@ a {
   0% { transform: scale(0.5); opacity: 0.4; }
   50% { transform: scale(1); opacity: 1; }
   100% { transform: scale(0.5); opacity: 0.4; }
+}
+
+/* Code block styling */
+.code-block-container {
+  @apply relative my-4 overflow-hidden rounded-lg;
+  background: #1a1b26;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.code-block-header {
+  @apply flex items-center justify-between px-4 py-2;
+  background: rgba(41, 46, 66, 0.5);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.code-block-language {
+  @apply text-xs font-mono text-gray-400 uppercase tracking-wider font-semibold;
+}
+
+.code-block-copy-btn {
+  @apply text-xs text-gray-400 hover:text-indigo-400 flex items-center transition-colors gap-1 py-1 px-2 rounded-md;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.code-block-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.code-block-content {
+  @apply !bg-[#1a1b26] !p-4;
+}
+
+.code-block-content pre {
+  @apply !bg-transparent m-0;
+}
+
+.code-block-content code {
+  @apply !bg-transparent text-[0.95rem] leading-relaxed font-mono;
+  font-family: 'JetBrains Mono', Menlo, Monaco, Consolas, 'Courier New', monospace;
+}
+
+/* Syntax highlighting colors - Vibrant theme */
+.code-block-content .token.comment { color: #737aa2 !important; }
+.code-block-content .token.string { color: #9ece6a !important; }
+.code-block-content .token.number { color: #ff9e64 !important; }
+.code-block-content .token.builtin { color: #7aa2f7 !important; }
+.code-block-content .token.char { color: #9ece6a !important; }
+.code-block-content .token.constant { color: #bb9af7 !important; }
+.code-block-content .token.function { color: #7aa2f7 !important; }
+.code-block-content .token.keyword { color: #f7768e !important; }
+.code-block-content .token.operator { color: #89ddff !important; }
+.code-block-content .token.parameter { color: #e0af68 !important; }
+.code-block-content .token.property { color: #73daca !important; }
+.code-block-content .token.punctuation { color: #89ddff !important; }
+.code-block-content .token.regex { color: #2ac3de !important; }
+.code-block-content .token.variable { color: #bb9af7 !important; }
+
+/* Line highlight and selection */
+.code-block-content pre::-moz-selection,
+.code-block-content pre > code::-moz-selection,
+.code-block-content pre > code > span::-moz-selection {
+  background: rgba(73, 77, 100, 0.5) !important;
+}
+
+.code-block-content pre::selection,
+.code-block-content pre > code::selection,
+.code-block-content pre > code > span::selection {
+  background: rgba(73, 77, 100, 0.5) !important;
+}
+
+/* Dark mode adjustments */
+.dark .code-block-container {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
 }
 
 main {
