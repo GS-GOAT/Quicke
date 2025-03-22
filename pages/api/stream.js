@@ -21,6 +21,95 @@ const FALLBACK_ERROR_TYPES = {
 // Use the imported values with a fallback if needed
 const ERROR_TYPES = errorService?.ERROR_TYPES || IMPORTED_ERROR_TYPES || FALLBACK_ERROR_TYPES;
 
+// Create a completion manager first
+const createCompletionManager = (totalModels, sendEvent, res) => {
+  const completedModels = new Set();
+  let completedResponses = 0;
+
+  const markCompleted = (modelId) => {
+    if (completedModels.has(modelId)) return;
+    
+    completedModels.add(modelId);
+    completedResponses++;
+    
+    console.log(`[${modelId}] Completed (${completedResponses}/${totalModels})`);
+    
+    // Clear any pending timeouts
+    if (errorService?.modelTimers) {
+      const timerId = errorService.modelTimers.get(`timeout_${modelId}`);
+      if (timerId) {
+        clearTimeout(timerId);
+        errorService.modelTimers.delete(`timeout_${modelId}`);
+      }
+    }
+    
+    if (completedResponses === totalModels) {
+      console.log('All models completed, ending response');
+      sendEvent({ done: true, allComplete: true });
+      res.end();
+    }
+  };
+
+  return {
+    markCompleted,
+    isCompleted: (modelId) => completedModels.has(modelId),
+    getCompletedCount: () => completedResponses,
+    completedModels // Expose Set for checking completion status
+  };
+};
+
+// Move error handling to dedicated object
+const createErrorHandler = (completionManager, sendEvent) => {
+  const sendErrorEvent = (modelId, errorType, text = '') => {
+    try {
+      console.log(`[${modelId}] Sending error event: ${errorType}`);
+      
+      const provider = getLLMProvider(modelId);
+      const retryCount = errorService?.getRetryCount?.(modelId) || 0;
+      const errorMessage = errorService?.getErrorMessage?.(errorType, modelId, provider) 
+        || `Error with ${provider}: ${errorType}`;
+      
+      sendEvent({
+        model: modelId,
+        error: errorMessage,
+        errorType,
+        text,
+        loading: false,
+        streaming: false,
+        done: true,
+        ...(retryCount > 0 && { retryCount }),
+        maxRetries: TIMEOUT_SETTINGS.MAX_RETRIES
+      });
+      
+      completionManager.markCompleted(modelId);
+      
+    } catch (sendError) {
+      console.error(`Failed to send error event for ${modelId}:`, sendError);
+      sendEvent({
+        model: modelId,
+        error: `Error with ${modelId}: ${errorType}`,
+        errorType: 'UNKNOWN_ERROR',
+        loading: false,
+        streaming: false,
+        done: true
+      });
+      completionManager.markCompleted(modelId);
+    }
+  };
+
+  return { sendErrorEvent };
+};
+
+// Add helper function for API key verification
+const verifyModelApiKeys = (modelArray, providerMap, userApiKeys) => {
+  modelArray.forEach(modelId => {
+    const provider = providerMap[modelId];
+    if (!userApiKeys[provider]) {
+      errorHandler.sendErrorEvent(modelId, ERROR_TYPES.API_KEY_MISSING);
+    }
+  });
+};
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -88,81 +177,21 @@ export default async function handler(req, res) {
     }
   };
 
-  // Define sendErrorEvent at the top level to ensure it's in scope everywhere
-  const sendErrorEvent = (modelId, errorType, text = '') => {
-    try {
-      console.log(`[${modelId}] Sending error event: ${errorType}`);
-      
-      const provider = getLLMProvider(modelId);
-      let retryCount = 0;
-      if (errorService && typeof errorService.getRetryCount === 'function') {
-        retryCount = errorService.getRetryCount(modelId);
+  // Initialize completion manager first
+  const completionManager = createCompletionManager(modelArray.length, sendEvent, res);
+  
+  // Then create error handler with completion manager
+  const errorHandler = createErrorHandler(completionManager, sendEvent);
+
+  // Now verifyModelApiKeys will have access to errorHandler
+  // Define verifyModelApiKeys with closure over errorHandler
+  const verifyModelApiKeys = (modelArray, providerMap, userApiKeys) => {
+    modelArray.forEach(modelId => {
+      const provider = providerMap[modelId];
+      if (!userApiKeys[provider]) {
+        errorHandler.sendErrorEvent(modelId, ERROR_TYPES.API_KEY_MISSING);
       }
-      
-      let errorMessage = '';
-      if (errorService && typeof errorService.getErrorMessage === 'function') {
-        errorMessage = errorService.getErrorMessage(errorType, modelId, provider);
-      } else {
-        // Fallback error messages if errorService isn't available
-        switch(errorType) {
-          case 'RATE_LIMIT':
-            errorMessage = `${provider} rate limit exceeded. Please try again later.`;
-            break;
-          case 'API_KEY_MISSING':
-            errorMessage = `${provider} API key is missing or invalid.`;
-            break;
-          case 'TIMEOUT':
-            errorMessage = `${provider} response timed out.`;
-            break;
-          case 'MODEL_UNAVAILABLE':
-            errorMessage = `${provider} is currently unavailable.`;
-            break;
-          case 'EMPTY_RESPONSE':
-            errorMessage = `${provider} returned an empty response.`;
-            break;
-          default:
-            errorMessage = `Error with ${provider}: ${errorType}`;
-        }
-      }
-      
-      sendEvent({
-        model: modelId,
-        error: errorMessage,
-        errorType,
-        text,
-        loading: false,
-        streaming: false,
-        done: true,
-        retryCount: retryCount > 0 ? retryCount : undefined,
-        maxRetries: (errorService && errorService.TIMEOUT_SETTINGS) ? 
-          errorService.TIMEOUT_SETTINGS.MAX_RETRIES : 2
-      });
-      
-      // After sending the error event, make sure the model is marked as completed
-      if (typeof handleModelCompletion === 'function') {
-        setTimeout(() => {
-          handleModelCompletion(modelId);
-        }, 0);
-      }
-    } catch (sendError) {
-      console.error(`Failed to send error event for ${modelId}:`, sendError);
-      // Emergency fallback - send a basic error message
-      sendEvent({
-        model: modelId,
-        error: `Error with ${modelId}: ${errorType}`,
-        errorType: 'UNKNOWN_ERROR',
-        loading: false,
-        streaming: false,
-        done: true
-      });
-      
-      // Make sure to mark as completed even if sending the error event fails
-      if (typeof handleModelCompletion === 'function') {
-        setTimeout(() => {
-          handleModelCompletion(modelId);
-        }, 0);
-      }
-    }
+    });
   };
 
   // Get user's API keys from database
@@ -182,27 +211,41 @@ export default async function handler(req, res) {
     return;
   }
 
-  // Initialize API clients with ONLY user's keys (no fallback to env variables)
-  const openai = new OpenAI({ apiKey: userApiKeys.openai });
-  const anthropic = new Anthropic({ apiKey: userApiKeys.anthropic });
-  const genAI = new GoogleGenerativeAI(userApiKeys.google);
-  const openRouter = new OpenAI({
-    baseURL: 'https://openrouter.ai/api/v1',
-    apiKey: userApiKeys.openrouter,
-    defaultQuery: {
-      transforms: ['middle']  // Ensures consistent response format
-    },
-    defaultHeaders: {
-      'HTTP-Referer': process.env.NEXT_PUBLIC_URL || 'http://localhost:3000',
-      'X-Title': 'Quicke - LLM Response Comparison'
-    }
-  });
+  // Initialize API clients only if keys exist
+  let openai, anthropic, genAI, openRouter, deepseek;
 
-  // Replace the DeepSeek client initialization
-  const deepseek = new OpenAI({
-    baseURL: 'https://api.deepseek.com/v1',  // Add v1 to match DeepSeek's docs
-    apiKey: userApiKeys.deepseek
-  });
+  if (userApiKeys.openai) {
+    openai = new OpenAI({ apiKey: userApiKeys.openai });
+  }
+  if (userApiKeys.anthropic) {
+    anthropic = new Anthropic({ apiKey: userApiKeys.anthropic });
+  }
+  if (userApiKeys.google) {
+    genAI = new GoogleGenerativeAI(userApiKeys.google);
+  }
+  if (userApiKeys.openrouter) {
+    openRouter = new OpenAI({
+      baseURL: 'https://openrouter.ai/api/v1',
+      apiKey: userApiKeys.openrouter,
+      defaultQuery: {
+        transforms: ['middle']  // Ensures consistent response format
+      },
+      defaultHeaders: {
+        'HTTP-Referer': process.env.NEXT_PUBLIC_URL || 'http://localhost:3000',
+        'X-Title': 'Quicke - LLM Response Comparison'
+      }
+    });
+  }
+  if (userApiKeys.deepseek) {
+    deepseek = new OpenAI({
+      baseURL: 'https://api.deepseek.com/v1',  // Add v1 to match DeepSeek's docs
+      apiKey: userApiKeys.deepseek
+    });
+  }
+
+  // Additional verification before processing streams
+  const completedModels = new Set();
+  verifyModelApiKeys(modelArray, providerMap, userApiKeys);
 
   // Map of OpenRouter model IDs and their display names
   const openRouterModels = {
@@ -268,45 +311,6 @@ export default async function handler(req, res) {
     }
   };
 
-  let completedResponses = 0;
-  const totalModels = modelArray.length;
-  
-  // Track which models have completed to avoid double-counting
-  const completedModels = new Set();
-
-  const handleModelCompletion = (modelId) => {
-    // Skip if this model was already marked as completed
-    if (completedModels.has(modelId)) {
-      return;
-    }
-    
-    // Mark this model as completed
-    completedModels.add(modelId);
-    completedResponses++;
-    
-    console.log(`[${modelId}] Completed (${completedResponses}/${totalModels})`);
-    
-    // Clear any pending timeouts for this model
-    if (errorService && errorService.modelTimers) {
-      const timerId = errorService.modelTimers.get(`timeout_${modelId}`);
-      if (timerId) {
-        clearTimeout(timerId);
-        errorService.modelTimers.delete(`timeout_${modelId}`);
-        console.log(`[${modelId}] Cleared timeout on completion`);
-      }
-    }
-    
-    if (completedResponses === totalModels) {
-      // All models have completed - send single completion event
-      console.log('All models have completed, ending response');
-      sendEvent({
-        done: true,
-        allComplete: true  // This flag indicates all models are done
-      });
-      res.end();
-    }
-  };
-
   try {
     // Get custom models from localStorage (passed in request)
     const customModels = JSON.parse(req.query.customModels || '[]');
@@ -324,7 +328,7 @@ export default async function handler(req, res) {
           console.log(`[${modelId}] Checking if model timed out after ${timeoutDuration/1000}s`);
           
           // Skip if this model is already completed
-          if (completedModels.has(modelId)) {
+          if (completionManager.isCompleted(modelId)) {
             console.log(`[${modelId}] Skipping timeout - model already completed`);
             return;
           }
@@ -332,8 +336,8 @@ export default async function handler(req, res) {
           if (!errorService) {
             console.error('Error service is not initialized');
             // Even if error service isn't initialized, we should still handle timeout
-            sendErrorEvent(modelId, ERROR_TYPES.MODEL_UNAVAILABLE);
-            handleModelCompletion(modelId);
+            errorHandler.sendErrorEvent(modelId, ERROR_TYPES.MODEL_UNAVAILABLE);
+            completionManager.markCompleted(modelId);
             return;
           }
           
@@ -345,10 +349,10 @@ export default async function handler(req, res) {
             console.log(`[${modelId}] Model availability timeout after ${timeoutDuration/1000}s`);
             
             // Send model unavailable error
-            sendErrorEvent(modelId, ERROR_TYPES.MODEL_UNAVAILABLE);
+            errorHandler.sendErrorEvent(modelId, ERROR_TYPES.MODEL_UNAVAILABLE);
             
             // THIS IS CRITICAL: Mark this model as completed for the counter
-            handleModelCompletion(modelId);
+            completionManager.markCompleted(modelId);
             
             // Clean up the stream - with safety check
             if (errorService && typeof errorService.unregisterStream === 'function') {
@@ -358,8 +362,8 @@ export default async function handler(req, res) {
         } catch (timeoutError) {
           // Log but don't rethrow - ensure the timeout logic completes
           console.error(`[${modelId}] Error in timeout handler:`, timeoutError);
-          sendErrorEvent(modelId, ERROR_TYPES.MODEL_UNAVAILABLE);
-          handleModelCompletion(modelId);
+          errorHandler.sendErrorEvent(modelId, ERROR_TYPES.MODEL_UNAVAILABLE);
+          completionManager.markCompleted(modelId);
         }
       }, timeoutDuration);
       
@@ -374,8 +378,8 @@ export default async function handler(req, res) {
       try {
         // First verify if user has the required API key
         if (!verifyApiKey(modelId, providerMap, userApiKeys)) {
-          sendErrorEvent(modelId, ERROR_TYPES.API_KEY_MISSING);
-          handleModelCompletion(modelId);
+          errorHandler.sendErrorEvent(modelId, ERROR_TYPES.API_KEY_MISSING);
+          completionManager.markCompleted(modelId);
           return;
         }
 
@@ -405,16 +409,16 @@ export default async function handler(req, res) {
         } catch (error) {
           // Handle errors for individual models without affecting others
           console.error(`Error with ${modelId}:`, error);
-          sendErrorEvent(modelId, ERROR_TYPES.UNKNOWN_ERROR);
+          errorHandler.sendErrorEvent(modelId, ERROR_TYPES.UNKNOWN_ERROR);
         }
 
         // Always mark as completed
-        handleModelCompletion(modelId);
+        completionManager.markCompleted(modelId);
       } catch (error) {
         // Catch any unexpected errors and ensure model completion
         console.error(`Unexpected error with ${modelId}:`, error);
-        sendErrorEvent(modelId, ERROR_TYPES.UNKNOWN_ERROR);
-        handleModelCompletion(modelId);
+        errorHandler.sendErrorEvent(modelId, ERROR_TYPES.UNKNOWN_ERROR);
+        completionManager.markCompleted(modelId);
       }
     });
 
@@ -423,9 +427,9 @@ export default async function handler(req, res) {
 
     // Add a final check to make sure all models were marked as completed
     modelArray.forEach(modelId => {
-      if (!completedModels.has(modelId)) {
+      if (!completionManager.isCompleted(modelId)) {
         console.log(`[${modelId}] Was not marked as completed - forcing completion`);
-        handleModelCompletion(modelId);
+        completionManager.markCompleted(modelId);
       }
     });
 
@@ -715,7 +719,7 @@ async function handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, op
 async function handleCustomModelStream(modelId, prompt, sendEvent, customModels) {
   const customModel = customModels.find(model => model.id === modelId);
   if (!customModel) {
-    sendErrorEvent(modelId, ERROR_TYPES.UNKNOWN_ERROR, 'Custom model configuration not found');
+    errorHandler.sendErrorEvent(modelId, ERROR_TYPES.UNKNOWN_ERROR, 'Custom model configuration not found');
     return null;
   }
 
@@ -825,7 +829,7 @@ async function handleCustomModelStream(modelId, prompt, sendEvent, customModels)
         await new Promise(resolve => setTimeout(resolve, TIMEOUT_SETTINGS.RETRY_DELAY));
         return handleCustomModelStream(modelId, prompt, sendEvent, customModels);
       } else {
-        sendErrorEvent(modelId, ERROR_TYPES.EMPTY_RESPONSE);
+        errorHandler.sendErrorEvent(modelId, ERROR_TYPES.EMPTY_RESPONSE);
         return null;
       }
     }
@@ -878,9 +882,9 @@ async function handleCustomModelStream(modelId, prompt, sendEvent, customModels)
     
     // If we've run out of retries, send final error
     if (errorService.getRetryCount(modelId) >= TIMEOUT_SETTINGS.MAX_RETRIES) {
-      sendErrorEvent(modelId, ERROR_TYPES.MAX_RETRIES_EXCEEDED);
+      errorHandler.sendErrorEvent(modelId, ERROR_TYPES.MAX_RETRIES_EXCEEDED);
     } else {
-      sendErrorEvent(modelId, errorType);
+      errorHandler.sendErrorEvent(modelId, errorType);
     }
     
     return null;
