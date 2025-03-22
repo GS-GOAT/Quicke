@@ -134,15 +134,60 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
       }
     ],
     OpenAI: [
-      { 
-        id: 'gpt-4',
-        name: 'GPT-4',
+      {
+        id: 'gpt-4.5-preview',
+        name: 'GPT-4.5 Preview',
         provider: 'OpenAI',
-        description: 'Most capable GPT-4 model for complex tasks',
-        context:0,
-        color: 'from-emerald-400 to-emerald-600',
-        icon: '🤖'
+        description: 'Latest GPT-4.5 preview model with enhanced capabilities',
+        context: 0,
+        color: 'from-emerald-500 to-emerald-700',
+        icon: '🔮'
       },
+      {
+        id: 'gpt-4o',
+        name: 'GPT-4o',
+        provider: 'OpenAI',
+        description: 'Advanced GPT-4 Omega model',
+        context: 0,
+        color: 'from-emerald-600 to-emerald-800',
+        icon: 'Ω'
+      },
+      {
+        id: 'gpt-4o-mini',
+        name: 'GPT-4o Mini',
+        provider: 'OpenAI',
+        description: 'Compact version of GPT-4 Omega',
+        context: 0,
+        color: 'from-emerald-400 to-emerald-600',
+        icon: 'ω'
+      },
+      {
+        id: 'o1',
+        name: 'O1',
+        provider: 'OpenAI',
+        description: 'Next generation O1 model',
+        context: 0,
+        color: 'from-teal-400 to-teal-600',
+        icon: '🌟'
+      },
+      {
+        id: 'o3-mini',
+        name: 'O3 Mini',
+        provider: 'OpenAI',
+        description: 'Compact O3 model with efficient performance',
+        context: 0,
+        color: 'from-teal-500 to-teal-700',
+        icon: '💫'
+      },
+      {
+        id: 'o1-mini',
+        name: 'O1 Mini',
+        provider: 'OpenAI',
+        description: 'Efficient and compact O1 model',
+        context: 0,
+        color: 'from-teal-600 to-teal-800',
+        icon: '✨'
+      }
     ],
     Anthropic: [
       { 

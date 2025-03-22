@@ -131,7 +131,12 @@ export default async function handler(req, res) {
   
   // Define providerMap at the top level to ensure it's in scope everywhere
   const providerMap = {
-    'gpt-4': 'openai',
+    'gpt-4.5-preview': 'openai',
+    'gpt-4o': 'openai',
+    'gpt-4o-mini': 'openai',
+    'o1': 'openai',
+    'o3-mini': 'openai',
+    'o1-mini': 'openai',
     'claude': 'anthropic',
     'gemini': 'google',
     'gemini-pro': 'google',
@@ -140,7 +145,7 @@ export default async function handler(req, res) {
     'deepseek-chat': 'deepseek',
     'deepseek-coder': 'deepseek',
     'deepseek-reasoner': 'deepseek',
-    // Map all OpenRouter models to the openrouter provider
+    // Map of OpenRouter models r
     'deepseek-distill': 'openrouter',
     'deepseek-v3-openrouter': 'openrouter',
     'mistral-7b': 'openrouter',
@@ -152,6 +157,16 @@ export default async function handler(req, res) {
     'mistral-small-3': 'openrouter',
     'mistral-nemo': 'openrouter',
     // 'olympiccoder': 'openrouter'
+  };
+
+  // Add model version mapping
+  const openAIModels = {
+    'gpt-4.5-preview': 'gpt-4.5-preview-2025-02-27',
+    'gpt-4o': 'gpt-4o-2024-08-06',
+    'gpt-4o-mini': 'gpt-4o-mini-2024-07-18',
+    'o1': 'o1-2024-12-17',
+    'o3-mini': 'o3-mini-2025-01-31',
+    'o1-mini': 'o1-mini-2024-09-12'
   };
   
   // Helper function to get provider name from model ID
@@ -630,7 +645,7 @@ async function handleOpenAIStream(modelId, prompt, sendEvent, openai) {
     sendEvent,
     client: openai,
     generateStream: () => openai.chat.completions.create({
-      model: modelId,
+      model: openAIModels[modelId] || modelId,
       messages: [{ role: 'user', content: prompt }],
       stream: true,
     }),

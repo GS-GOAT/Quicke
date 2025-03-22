@@ -13,7 +13,12 @@ import remarkParse from 'remark-parse';
 
 // Model display names mapping
 const modelDisplayNames = {
-  'gpt-4': 'GPT-4',
+  'gpt-4.5-preview': 'GPT-4.5 Preview',
+  'gpt-4o': 'GPT-4o',
+  'gpt-4o-mini': 'GPT-4o Mini',
+  'o1': 'O1',
+  'o3-mini': 'O3 Mini',
+  'o1-mini': 'O1 Mini',
   'claude': 'Claude 3 Sonnet',
   'gemini': 'Gemini 2.0 Flash',
   'gemini-pro': 'Gemini 2.0 Pro',
