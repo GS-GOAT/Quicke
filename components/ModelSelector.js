@@ -6,7 +6,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
   const modelCategories = {
     Google: [
       { 
-        id: 'gemini',
+        id: 'gemini-flash',
         name: 'Gemini 2.0 Flash',
         provider: 'Google',
         description: 'Fastest performance optimized model',

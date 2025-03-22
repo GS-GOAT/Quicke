@@ -138,7 +138,7 @@ export default async function handler(req, res) {
     'o3-mini': 'openai',
     'o1-mini': 'openai',
     // Google
-    'gemini': 'google',
+    'gemini-flash': 'google',
     'gemini-pro': 'google',
     'gemini-thinking': 'google',
     // Official DeepSeek models
@@ -321,7 +321,7 @@ export default async function handler(req, res) {
 
   // Update geminiModels with debug logging
   const geminiModels = {
-    'gemini': {
+    'gemini-flash': {
       id: 'gemini-2.0-flash',
       name: 'Gemini 2.0 Flash'
     },

@@ -21,7 +21,7 @@ const modelDisplayNames = {
   'o3-mini': 'O3 Mini',
   'o1-mini': 'O1 Mini',
   // Google
-  'gemini': 'Gemini 2.0 Flash',
+  'gemini-flash': 'Gemini 2.0 Flash',
   'gemini-pro': 'Gemini 2.0 Pro',
   'gemini-thinking': 'Gemini 2.0 Flash Thinking',
   // DeepSeek official models
