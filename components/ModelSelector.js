@@ -4,28 +4,6 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
   const [activeCategory, setActiveCategory] = useState('all');
 
   const modelCategories = {
-    OpenAI: [
-      { 
-        id: 'gpt-4',
-        name: 'GPT-4',
-        provider: 'OpenAI',
-        description: 'Most capable GPT-4 model for complex tasks',
-        context:0,
-        color: 'from-emerald-400 to-emerald-600',
-        icon: '🤖'
-      },
-    ],
-    Anthropic: [
-      { 
-        id: 'claude',
-        name: 'Claude 3 Sonnet',
-        provider: 'Anthropic',
-        description: 'Latest Claude model with strong reasoning capabilities',
-        context:0,
-        color: 'from-orange-400 to-orange-600',
-        icon: '🧠'
-      }
-    ],
     Google: [
       { 
         id: 'gemini',
@@ -52,35 +30,6 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         description: 'Advanced reasoning for more thoughtful responses',
         context: 0,
         color: 'from-purple-400 to-purple-600',
-        icon: '🤔'
-      }
-    ],
-    DeepSeek: [
-      {
-        id: 'deepseek-chat',
-        name: 'DeepSeek V3',
-        provider: 'DeepSeek',
-        description: 'Latest DeepSeek chat model optimized for performance',
-        context: '32K',
-        color: 'from-purple-400 to-purple-600',
-        icon: '🌌'
-      },
-      {
-        id: 'deepseek-coder',
-        name: 'DeepSeek Coder',
-        provider: 'DeepSeek',
-        description: 'Specialized model for coding tasks and technical discussions',
-        context: '32K',
-        color: 'from-indigo-400 to-indigo-600',
-        icon: '👨‍💻'
-      },
-      {
-        id: 'deepseek-reasoner',
-        name: 'DeepSeek R1',
-        provider: 'DeepSeek',
-        description: 'Advanced model with chain-of-thought reasoning',
-        context: '32K',
-        color: 'from-blue-400 to-blue-600',
         icon: '🤔'
       }
     ],
@@ -131,7 +80,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         icon: '🌊'
       },
       // {
-      //   id: 'olympiccoder',
+        //   id: 'olympiccoder',
       //   name: 'OlympicCoder 7B',
       //   provider: 'OpenRouter',
       //   description: 'Specialized coding model optimized for programming tasks',
@@ -182,6 +131,57 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         context:'8K',
         color: 'from-green-400 to-green-600',
         icon: '💬'
+      }
+    ],
+    OpenAI: [
+      { 
+        id: 'gpt-4',
+        name: 'GPT-4',
+        provider: 'OpenAI',
+        description: 'Most capable GPT-4 model for complex tasks',
+        context:0,
+        color: 'from-emerald-400 to-emerald-600',
+        icon: '🤖'
+      },
+    ],
+    Anthropic: [
+      { 
+        id: 'claude',
+        name: 'Claude 3 Sonnet',
+        provider: 'Anthropic',
+        description: 'Latest Claude model with strong reasoning capabilities',
+        context:0,
+        color: 'from-orange-400 to-orange-600',
+        icon: '🧠'
+      }
+    ],
+    DeepSeek: [
+      {
+        id: 'deepseek-chat',
+        name: 'DeepSeek V3',
+        provider: 'DeepSeek',
+        description: 'Latest DeepSeek chat model optimized for performance',
+        context: '32K',
+        color: 'from-purple-400 to-purple-600',
+        icon: '🌌'
+      },
+      {
+        id: 'deepseek-coder',
+        name: 'DeepSeek Coder',
+        provider: 'DeepSeek',
+        description: 'Specialized model for coding tasks and technical discussions',
+        context: '32K',
+        color: 'from-indigo-400 to-indigo-600',
+        icon: '👨‍💻'
+      },
+      {
+        id: 'deepseek-reasoner',
+        name: 'DeepSeek R1',
+        provider: 'DeepSeek',
+        description: 'Advanced model with chain-of-thought reasoning',
+        context: '32K',
+        color: 'from-blue-400 to-blue-600',
+        icon: '🤔'
       }
     ]
   };

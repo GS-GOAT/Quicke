@@ -273,7 +273,7 @@ export default async function handler(req, res) {
       id: 'deepseek/deepseek-r1-distill-llama-70b:free',
       name: 'DeepSeek R1'
     },
-    'deepseek-v3': {
+    'deepseek-v3-openrouter': {
       id: 'deepseek/deepseek-chat:free',
       name: 'DeepSeek V3'
     },
