@@ -137,7 +137,7 @@ export default async function handler(req, res) {
     'o1': 'openai',
     'o3-mini': 'openai',
     'o1-mini': 'openai',
-    'claude': 'anthropic',
+    // Google
     'gemini': 'google',
     'gemini-pro': 'google',
     'gemini-thinking': 'google',
@@ -157,6 +157,9 @@ export default async function handler(req, res) {
     'mistral-small-3': 'openrouter',
     'mistral-nemo': 'openrouter',
     // 'olympiccoder': 'openrouter'
+    // Anthropic
+    'claude-3-7': 'anthropic',
+    'claude-3-5': 'anthropic',
   };
 
   // Add model version mapping
@@ -169,6 +172,12 @@ export default async function handler(req, res) {
     'o1-mini': 'o1-mini-2024-09-12'
   };
   
+  // Add model version mapping for Claude
+  const claudeModels = {
+    'claude-3-7': 'claude-3-7-sonnet-20250219',
+    'claude-3-5': 'claude-3-5-sonnet-20241022'
+  };
+
   // Helper function to get provider name from model ID
   const getLLMProvider = (modelId) => {
     if (providerMap[modelId]) {
@@ -653,14 +662,14 @@ async function handleOpenAIStream(modelId, prompt, sendEvent, openai) {
   });
 }
 
-async function handleClaudeStream(prompt, sendEvent, anthropic) {
+async function handleClaudeStream(modelId, prompt, sendEvent, anthropic) {
   return handleModelStream({
-    modelId: 'claude',
+    modelId,
     prompt,
     sendEvent,
     client: anthropic,
     generateStream: () => anthropic.messages.create({
-      model: 'claude-3-sonnet-20240229',
+      model: claudeModels[modelId] || 'claude-3-7-sonnet-20250219',
       max_tokens: 1000,
       messages: [{ role: 'user', content: prompt }],
       stream: true,

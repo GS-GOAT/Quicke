@@ -140,7 +140,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         provider: 'OpenAI',
         description: 'Latest GPT-4.5 preview model with enhanced capabilities',
         context: 0,
-        color: 'from-emerald-500 to-emerald-700',
+        color: 'from-violet-400 to-fuchsia-600',  // Changed from emerald to violet-fuchsia
         icon: '🔮'
       },
       {
@@ -149,7 +149,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         provider: 'OpenAI',
         description: 'Advanced GPT-4 Omega model',
         context: 0,
-        color: 'from-emerald-600 to-emerald-800',
+        color: 'from-blue-400 to-indigo-600',  // Changed from emerald to blue-indigo
         icon: 'Ω'
       },
       {
@@ -158,7 +158,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         provider: 'OpenAI',
         description: 'Compact version of GPT-4 Omega',
         context: 0,
-        color: 'from-emerald-400 to-emerald-600',
+        color: 'from-cyan-400 to-blue-600',  // Changed from emerald to cyan-blue
         icon: 'ω'
       },
       {
@@ -167,7 +167,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         provider: 'OpenAI',
         description: 'Next generation O1 model',
         context: 0,
-        color: 'from-teal-400 to-teal-600',
+        color: 'from-rose-400 to-pink-600',  // Changed from teal to rose-pink
         icon: '🌟'
       },
       {
@@ -176,7 +176,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         provider: 'OpenAI',
         description: 'Compact O3 model with efficient performance',
         context: 0,
-        color: 'from-teal-500 to-teal-700',
+        color: 'from-purple-400 to-violet-600',  // Changed from teal to purple-violet
         icon: '💫'
       },
       {
@@ -185,19 +185,28 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         provider: 'OpenAI',
         description: 'Efficient and compact O1 model',
         context: 0,
-        color: 'from-teal-600 to-teal-800',
+        color: 'from-fuchsia-400 to-purple-600',  // Changed from teal to fuchsia-purple
         icon: '✨'
       }
     ],
     Anthropic: [
       { 
-        id: 'claude',
-        name: 'Claude 3 Sonnet',
+        id: 'claude-3-7',
+        name: 'Claude 3.7 Sonnet',
         provider: 'Anthropic',
-        description: 'Latest Claude model with strong reasoning capabilities',
-        context:0,
+        description: 'Latest Claude model with superior reasoning and analysis',
+        context: 0,
         color: 'from-orange-400 to-orange-600',
         icon: '🧠'
+      },
+      {
+        id: 'claude-3-5',
+        name: 'Claude 3.5 Sonnet',
+        provider: 'Anthropic',
+        description: 'Advanced Claude model optimized for complex tasks',
+        context: 0,
+        color: 'from-orange-500 to-orange-700',
+        icon: '🤖'
       }
     ],
     DeepSeek: [

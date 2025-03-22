@@ -13,17 +13,18 @@ import remarkParse from 'remark-parse';
 
 // Model display names mapping
 const modelDisplayNames = {
+  // OpenAI
   'gpt-4.5-preview': 'GPT-4.5 Preview',
   'gpt-4o': 'GPT-4o',
   'gpt-4o-mini': 'GPT-4o Mini',
   'o1': 'O1',
   'o3-mini': 'O3 Mini',
   'o1-mini': 'O1 Mini',
-  'claude': 'Claude 3 Sonnet',
+  // Google
   'gemini': 'Gemini 2.0 Flash',
   'gemini-pro': 'Gemini 2.0 Pro',
   'gemini-thinking': 'Gemini 2.0 Flash Thinking',
-  // Add DeepSeek official models
+  // DeepSeek official models
   'deepseek-chat': 'DeepSeek V3',
   'deepseek-coder': 'DeepSeek Coder',
   'deepseek-reasoner': 'DeepSeek R1',
@@ -38,7 +39,10 @@ const modelDisplayNames = {
   'nemotron-70b': 'Nemotron 70B',
   'mistral-small-3': 'Mistral Small 3',
   'mistral-nemo': 'Mistral Nemo',
-  // 'olympiccoder': 'OlympicCoder 7B'
+  // 'olympiccoder': 'OlympicCoder 7B',
+  // Anthropic
+  'claude-3-7': 'Claude 3.7 Sonnet',
+  'claude-3-5': 'Claude 3.5 Sonnet',
 };
 
 export default function ResponseColumn({ model, response, streaming, className, conversationId, onRetry }) {  // Add conversationId prop
