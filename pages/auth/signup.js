@@ -24,7 +24,7 @@ export default function SignUp() {
       });
 
       if (res.ok) {
-        // After successful signup, immediately sign in and redirect to home
+        // After successful signup, immediately sign in
         const result = await signIn('credentials', {
           email,
           password,
@@ -32,7 +32,8 @@ export default function SignUp() {
         });
 
         if (result.ok) {
-          router.push('/');  // Redirect to main page
+          // Redirect to onboarding page instead of home
+          router.push('/onboarding');
         } else {
           setError('Error signing in after registration');
           setIsLoading(false);
