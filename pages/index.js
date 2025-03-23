@@ -9,6 +9,7 @@ import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useLocalStorage } from '../hooks/useLocalStorage'; 
+import StarfieldBackground from '../components/StarfieldBackground';
 
 export default function Home() {
   const router = useRouter();
@@ -36,6 +37,9 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [threads, setThreads] = useState([]);
   const [activeThreadId, setActiveThreadId] = useState(null);
+  const [hasInteracted, setHasInteracted] = useState(false);
+  const universeRef = useRef(null);
+  const starfieldRef = useRef(null);
 
   const promptSuggestions = {
     writing: [
@@ -879,356 +883,401 @@ export default function Home() {
     }
   };
 
+  const handleFirstPrompt = () => {
+    setHasInteracted(true);
+    if (starfieldRef.current) {
+      starfieldRef.current.stopAnimation();
+    }
+  };
+
+  useEffect(() => {
+    // When the first message is sent, stop the animation
+    if (history.length > 0 && !hasInteracted) {
+      handleFirstPrompt();
+    }
+  }, [history.length, hasInteracted]);
+
   return (
-    <div className="flex flex-col h-screen bg-gray-50 dark:bg-[#111111] transition-colors duration-200">
-      <Head>
-        <title>Quicke - LLM Response Comparison</title>
-        <meta name="description" content="Get responses from multiple LLMs side by side" />
-        <link rel="icon" href="/favicon.ico" />
-      </Head>
+    <div className="flex flex-col h-screen relative">
+      <StarfieldBackground ref={starfieldRef} />
+      
+      {/* Add a dark overlay that fades out when hasInteracted is true */}
+      <div 
+        className="fixed inset-0 bg-black transition-opacity duration-1000 pointer-events-none z-[1]"
+        style={{ 
+          opacity: hasInteracted ? 0 : 0.3 
+        }}
+      />
 
-      <header className="relative z-10 bg-white/80 dark:bg-darksurface/80 backdrop-blur-sm shadow-sm border-b border-gray-200 dark:border-gray-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="flex items-center justify-between h-16">
-            {/* Logo & Brand */}
-            <div className="flex items-center space-x-3">
-              {/* Add Hamburger Menu */}
-              <button 
-                className="p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 group relative"
-                aria-label="Thread menu"
-                onMouseEnter={() => setSidebarOpen(true)}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-                </svg>
-              </button>
-              
-              {/* Updated Quicke text with improved animation */}
-              <h1 className="text-2xl font-bold quicke-text">
-                Quicke
-              </h1>
-              
-              {/* Updated animation styles */}
-              <style jsx global>{`
-                .quicke-text {
-                  position: relative;
-                  background: linear-gradient(90deg, 
-                    rgba(255, 255, 255, 0.95) 0%, 
-                    rgba(240, 240, 255, 0.9) 40%, 
-                    rgba(225, 225, 245, 0.85) 60%, 
-                    rgba(210, 210, 235, 0.8) 100%
-                  );
-                  background-size: 200% 100%;
-                  -webkit-background-clip: text;
-                  background-clip: text;
-                  color: transparent;
-                  -webkit-text-fill-color: transparent;
-                  letter-spacing: 1px;
-                }
-                
-                /* Modify the wave effect to move in one direction only and slower */
-                .quicke-text::before {
-                  content: 'Quicke';
-                  position: absolute;
-                  top: 0;
-                  left: 0;
-                  width: 100%;
-                  height: 100%;
-                  background: linear-gradient(90deg, 
-                    transparent 0%,
-                    transparent 30%,
-                    rgba(255, 240, 220, 0.7) 50%, 
-                    transparent 70%,
-                    transparent 100%
-                  );
-                  background-size: 300% 100%;
-                  -webkit-background-clip: text;
-                  background-clip: text;
-                  color: transparent;
-                  -webkit-text-fill-color: transparent;
-                  animation: wave-through 12s linear infinite;
-                }
-                
-                /* Animation that moves in one direction only: right to left - REVERSED */
-                @keyframes wave-through {
-                  0% { background-position: 400% 0; }
-                  100% { background-position: -100% 0; }
-                }
-                
-                /* Keep the subtle underline */
-                .quicke-text::after {
-                  content: '';
-                  position: absolute;
-                  width: 100%;
-                  height: 1px;
-                  bottom: -2px;
-                  left: 0;
-                  background: linear-gradient(90deg, transparent, rgba(255, 220, 160, 0.5), transparent);
-                }
-              `}</style>
-            </div>
+      {/* Wrap all content in a relative container with z-index */}
+      <div className="relative z-[2] flex flex-col h-screen">
+        <Head>
+          <title>Quicke - LLM Response Comparison</title>
+          <meta name="description" content="Get responses from multiple LLMs side by side" />
+          <link rel="icon" href="/favicon.ico" />
+        </Head>
 
-            {/* Center - Model Selector */}
-            <div className="flex-1 flex justify-center">
-              <button 
-                ref={modelButtonRef}
-                onMouseEnter={handleModelButtonMouseEnter}
-                className="group px-4 py-2 rounded-lg bg-white hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 text-sm font-medium transition-all duration-200 border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md"
-              >
-                <div className="flex items-center space-x-2">
-                  <span>{selectedModels.length} Model{selectedModels.length !== 1 ? 's' : ''}</span>
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-gray-400 group-hover:text-primary-500 transition-colors">
-                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+        <header className="relative z-10 bg-white/80 dark:bg-darksurface/80 backdrop-blur-sm shadow-sm border-b border-gray-200 dark:border-gray-800">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6">
+            <div className="flex items-center justify-between h-16">
+              {/* Logo & Brand */}
+              <div className="flex items-center space-x-3">
+                {/* Add Hamburger Menu */}
+                <button 
+                  className="p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 group relative"
+                  aria-label="Thread menu"
+                  onMouseEnter={() => setSidebarOpen(true)}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
                   </svg>
-                </div>
-              </button>
-            </div>
+                </button>
+                
+                {/* Updated Quicke text with improved animation */}
+                <h1 className="text-2xl font-bold quicke-text">
+                  Quicke
+                </h1>
+                
+                {/* Updated animation styles */}
+                <style jsx global>{`
+                  .quicke-text {
+                    position: relative;
+                    background: linear-gradient(90deg, 
+                      rgba(255, 255, 255, 0.95) 0%, 
+                      rgba(240, 240, 255, 0.9) 40%, 
+                      rgba(225, 225, 245, 0.85) 60%, 
+                      rgba(210, 210, 235, 0.8) 100%
+                    );
+                    background-size: 200% 100%;
+                    -webkit-background-clip: text;
+                    background-clip: text;
+                    color: transparent;
+                    -webkit-text-fill-color: transparent;
+                    letter-spacing: 1px;
+                  }
+                  
+                  /* Modify the wave effect to move in one direction only and slower */
+                  .quicke-text::before {
+                    content: 'Quicke';
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: linear-gradient(90deg, 
+                      transparent 0%,
+                      transparent 30%,
+                      rgba(255, 240, 220, 0.7) 50%, 
+                      transparent 70%,
+                      transparent 100%
+                    );
+                    background-size: 300% 100%;
+                    -webkit-background-clip: text;
+                    background-clip: text;
+                    color: transparent;
+                    -webkit-text-fill-color: transparent;
+                    animation: wave-through 12s linear infinite;
+                  }
+                  
+                  /* Animation that moves in one direction only: right to left - REVERSED */
+                  @keyframes wave-through {
+                    0% { background-position: 400% 0; }
+                    100% { background-position: -100% 0; }
+                  }
+                  
+                  /* Keep the subtle underline */
+                  .quicke-text::after {
+                    content: '';
+                    position: absolute;
+                    width: 100%;
+                    height: 1px;
+                    bottom: -2px;
+                    left: 0;
+                    background: linear-gradient(90deg, transparent, rgba(255, 220, 160, 0.5), transparent);
+                  }
+                `}</style>
+              </div>
 
-            {/* Right Actions */}
-            <div className="flex items-center space-x-4">
-              <ThemeToggle />
-              {session?.user ? (
-                <div className="relative group">
-                  <button className="flex items-center space-x-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#e6dfd3] via-[#f5efe7] to-[#d4cbbe] flex items-center justify-center text-gray-800 font-medium shadow-sm"
-                      style={{
-                        boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.5), inset 0 -2px 4px rgba(0,0,0,0.05)'
-                      }}>
-                      {session.user.email.charAt(0).toUpperCase()}
-                    </div>
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-gray-400">
+              {/* Center - Model Selector */}
+              <div className="flex-1 flex justify-center">
+                <button 
+                  ref={modelButtonRef}
+                  onMouseEnter={handleModelButtonMouseEnter}
+                  className="group px-4 py-2 rounded-lg bg-white hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 text-sm font-medium transition-all duration-200 border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md"
+                >
+                  <div className="flex items-center space-x-2">
+                    <span>{selectedModels.length} Model{selectedModels.length !== 1 ? 's' : ''}</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-gray-400 group-hover:text-primary-500 transition-colors">
                       <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
                     </svg>
-                  </button>
-                  
-                  <div className="absolute right-0 mt-2 w-56 py-2 rounded-lg shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-50 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all duration-200"
-                    style={{
-                      backgroundColor: 'rgba(28, 28, 32, 0.75)',
-                      backdropFilter: 'blur(20px)',
-                      WebkitBackdropFilter: 'blur(20px)',
-                      borderRight: '1px solid rgba(75, 75, 80, 0.2)',
-                      boxShadow: '0 0 20px rgba(0, 0, 0, 0.4)'
-                    }}>
-                    <div className="px-4 py-2 border-b border-gray-700/30">
-                      <p className="text-sm text-gray-400">Signed in as</p>
-                      <p className="text-sm font-medium text-gray-200 truncate">{session.user.email}</p>
-                    </div>
-                    
-                    <button 
-                      onClick={() => setShowApiKeyManager(true)}
-                      className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700/50 flex items-center transition-colors"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 mr-2">
-                        <path fillRule="evenodd" d="M8 7a5 5 0 113.61 4.804l-1.903 1.903A1 1 0 019 14H8v1a1 1 0 01-1 1H6v1a1 1 0 01-1 1H3a1 1 0 01-1-1v-2a1 1 0 01.293-.707L8.196 8.39A5.002 5.002 0 018 7zm5-3a.75.75 0 000 1.5A1.5 1.5 0 0114.5 7 .75.75 0 0016 7a3 3 0 00-3-3z" clipRule="evenodd" />
+                  </div>
+                </button>
+              </div>
+
+              {/* Right Actions */}
+              <div className="flex items-center space-x-4">
+                <ThemeToggle />
+                {session?.user ? (
+                  <div className="relative group">
+                    <button className="flex items-center space-x-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#e6dfd3] via-[#f5efe7] to-[#d4cbbe] flex items-center justify-center text-gray-800 font-medium shadow-sm"
+                        style={{
+                          boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.5), inset 0 -2px 4px rgba(0,0,0,0.05)'
+                        }}>
+                        {session.user.email.charAt(0).toUpperCase()}
+                      </div>
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-gray-400">
+                        <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
                       </svg>
-                      API Keys
                     </button>
                     
-                    <div className="border-t border-gray-700/30 mt-2 pt-2">
-                      <div className="px-4 py-2">
-                        <label className="text-sm text-gray-700 dark:text-gray-300 mb-2 block">
-                          Response Layout
-                        </label>
-                        <div className="flex items-center space-x-4">
-                          <button
-                            onClick={() => setResponseLayout('grid')}
-                            className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm ${
-                              responseLayout === 'grid'
-                                ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400'
-                                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-                            }`}
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-                              <path d="M2 4.25A2.25 2.25 0 014.25 2h2.5A2.25 2.25 0 019 4.25v2.5A2.25 2.25 0 016.75 9h-2.5A2.25 2.25 0 012 6.75v-2.5zM2 13.25A2.25 2.25 0 014.25 11h2.5A2.25 2.25 0 019 13.25v2.5A2.25 2.25 0 016.75 18h-2.5A2.25 2.25 0 012 15.75v-2.5zM11 4.25A2.25 2.25 0 0113.25 2h2.5A2.25 2.25 0 0118 4.25v2.5A2.25 2.25 0 0115.75 9h-2.5A2.25 2.25 0 0111 6.75v-2.5zM11 13.25A2.25 2.25 0 0113.25 11h2.5A2.25 2.25 0 0118 13.25v2.5A2.25 2.25 0 0115.75 18h-2.5A2.25 2.25 0 0111 15.75v-2.5z" />
-                            </svg>
-                            <span>Grid</span>
-                          </button>
-                          <button
-                            onClick={() => setResponseLayout('stack')}
-                            className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm ${
-                              responseLayout === 'stack'
-                                ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400'
-                                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-                            }`}
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-                              <path d="M2 4.25A2.25 2.25 0 014.25 2h11.5A2.25 2.25 0 0118 4.25v2.5A2.25 2.25 0 0115.75 9h-11.5A2.25 2.25 0 012 6.75v-2.5zM2 13.25A2.25 2.25 0 014.25 11h11.5A2.25 2.25 0 0118 13.25v2.5A2.25 2.25 0 0115.75 18h-11.5A2.25 2.25 0 012 15.75v-2.5z" />
-                            </svg>
-                            <span>Stack</span>
-                          </button>
-                        </div>
+                    <div className="absolute right-0 mt-2 w-56 py-2 rounded-lg shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-50 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all duration-200"
+                      style={{
+                        backgroundColor: 'rgba(28, 28, 32, 0.75)',
+                        backdropFilter: 'blur(20px)',
+                        WebkitBackdropFilter: 'blur(20px)',
+                        borderRight: '1px solid rgba(75, 75, 80, 0.2)',
+                        boxShadow: '0 0 20px rgba(0, 0, 0, 0.4)'
+                      }}>
+                      <div className="px-4 py-2 border-b border-gray-700/30">
+                        <p className="text-sm text-gray-400">Signed in as</p>
+                        <p className="text-sm font-medium text-gray-200 truncate">{session.user.email}</p>
                       </div>
+                      
                       <button 
-                        onClick={() => signOut()}
-                        className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
+                        onClick={() => setShowApiKeyManager(true)}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700/50 flex items-center transition-colors"
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 mr-2">
-                          <path fillRule="evenodd" d="M3 4.25A2.25 2.25 0 015.25 2h5.5A2.25 2.25 0 0113 4.25v2a.75.75 0 01-1.5 0v-2a.75.75 0 00-.75-.75h-5.5a.75.75 0 00-.75.75v11.5c0 .414.336.75.75.75h5.5a.75.75 0 00.75-.75v-2a.75.75 0 011.5 0v2A2.25 2.25 0 0110.75 18h-5.5A2.25 2.25 0 013 15.75V4.25z" clipRule="evenodd" />
-                          <path fillRule="evenodd" d="M19 10a.75.75 0 00-.75-.75H8.704l1.048-.943a.75.75 0 10-1.004-1.114l-2.5 2.25a.75.75 0 000 1.114l2.5 2.25a.75.75 0 101.004-1.114l-1.048-.943h9.546A.75.75 0 0019 10z" clipRule="evenodd" />
+                          <path fillRule="evenodd" d="M8 7a5 5 0 113.61 4.804l-1.903 1.903A1 1 0 019 14H8v1a1 1 0 01-1 1H6v1a1 1 0 01-1 1H3a1 1 0 01-1-1v-2a1 1 0 01.293-.707L8.196 8.39A5.002 5.002 0 018 7zm5-3a.75.75 0 000 1.5A1.5 1.5 0 0114.5 7 .75.75 0 0016 7a3 3 0 00-3-3z" clipRule="evenodd" />
                         </svg>
-                        Sign out
+                        API Keys
                       </button>
+                      
+                      <div className="border-t border-gray-700/30 mt-2 pt-2">
+                        <div className="px-4 py-2">
+                          <label className="text-sm text-gray-700 dark:text-gray-300 mb-2 block">
+                            Response Layout
+                          </label>
+                          <div className="flex items-center space-x-4">
+                            <button
+                              onClick={() => setResponseLayout('grid')}
+                              className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm ${
+                                responseLayout === 'grid'
+                                  ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400'
+                                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                              }`}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                                <path d="M2 4.25A2.25 2.25 0 014.25 2h2.5A2.25 2.25 0 019 4.25v2.5A2.25 2.25 0 016.75 9h-2.5A2.25 2.25 0 012 6.75v-2.5zM2 13.25A2.25 2.25 0 014.25 11h2.5A2.25 2.25 0 019 13.25v2.5A2.25 2.25 0 016.75 18h-2.5A2.25 2.25 0 012 15.75v-2.5zM11 4.25A2.25 2.25 0 0113.25 2h2.5A2.25 2.25 0 0118 4.25v2.5A2.25 2.25 0 0115.75 9h-2.5A2.25 2.25 0 0111 6.75v-2.5zM11 13.25A2.25 2.25 0 0113.25 11h2.5A2.25 2.25 0 0118 13.25v2.5A2.25 2.25 0 0115.75 18h-2.5A2.25 2.25 0 0111 15.75v-2.5z" />
+                              </svg>
+                              <span>Grid</span>
+                            </button>
+                            <button
+                              onClick={() => setResponseLayout('stack')}
+                              className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm ${
+                                responseLayout === 'stack'
+                                  ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400'
+                                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                              }`}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                                <path d="M2 4.25A2.25 2.25 0 014.25 2h11.5A2.25 2.25 0 0118 4.25v2.5A2.25 2.25 0 0115.75 9h-11.5A2.25 2.25 0 012 6.75v-2.5zM2 13.25A2.25 2.25 0 014.25 11h11.5A2.25 2.25 0 0118 13.25v2.5A2.25 2.25 0 0115.75 18h-11.5A2.25 2.25 0 012 15.75v-2.5z" />
+                              </svg>
+                              <span>Stack</span>
+                            </button>
+                          </div>
+                        </div>
+                        <button 
+                          onClick={() => signOut()}
+                          className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 mr-2">
+                            <path fillRule="evenodd" d="M3 4.25A2.25 2.25 0 015.25 2h5.5A2.25 2.25 0 0113 4.25v2a.75.75 0 01-1.5 0v-2a.75.75 0 00-.75-.75h-5.5a.75.75 0 00-.75.75v11.5c0 .414.336.75.75.75h5.5a.75.75 0 00.75-.75v-2a.75.75 0 011.5 0v2A2.25 2.25 0 0110.75 18h-5.5A2.25 2.25 0 013 15.75V4.25z" clipRule="evenodd" />
+                            <path fillRule="evenodd" d="M19 10a.75.75 0 00-.75-.75H8.704l1.048-.943a.75.75 0 10-1.004-1.114l-2.5 2.25a.75.75 0 000 1.114l2.5 2.25a.75.75 0 101.004-1.114l-1.048-.943h9.546A.75.75 0 0019 10z" clipRule="evenodd" />
+                          </svg>
+                          Sign out
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ) : (
-                <div className="flex items-center space-x-3">
-                  <Link href="/auth/signin" className="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400">
-                    Sign in
-                  </Link>
-                  <Link 
-                    href="/auth/signup"
-                    className="relative px-4 py-2 text-sm font-medium text-white rounded-lg transition-all duration-300 overflow-hidden group"
-                    style={{
-                      background: 'linear-gradient(165deg, rgba(79, 70, 229, 0.4) 0%, rgba(55, 48, 163, 0.4) 100%)',
-                      backdropFilter: 'blur(8px)',
-                      WebkitBackdropFilter: 'blur(8px)',
-                      border: '1px solid rgba(255, 255, 255, 0.2)',
-                      boxShadow: `
-                        0 2px 4px rgba(79, 70, 229, 0.1),
-                        0 4px 8px rgba(79, 70, 229, 0.1),
-                        inset 0 1px 1px rgba(255, 255, 255, 0.4),
-                        inset 0 -1px 1px rgba(0, 0, 0, 0.1)
-                      `
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'translateY(-1px)';
-                      e.currentTarget.style.boxShadow = `
-                        0 4px 8px rgba(79, 70, 229, 0.2),
-                        0 8px 16px rgba(79, 70, 229, 0.2),
-                        inset 0 1px 1px rgba(255, 255, 255, 0.4),
-                        inset 0 -1px 1px rgba(0, 0, 0, 0.1)
-                      `;
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'translateY(0)';
-                      e.currentTarget.style.boxShadow = `
-                        0 2px 4px rgba(79, 70, 229, 0.1),
-                        0 4px 8px rgba(79, 70, 229, 0.1),
-                        inset 0 1px 1px rgba(255, 255, 255, 0.4),
-                        inset 0 -1px 1px rgba(0, 0, 0, 0.1)
-                      `;
-                    }}
-                  >
-                    {/* Glass highlight effect */}
-                    <div 
-                      className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                ) : (
+                  <div className="flex items-center space-x-3">
+                    <Link href="/auth/signin" className="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400">
+                      Sign in
+                    </Link>
+                    <Link 
+                      href="/auth/signup"
+                      className="relative px-4 py-2 text-sm font-medium text-white rounded-lg transition-all duration-300 overflow-hidden group"
                       style={{
-                        background: 'linear-gradient(165deg, rgba(255, 255, 255, 0.2) 0%, transparent 100%)',
-                        borderRadius: '7px'
+                        background: 'linear-gradient(165deg, rgba(79, 70, 229, 0.4) 0%, rgba(55, 48, 163, 0.4) 100%)',
+                        backdropFilter: 'blur(8px)',
+                        WebkitBackdropFilter: 'blur(8px)',
+                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                        boxShadow: `
+                          0 2px 4px rgba(79, 70, 229, 0.1),
+                          0 4px 8px rgba(79, 70, 229, 0.1),
+                          inset 0 1px 1px rgba(255, 255, 255, 0.4),
+                          inset 0 -1px 1px rgba(0, 0, 0, 0.1)
+                        `
                       }}
-                    />
-                    <span className="relative z-10">Start Free</span>
-                  </Link>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Model Selector Dropdown */}
-      {showModelSelector && (
-        <div
-          ref={modelSelectorRef}
-          onMouseLeave={handleModelSelectorMouseLeave}
-          className="fixed top-16 left-1/2 -translate-x-1/2 w-[calc(100vw-2rem)] max-w-3xl rounded-xl bg-white/95 dark:bg-gray-900/95 backdrop-blur-md shadow-2xl ring-1 ring-black/5 dark:ring-white/5 z-50 transition-all duration-200 ease-out transform"
-          style={{
-            maxHeight: 'calc(100vh - 200px)',
-            overflowY: 'auto'
-          }}
-        >
-          <ModelSelector 
-            selectedModels={selectedModels} 
-            setSelectedModels={setSelectedModels} 
-          />
-        </div>
-      )}
-
-      <ApiKeyManager 
-        isOpen={showApiKeyManager} 
-        onClose={() => setShowApiKeyManager(false)} 
-      />
-      
-      {error && (
-        <div className="mx-auto w-full max-w-4xl p-4 my-2 bg-yellow-900/20 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-lg border border-yellow-200/30 dark:border-yellow-800/30">
-          <div className="flex items-center">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 mr-2">
-              <path fillRule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 01.75.75v3.75a.75.75 0 01-1.5 0V9a.75.75 0 01.75-.75zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z" clipRule="evenodd" />
-            </svg>
-            Error: {error}
-          </div>
-        </div>
-      )}
-      
-      <main className="flex-grow overflow-auto px-4 py-2">
-        <div className="max-w-5xl mx-auto">
-          {history.length === 0 ? (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
-              <div className="max-w-3xl w-full space-y-8">
-                <div className="space-y-4">
-                  <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 dark:text-white">
-                    Prompt AI Models At Once
-                  </h1>
-                  <p className="text-xl text-gray-600 dark:text-gray-400">
-                    Get instant responses from multiple AI models side by side
-                  </p>
-                </div>
-
-                {renderSuggestions()}
-
-                {/* Quick start section */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-8">
-                  {/* <div className="p-4 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm">
-                    <h3 className="font-semibold text-gray-900 dark:text-white">Multiple Models</h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Compare responses from leading AI models</p>
-                  </div> */}
-                  {/* Add more quick start cards */}
-                </div>
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = 'translateY(-1px)';
+                        e.currentTarget.style.boxShadow = `
+                          0 4px 8px rgba(79, 70, 229, 0.2),
+                          0 8px 16px rgba(79, 70, 229, 0.2),
+                          inset 0 1px 1px rgba(255, 255, 255, 0.4),
+                          inset 0 -1px 1px rgba(0, 0, 0, 0.1)
+                        `;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.boxShadow = `
+                          0 2px 4px rgba(79, 70, 229, 0.1),
+                          0 4px 8px rgba(79, 70, 229, 0.1),
+                          inset 0 1px 1px rgba(255, 255, 255, 0.4),
+                          inset 0 -1px 1px rgba(0, 0, 0, 0.1)
+                        `;
+                      }}
+                    >
+                      {/* Glass highlight effect */}
+                      <div 
+                        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                        style={{
+                          background: 'linear-gradient(165deg, rgba(255, 255, 255, 0.2) 0%, transparent 100%)',
+                          borderRadius: '7px'
+                        }}
+                      />
+                      <span className="relative z-10">Start Free</span>
+                    </Link>
+                  </div>
+                )}
               </div>
             </div>
-          ) : renderConversationHistory()}
-        </div>
-      </main>
-      
-      <footer className="px-4 py-4 sm:px-6 lg:px-8 bg-transparent">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex items-center gap-3">
-            {/* Add dustbin button */}
-            {history.length > 0 && (
-              <button
-                onClick={handleClear}
-                className="p-2.5 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all duration-200 group"
-                title="Clear screen"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" 
-                  className="w-5 h-5 transform group-hover:scale-110 transition-transform duration-200">
-                  <path fillRule="evenodd" d="M16.5 4.478v.227a48.816 48.816 0 013.878.512.75.75 0 11-.256 1.478l-.209-.035-1.005 13.07a3 3 0 01-2.991 2.77H8.084a3 3 0 01-2.991-2.77L4.087 6.66l-.209.035a.75.75 0 01-.256-1.478A48.567 48.567 0 017.5 4.705v-.227c0-1.564 1.213-2.9 2.816-2.951a52.662 52.662 0 013.369 0c1.603.051 2.815 1.387 2.815 2.951zm-6.136-1.452a51.196 51.196 0 013.273 0C14.39 3.05 15 3.684 15 4.478v.113a49.488 49.488 0 00-6 0v-.113c0-.794.609-1.428 1.364-1.452zm-.355 5.945a.75.75 0 10-1.5.058l.347 9a.75.75 0 101.499-.058l-.346-9zm5.48.058a.75.75 0 10-1.498-.058l-.347 9a.75.75 0 001.5.058l.345-9z" clipRule="evenodd" />
-                </svg>
-              </button>
-            )}
-            <div className="flex-grow">
-              <PromptInput 
-                prompt={prompt} 
-                setPrompt={setPrompt} 
-                onSubmit={handleSubmit}
-                onClear={handleClear}
-                disabled={loading || selectedModels.length === 0}  
-                isProcessing={isProcessing}  
+          </div>
+        </header>
+
+        {/* Model Selector Dropdown */}
+        {showModelSelector && (
+          <>
+            {/* Backdrop */}
+            <div 
+              className="fixed inset-0 backdrop-blur-sm bg-black/10 z-40 model-selector-backdrop"
+              onClick={() => setShowModelSelector(false)}
+              style={{
+                backdropFilter: 'blur(4px)',
+                WebkitBackdropFilter: 'blur(4px)'
+              }}
+            />
+            {/* Model Selector Menu */}
+            <div
+              ref={modelSelectorRef}
+              onMouseLeave={handleModelSelectorMouseLeave}
+              className="model-selector-menu fixed top-16 left-1/2 -translate-x-1/2 w-[calc(100vw-2rem)] max-w-3xl rounded-xl shadow-2xl ring-1 ring-black/5 dark:ring-white/5 z-50"
+              style={{
+                maxHeight: 'calc(100vh - 200px)',
+                overflowY: 'auto',
+                pointerEvents: 'auto'  // Ensure clicks work
+              }}
+            >
+              <ModelSelector 
+                selectedModels={selectedModels} 
+                setSelectedModels={setSelectedModels} 
               />
             </div>
-          </div>
-        </div>
-      </footer>
+          </>
+        )}
 
-      <ThreadSidebar 
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-        threads={threads}
-        onNewThread={handleNewThread}
-        onThreadSelect={handleThreadSelect}
-        activeThreadId={activeThreadId}
-      />
+        <ApiKeyManager 
+          isOpen={showApiKeyManager} 
+          onClose={() => setShowApiKeyManager(false)} 
+        />
+        
+        {error && (
+          <div className="mx-auto w-full max-w-4xl p-4 my-2 bg-yellow-900/20 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-lg border border-yellow-200/30 dark:border-yellow-800/30">
+            <div className="flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 mr-2">
+                <path fillRule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 01.75.75v3.75a.75.75 0 01-1.5 0V9a.75.75 0 01.75-.75zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z" clipRule="evenodd" />
+              </svg>
+              Error: {error}
+            </div>
+          </div>
+        )}
+        
+        <main className="flex-grow overflow-auto px-4 py-2">
+          <div className="max-w-5xl mx-auto">
+            {history.length === 0 ? (
+              <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
+                <div className="max-w-3xl w-full space-y-8">
+                  <div className="space-y-4">
+                    <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 dark:text-white">
+                      Prompt AI Models At Once
+                    </h1>
+                    <p className="text-xl text-gray-600 dark:text-gray-400">
+                      Get instant responses from multiple AI models side by side
+                    </p>
+                  </div>
+
+                  {renderSuggestions()}
+
+                  {/* Quick start section */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-8">
+                    {/* <div className="p-4 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm">
+                      <h3 className="font-semibold text-gray-900 dark:text-white">Multiple Models</h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Compare responses from leading AI models</p>
+                    </div> */}
+                    {/* Add more quick start cards */}
+                  </div>
+                </div>
+              </div>
+            ) : renderConversationHistory()}
+          </div>
+        </main>
+        
+        <footer className="px-4 py-4 sm:px-6 lg:px-8 bg-transparent">
+          <div className="max-w-4xl mx-auto">
+            <div className="flex items-center gap-3">
+              {/* Add dustbin button */}
+              {history.length > 0 && (
+                <button
+                  onClick={handleClear}
+                  className="p-2.5 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all duration-200 group"
+                  title="Clear screen"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" 
+                    className="w-5 h-5 transform group-hover:scale-110 transition-transform duration-200">
+                    <path fillRule="evenodd" d="M16.5 4.478v.227a48.816 48.816 0 013.878.512.75.75 0 11-.256 1.478l-.209-.035-1.005 13.07a3 3 0 01-2.991 2.77H8.084a3 3 0 01-2.991-2.77L4.087 6.66l-.209.035a.75.75 0 01-.256-1.478A48.567 48.567 0 017.5 4.705v-.227c0-1.564 1.213-2.9 2.816-2.951a52.662 52.662 0 013.369 0c1.603.051 2.815 1.387 2.815 2.951zm-6.136-1.452a51.196 51.196 0 013.273 0C14.39 3.05 15 3.684 15 4.478v.113a49.488 49.488 0 00-6 0v-.113c0-.794.609-1.428 1.364-1.452zm-.355 5.945a.75.75 0 10-1.5.058l.347 9a.75.75 0 101.499-.058l-.346-9zm5.48.058a.75.75 0 10-1.498-.058l-.347 9a.75.75 0 001.5.058l.345-9z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              )}
+              <div className="flex-grow">
+                <PromptInput 
+                  prompt={prompt} 
+                  setPrompt={setPrompt} 
+                  onSubmit={(e) => {
+                    if (!hasInteracted) {
+                      handleFirstPrompt();
+                    }
+                    handleSubmit(e);
+                  }}
+                  onClear={handleClear}
+                  disabled={loading || selectedModels.length === 0}  
+                  isProcessing={isProcessing}  
+                />
+              </div>
+            </div>
+          </div>
+        </footer>
+
+        <ThreadSidebar 
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+          threads={threads}
+          onNewThread={handleNewThread}
+          onThreadSelect={handleThreadSelect}
+          activeThreadId={activeThreadId}
+        />
+      </div>
     </div>
   );
 }
