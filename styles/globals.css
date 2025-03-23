@@ -468,11 +468,18 @@ a {
   display: inline-block;
   margin-right: 1rem;
   min-width: max-content;
+  opacity: 0.9;
+  transition: opacity 0.3s ease;
+}
+
+.suggestion-item:hover {
+  opacity: 1;
 }
 
 /* Enhanced suggestion carousel fade effect */
 .suggestion-carousel-container {
   position: relative;
+  overflow: hidden;
 }
 
 .suggestion-carousel-container::before,
@@ -481,7 +488,7 @@ a {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 100px;
+  width: 15%;
   pointer-events: none;
   z-index: 1;
 }
@@ -491,6 +498,7 @@ a {
   background: linear-gradient(
     to right,
     rgb(249, 250, 251) 0%,
+    rgba(249, 250, 251, 0.6) 40%,
     rgba(249, 250, 251, 0) 100%
   );
 }
@@ -500,6 +508,7 @@ a {
   background: linear-gradient(
     to left,
     rgb(249, 250, 251) 0%,
+    rgba(249, 250, 251, 0.6) 40%,
     rgba(249, 250, 251, 0) 100%
   );
 }
@@ -508,6 +517,7 @@ a {
   background: linear-gradient(
     to right,
     rgb(17, 17, 17) 0%,
+    rgba(17, 17, 17, 0.6) 40%,
     rgba(17, 17, 17, 0) 100%
   );
 }
@@ -516,6 +526,7 @@ a {
   background: linear-gradient(
     to left,
     rgb(17, 17, 17) 0%,
+    rgba(17, 17, 17, 0.6) 40%,
     rgba(17, 17, 17, 0) 100%
   );
 }
@@ -718,17 +729,19 @@ main {
 
 footer {
   @apply sticky bottom-0 z-10;
-  /* Ensure footer stays above content */
+  /* Ensure footer stays above content but doesn't block stars */
   background: linear-gradient(to top,
-    rgba(255, 255, 255, 1) 0%,
-    rgba(255, 255, 255, 0.9) 100%
+    rgba(255, 255, 255, 0.7) 0%,
+    rgba(255, 255, 255, 0.5) 100%
   );
+  position: relative;
+  z-index: 3;
 }
 
 .dark footer {
   background: linear-gradient(to top,
-    rgba(17, 17, 17, 1) 0%,
-    rgba(17, 17, 17, 0.9) 100%
+    rgba(17, 17, 17, 0.7) 0%,
+    rgba(17, 17, 17, 0.5) 100%
   );
 }
 
@@ -754,7 +767,7 @@ footer {
   transform: translateY(-1px);
 }
 
-/* Scrolling prompts animation */
+/* Scrolling prompts animation with more subtle transparency and fading */
 @keyframes scroll {
   0% { transform: translateY(0); }
   100% { transform: translateY(-50%); }
@@ -764,8 +777,26 @@ footer {
   animation: scroll 15s linear infinite;
 }
 
+/* Updated scrolling-prompts-container with subtler masking/fading effect */
 .scrolling-prompts-container {
-  mask-image: linear-gradient(to bottom, transparent, black 10%, black 90%, transparent);
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(0, 0, 0, 0.7) 5%,
+    rgba(0, 0, 0, 1) 15%,
+    rgba(0, 0, 0, 1) 85%,
+    rgba(0, 0, 0, 0.7) 95%,
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(0, 0, 0, 0.7) 5%,
+    rgba(0, 0, 0, 1) 15%,
+    rgba(0, 0, 0, 1) 85%,
+    rgba(0, 0, 0, 0.7) 95%,
+    transparent 100%
+  );
 }
 
 /* Thread sidebar animations */
@@ -833,21 +864,6 @@ footer {
   transition: opacity 300ms, transform 300ms, backdrop-filter 300ms;
 }
 
-/* Improve scrolling for prompts */
-.scrolling-prompts-container {
-  mask-image: linear-gradient(to bottom, transparent, black 10%, black 90%, transparent);
-  -webkit-mask-image: linear-gradient(to bottom, transparent, black 10%, black 90%, transparent);
-}
-
-.animate-scroll {
-  animation: scroll 15s linear infinite;
-}
-
-@keyframes scroll {
-  0% { transform: translateY(0); }
-  100% { transform: translateY(-50%); }
-}
-
 /* Enhanced glassmorphism for dark theme */
 .dark .glass-effect {
   background: rgba(17, 24, 39, 0.7);
@@ -859,7 +875,13 @@ footer {
 
 /* Universe animation styles */
 .universe-canvas {
-  pointer-events: none;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 0 !important;
+  pointer-events: none !important;
 }
 
 /* Ensure content appears above canvas */
@@ -887,6 +909,7 @@ footer {
   width: 100% !important;
   height: 100% !important;
   z-index: 0 !important;
+  pointer-events: none !important;
 }
 
 /* Ensure content appears above starfield */
@@ -954,4 +977,13 @@ footer {
 /* Remove conflicting backdrop blur styles */
 .backdrop-blur-active::before {
   display: none; /* Remove the old backdrop */
+}
+
+/* Input area should be partially transparent to see stars */
+.prompt-input-container {
+  background-color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.dark .prompt-input-container {
+  background-color: rgba(17, 24, 39, 0.7) !important;
 }

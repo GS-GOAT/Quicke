@@ -15,9 +15,9 @@ class Star {
     this.z = Math.random() * 1500; // Increased depth for smoother perspective
     this.size = 2;
     
-    // Create a blueish-white color with random brightness
-    const brightness = 150 + Math.random() * 105; // Range: 150-255
-    this.color = `rgba(${brightness}, ${brightness + 20}, ${brightness + 40}, 0.8)`;
+    // Change to pure white color with varying opacity
+    const brightness = 255; // Pure white
+    this.color = `rgba(${brightness}, ${brightness}, ${brightness}, ${0.7 + Math.random() * 0.3})`; // White with random opacity
   }
 
   update(speed) {

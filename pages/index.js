@@ -40,6 +40,16 @@ export default function Home() {
   const [hasInteracted, setHasInteracted] = useState(false);
   const universeRef = useRef(null);
   const starfieldRef = useRef(null);
+  const [predefinedSuggestions] = useState([
+    "Explain quantum computing in simple terms",
+    "Write a short story about a robot learning to feel emotions",
+    "How do I improve my coding skills?",
+    "What are some strategies for effective time management?",
+    "Explain the concept of blockchain technology",
+    "Help me create a workout routine for beginners",
+    "What are the best practices for web accessibility?",
+    "How does machine learning work?",
+  ]);
 
   const promptSuggestions = {
     writing: [
@@ -479,17 +489,20 @@ export default function Home() {
 
   // Replace the old suggestion rendering with continuous scroll
   const renderSuggestions = () => (
-    <div className="relative h-24 overflow-hidden">
-      <div className="suggestion-carousel">
-        {/* Duplicate suggestions array for seamless loop */}
-        {[...Object.values(promptSuggestions).flat(), ...Object.values(promptSuggestions).flat()].map((suggestion, index) => (
-          <button
-            key={`${suggestion}-${index}`}
-            onClick={() => setPrompt(suggestion)}
-            className="suggestion-item px-4 py-2 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-md hover:shadow-lg border border-gray-200 dark:border-gray-700"
+    <div className="my-4 mx-auto max-w-3xl overflow-hidden suggestion-carousel-container">
+      <div className="suggestion-carousel whitespace-nowrap">
+        {predefinedSuggestions.concat(predefinedSuggestions).map((suggestion, i) => (
+          <span 
+            key={i} 
+            onClick={() => {
+              setPrompt(suggestion);
+              handleSubmit({ text: suggestion });
+            }}
+            className="suggestion-item inline-block px-3 py-1.5 mr-2 bg-gray-100/70 dark:bg-gray-800/70 text-gray-800 dark:text-gray-200 rounded-full text-sm cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-200"
+            style={{ backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
           >
-            "{suggestion}"
-          </button>
+            {suggestion}
+          </span>
         ))}
       </div>
     </div>
@@ -1250,7 +1263,7 @@ export default function Home() {
                   </svg>
                 </button>
               )}
-              <div className="flex-grow">
+              <div className="flex-grow prompt-input-container rounded-lg bg-opacity-70">
                 <PromptInput 
                   prompt={prompt} 
                   setPrompt={setPrompt} 
