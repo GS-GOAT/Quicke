@@ -1,9 +1,6 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "./auth/[...nextauth]";
 import prisma from '../../lib/prisma';
-import { extractTextFromPDF, summarizePDF } from '../../utils/pdfProcessor';
-import path from 'path';
-import fs from 'fs';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -29,42 +26,14 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: 'File not found' });
     }
 
-    // If content already exists, return it
+    // Return content from database - we don't need to check for files anymore
     if (fileInfo.content) {
       return res.status(200).json({
         text: fileInfo.content,
         info: { pages: 0 } // Default info if not available
       });
-    }
-
-    // Otherwise extract content
-    const fullPath = path.join(process.cwd(), fileInfo.filePath);
-    if (!fs.existsSync(fullPath)) {
-      return res.status(404).json({ error: 'Physical file not found' });
-    }
-
-    let result;
-    try {
-      if (summarize === 'true') {
-        result = await summarizePDF(fullPath);
-      } else {
-        result = await extractTextFromPDF(fullPath);
-      }
-
-      // Save the extracted content
-      await prisma.uploadedFile.update({
-        where: { id: fileId },
-        data: { 
-          content: result.text,
-          // Don't delete filePath until content is confirmed saved
-          // filePath: null  // Remove this line
-        }
-      });
-
-      res.status(200).json(result);
-    } catch (extractError) {
-      console.error('PDF extraction error:', extractError);
-      res.status(500).json({ error: 'Failed to extract PDF content' });
+    } else {
+      return res.status(404).json({ error: 'No content available for this file' });
     }
   } catch (error) {
     console.error('Error processing request:', error);

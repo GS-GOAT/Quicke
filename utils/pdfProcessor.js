@@ -1,19 +1,15 @@
 import pdf from 'pdf-parse';
 import fs from 'fs';
-import path from 'path';
 
 export async function extractTextFromPDF(filePath) {
   let dataBuffer = null;
   try {
-    const fullPath = filePath.startsWith('/') 
-      ? path.join(process.cwd(), filePath)
-      : filePath;
-
-    if (!fs.existsSync(fullPath)) {
+    // Read directly from the temporary file path provided by formidable
+    if (!fs.existsSync(filePath)) {
       throw new Error('PDF file not found');
     }
 
-    dataBuffer = await fs.promises.readFile(fullPath);
+    dataBuffer = await fs.promises.readFile(filePath);
     const data = await pdf(dataBuffer);
     
     return {
