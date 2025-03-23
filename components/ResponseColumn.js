@@ -673,7 +673,7 @@ export default function ResponseColumn({ model, response, streaming, className, 
                 margin: 0,
                 borderRadius: '0.5rem',
                 padding: '2.5rem 1rem 1rem 1rem',
-                backgroundColor: 'rgb(0, 0, 25)',
+                backgroundColor: 'rgb(0, 0, 20)',
                 fontSize: '0.875rem',
                 lineHeight: '1.5'
               }}
