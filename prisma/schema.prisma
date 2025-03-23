@@ -8,15 +8,16 @@ datasource db {
 }
 
 model User {
-  id            String       @id @default(cuid())
+  id            String         @id @default(cuid())
   name          String?
-  email         String       @unique
+  email         String         @unique
   password      String?
-  apiKeys       ApiKey[]     
+  apiKeys       ApiKey[]
   conversations Conversation[]
-  threads       Thread[]     
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  threads       Thread[]
+  uploadedFiles UploadedFile[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 }
 
 model ApiKey {
@@ -24,7 +25,7 @@ model ApiKey {
   provider     String
   encryptedKey String
   userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade) 
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt    DateTime @default(now())
 
   // Add unique constraint for userId + provider combination
@@ -32,18 +33,19 @@ model ApiKey {
 }
 
 model Conversation {
-  id          String        @id @default(cuid())
-  userId      String
-  threadId    String       
-  createdAt   DateTime      @default(now())
-  messages    Message[]
-  user        User          @relation(fields: [userId], references: [id])
-  thread      Thread        @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  id            String         @id @default(cuid())
+  userId        String
+  threadId      String
+  createdAt     DateTime       @default(now())
+  messages      Message[]
+  uploadedFiles UploadedFile[]
+  user          User           @relation(fields: [userId], references: [id])
+  thread        Thread         @relation(fields: [threadId], references: [id], onDelete: Cascade)
 }
 
 model Message {
   id             String       @id @default(cuid())
-  role           String       // 'user' or 'assistant'
+  role           String // 'user' or 'assistant'
   content        String
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -51,11 +53,30 @@ model Message {
 }
 
 model Thread {
-  id            String        @id @default(cuid())
+  id            String         @id @default(cuid())
   userId        String
   title         String
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
   conversations Conversation[]
-  user          User          @relation(fields: [userId], references: [id])
+  uploadedFiles UploadedFile[]
+  user          User           @relation(fields: [userId], references: [id])
+}
+
+model UploadedFile {
+  id             String   @id @default(cuid())
+  userId         String
+  fileName       String
+  fileType       String
+  fileSize       Int
+  filePath       String
+  content        String?
+  threadId       String?
+  conversationId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id])
+  thread       Thread?       @relation(fields: [threadId], references: [id], onDelete: SetNull)
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
 }

@@ -26,7 +26,7 @@ const createCompletionManager = (totalModels, sendEvent, res) => {
   const completedModels = new Set();
   let completedResponses = 0;
 
-  const markCompleted = (modelId) => {
+  const markCompleted = (modelId, finalResponse) => {
     if (completedModels.has(modelId)) return;
     
     completedModels.add(modelId);
@@ -110,6 +110,26 @@ const verifyModelApiKeys = (modelArray, providerMap, userApiKeys) => {
   });
 };
 
+// Update getPDFContext to work with database content
+async function getPDFContext(userId, fileId) {
+  if (!fileId) return null;
+  
+  try {
+    const file = await prisma.uploadedFile.findFirst({
+      where: {
+        id: fileId,
+        userId
+      }
+    });
+    
+    // Return the stored content
+    return file?.content ;
+  } catch (error) {
+    console.error('Error getting PDF context:', error);
+    return null;
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -126,8 +146,40 @@ export default async function handler(req, res) {
   const session = await getServerSession(req, res, authOptions);
   if (!session) return res.status(401).json({ error: "Unauthorized" });
 
-  const { prompt, models } = req.query;
+  const { prompt, models, fileId } = req.query;
   const modelArray = models ? models.split(',') : [];
+  
+  let enhancedPrompt = prompt;
+  let pdfContext='';
+  // Only get PDF context if fileId is provided and valid
+  if (fileId) {
+    try {
+      const extractedText=await getPDFContext(session.user.id, fileId);
+      if(extractedText) {
+        pdfContext=extractedText;
+      }
+      // const file = await prisma.uploadedFile.findFirst({
+      //   where: {
+      //     id: fileId,
+      //     userId: session.user.id
+      //   },
+      //   select: {
+      //     content: true,
+      //     fileType: true
+      //   }
+      // });
+      enhancedPrompt = pdfContext? `The following is content from a PDF document:\n\n${pdfContext}\n\n${prompt}`
+      : prompt;
+
+      // if (file && file.fileType === 'application/pdf' && file.content) {
+      //   enhancedPrompt = `Context from PDF:\n\n${file.content}\n\nUser Query: ${prompt}`;
+      //   console.log("PDF fetched and enhanced prompt created with: " ,file.fileName)
+      // }
+    } catch (error) {
+      console.error('Error getting PDF context:', error);
+      // Continue with original prompt if error occurs
+    }
+  }
   
   // Define providerMap at the top level to ensure it's in scope everywhere
   const providerMap = {
@@ -176,6 +228,12 @@ export default async function handler(req, res) {
   const claudeModels = {
     'claude-3-7': 'claude-3-7-sonnet-20250219',
     'claude-3-5': 'claude-3-5-sonnet-20241022'
+  };
+
+  const deepseekModels = {
+    'deepseek-chat': 'chat',
+    'deepseek-coder': 'coder',
+    'deepseek-reasoner': 'reasoner'
   };
 
   // Helper function to get provider name from model ID
@@ -417,18 +475,18 @@ export default async function handler(req, res) {
 
         // Process model-specific streams with individual error handling
         try {
-          if (modelId === 'gpt-4') {
-            await handleOpenAIStream(modelId, prompt, sendEvent, openai);
-          } else if (modelId === 'claude') {
-            await handleClaudeStream(prompt, sendEvent, anthropic);
+          if (openAIModels[modelId]) {
+            await handleOpenAIStream(modelId, enhancedPrompt, sendEvent, openai);
+          } else if (claudeModels[modelId]) {
+            await handleClaudeStream(modelId, enhancedPrompt, sendEvent, anthropic);
           } else if (geminiModels[modelId]) {
-            await handleGeminiStream(modelId, prompt, sendEvent, genAI, geminiModels);
-          } else if (modelId.startsWith('deepseek-') && !openRouterModels[modelId]) {
-            await handleDeepSeekStream(modelId, prompt, sendEvent, deepseek);
+            await handleGeminiStream(modelId, enhancedPrompt, sendEvent, genAI, geminiModels);
+          } else if (deepseekModels[modelId]) {
+            await handleDeepSeekStream(modelId, enhancedPrompt, sendEvent, deepseek);
           } else if (openRouterModels[modelId]) {
-            await handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, openRouterModels);
+            await handleOpenRouterStream(modelId, enhancedPrompt, sendEvent, openRouter, openRouterModels);
           } else if (modelId.startsWith('custom-')) {
-            await handleCustomModelStream(modelId, prompt, sendEvent, customModels);
+            await handleCustomModelStream(modelId, enhancedPrompt, sendEvent, customModels);
           }
         } catch (error) {
           // Handle errors for individual models without affecting others

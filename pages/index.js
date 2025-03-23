@@ -275,20 +275,21 @@ export default function Home() {
     }
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (contextData) => {
     // Add authentication check
     if (!session) {
       const encodedPrompt = encodeURIComponent(prompt);
       router.push(`/auth/signin?redirect=/?prompt=${encodedPrompt}`);
       return;
     }
-
-    if (!prompt.trim() || loading || isProcessing) return;
+    
+    const promptText = contextData?.prompt || prompt;
+    const fileId = contextData?.fileId || null;
+    if (!promptText.trim() || loading || isProcessing) return;
     
     setLoading(true);
     setIsProcessing(true);
-    
-    const currentPrompt = prompt;
+    const currentPrompt = promptText;
     const id = Date.now().toString();
     setCurrentPromptId(id);
     
@@ -320,15 +321,31 @@ export default function Home() {
     setResponses(initialResponses);
 
     // Get custom models configuration
-    const customModels = JSON.parse(localStorage.getItem('customLLMs') || '[]');
-    const customModelIds = customModels.map(m => m.id);
+    // const customModels = JSON.parse(localStorage.getItem('customLLMs') || '[]');
+    // const customModelIds = customModels.map(m => m.id);
     
-    // Check if any selected models are custom
-    const hasCustomModels = selectedModels.some(id => customModelIds.includes(id));
+    // // Check if any selected models are custom
+    // const hasCustomModels = selectedModels.some(id => customModelIds.includes(id));
 
+      // Construct query parameters
+      // const queryParams = new URLSearchParams({
+      //   prompt: currentPrompt,
+      //   models: selectedModels.join(','),
+      //   fileId: fileId
+      // });
+      
+      // // Create URL with query params
+      // const streamUrl = `/api/stream?${queryParams.toString()}`
+    
     const newEventSource = new EventSource(
-      `/api/stream?prompt=${encodeURIComponent(currentPrompt)}&models=${encodeURIComponent(selectedModels.join(','))}&customModels=${encodeURIComponent(JSON.stringify(customModels))}`
+      `/api/stream?prompt=${encodeURIComponent(currentPrompt)}&models=${encodeURIComponent(selectedModels.join(','))}&fileId=${encodeURIComponent(fileId)}`
     );
+      
+    // Create URL with query parameters
+    // const streamUrl = `/api/stream?${queryParams.toString()}`;
+    
+    // Set up event source
+    // const newEventSource = new EventSource(streamUrl);
     eventSourceRef.current = newEventSource;
 
     newEventSource.onmessage = async (event) => {

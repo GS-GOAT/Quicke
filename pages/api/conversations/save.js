@@ -11,7 +11,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { prompt, responses, threadId } = req.body;
+    const { prompt, responses, threadId, fileId } = req.body;
     
     // Only proceed if there are valid responses to save
     if (Object.keys(responses).length === 0) {
@@ -97,6 +97,13 @@ export default async function handler(req, res) {
         }
       },
     });
+
+    if (fileId) {
+      await prisma.uploadedFile.update({
+        where: { id: fileId },
+        data: { conversationId: conversation.id }
+      });
+    }
 
     res.status(201).json({ 
       conversation,
