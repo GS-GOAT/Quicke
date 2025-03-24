@@ -1,116 +1,177 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]";
 import prisma from '../../../lib/prisma';
-
+  
 export default async function handler(req, res) {
-  const session = await getServerSession(req, res, authOptions);
-  if (!session) return res.status(401).json({ error: "Unauthorized" });
-
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: "Method not allowed" });
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    const { prompt, responses, threadId, fileId } = req.body;
-    
-    // Only proceed if there are valid responses to save
-    if (Object.keys(responses).length === 0) {
-      return res.status(400).json({ error: 'No valid responses to save' });
+    const session = await getServerSession(req, res, authOptions);
+    if (!session) {
+      return res.status(401).json({ error: "Unauthorized" });
     }
 
-    // If no threadId is provided, create a new thread
-    let actualThreadId = threadId;
+    const { id, prompt, responses, threadId, fileId } = req.body;
+
+    if (!id) {
+      return res.status(400).json({ error: 'Conversation ID is required' });
+    }
+
+    if (!prompt) {
+      return res.status(400).json({ error: 'Prompt is required' });
+    }
+
+    console.log(`API: Saving conversation ${id} with ${Object.keys(responses || {}).length} responses`);
+    console.log(`Thread ID: ${threadId || 'none'}`);
     
-    if (!actualThreadId) {
-      // Create a title from the first line or first few words of the prompt
-      let title = prompt.split('\n')[0].trim();
-      if (title.length > 50) {
-        title = title.substring(0, 47) + "...";
-      }
-      
-      const thread = await prisma.thread.create({
+    // Check if a threadId was provided
+    let targetThreadId = threadId;
+    
+    // If no threadId was provided, create a new thread
+    if (!targetThreadId) {
+      console.log('No thread ID provided, creating a new thread');
+      const newThread = await prisma.thread.create({
         data: {
-          userId: session.user.id,
-          title,
-          createdAt: new Date(),
-          updatedAt: new Date()
+          title: prompt.substring(0, 100) || 'New Conversation',
+          userId: session.user.id
         }
       });
-      actualThreadId = thread.id;
-      
-      // Check thread count and remove oldest if > 5
-      const threadCount = await prisma.thread.count({
-        where: { userId: session.user.id }
-      });
-      
-      if (threadCount > 5) {
-        const oldestThread = await prisma.thread.findFirst({
-          where: { userId: session.user.id },
-          orderBy: { updatedAt: 'asc' }
-        });
-        
-        if (oldestThread) {
-          await prisma.thread.delete({
-            where: { id: oldestThread.id }
-          });
-        }
-      }
+      targetThreadId = newThread.id;
+      console.log(`Created new thread with ID ${targetThreadId}`);
     } else {
-      // Update thread's updatedAt time
-      await prisma.thread.update({
-        where: { id: actualThreadId },
-        data: { updatedAt: new Date() }
+      // Verify the thread exists and belongs to the user
+      const existingThread = await prisma.thread.findUnique({
+        where: {
+          id: targetThreadId,
+          userId: session.user.id
+        }
       });
+      
+      if (!existingThread) {
+        console.log(`Thread ${targetThreadId} not found or not owned by user ${session.user.id}, creating new thread`);
+        const newThread = await prisma.thread.create({
+          data: {
+            title: prompt.substring(0, 100) || 'New Conversation',
+            userId: session.user.id
+          }
+        });
+        targetThreadId = newThread.id;
+      }
     }
 
-    const conversation = await prisma.conversation.create({
-      data: {
-        userId: session.user.id,
-        threadId: actualThreadId,
-        createdAt: new Date(),
+    // Create or update the conversation
+    const conversation = await prisma.conversation.upsert({
+      where: { id },
+      update: {
+        threadId: targetThreadId,
         messages: {
-          create: [
-            {
-              role: 'user',
-              content: prompt,
-              createdAt: new Date()
+          upsert: {
+            where: { 
+              id: `${id}-user`
             },
-            ...Object.entries(responses)
-              .filter(([_, response]) => !response.error)
-              .map(([model, response]) => ({
-                role: 'assistant',
-                content: JSON.stringify({ 
-                  model, 
-                  ...response,
-                  timestamp: Date.now()
-                }),
-                createdAt: new Date()
-              })),
-          ],
-        },
-      },
-      include: { 
-        messages: {
-          orderBy: {
-            createdAt: 'asc'
+            update: {
+              content: prompt,
+              role: 'user'
+            },
+            create: {
+              id: `${id}-user`,
+              content: prompt,
+              role: 'user'
+            }
           }
         }
       },
+      create: {
+        id,
+        threadId: targetThreadId,
+        userId: session.user.id,
+        messages: {
+          create: {
+            id: `${id}-user`,
+            content: prompt,
+            role: 'user'
+          }
+        },
+        ...(fileId && { fileId })
+      }
     });
+    
+    console.log(`Conversation ${id} created/updated in thread ${targetThreadId}`);
+    
+    // Process and save each model response separately
+    if (responses) {
+      console.log(`Processing ${Object.keys(responses).length} model responses`);
+      
+      for (const [modelId, response] of Object.entries(responses)) {
+        if (!response || !response.text) {
+          console.log(`Skipping empty response for model ${modelId}`);
+          continue;
+        }
+        
+        // Create a message with model info embedded in content
+        const messageContent = JSON.stringify({
+          model: modelId,
+          text: response.text,
+          timestamp: Date.now()
+        });
+        
+        // For model responses, create a unique ID
+        const messageId = `${id}-${modelId}`;
+        
+        try {
+          // Save to database without modelId field
+          await prisma.message.upsert({
+            where: { 
+              id: messageId
+            },
+            update: {
+              content: messageContent
+            },
+            create: {
+              id: messageId,
+              conversationId: id,
+              role: 'assistant',
+              content: messageContent
+            }
+          });
+          
+          console.log(`Saved response for model ${modelId}`);
+        } catch (error) {
+          console.error(`Error saving message for model ${modelId}:`, error);
+          continue; // Continue with other messages even if one fails
+        }
+      }
+    }
 
-    if (fileId) {
-      await prisma.uploadedFile.update({
-        where: { id: fileId },
-        data: { conversationId: conversation.id }
+    // Update the thread title if this is a new thread
+    if (targetThreadId) {
+      await prisma.thread.update({
+        where: { id: targetThreadId },
+        data: { 
+          title: prompt.substring(0, 100),
+          updatedAt: new Date()
+        }
       });
     }
 
-    res.status(201).json({ 
-      conversation,
-      threadId: actualThreadId
+    console.log(`Successfully saved conversation ${id} to thread ${targetThreadId}`);
+
+    // Log response details:
+    for (const [modelId, response] of Object.entries(responses || {})) {
+      if (response && response.text) {
+        const preview = response.text.substring(0, 50) + (response.text.length > 50 ? '...' : '');
+        console.log(`Saved ${modelId} response: ${preview}`);
+      }
+    }
+
+    return res.status(201).json({
+      id: conversation.id,
+      threadId: targetThreadId
     });
   } catch (error) {
     console.error('Error saving conversation:', error);
-    res.status(500).json({ error: 'Failed to save conversation' });
+    return res.status(500).json({ error: 'Failed to save conversation', details: error.message });
   }
 }

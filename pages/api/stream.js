@@ -5,6 +5,8 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "./auth/[...nextauth]";
 import prisma from '../../lib/prisma';
 import errorService, { ERROR_TYPES as IMPORTED_ERROR_TYPES, TIMEOUT_SETTINGS } from '../../utils/errorService';
+import contextTracker from '../../utils/contextTracker';
+import { getConversationContext } from '../../utils/contextManager';
 
 // Fallback error types in case errorService isn't initialized
 const FALLBACK_ERROR_TYPES = {
@@ -19,14 +21,15 @@ const FALLBACK_ERROR_TYPES = {
 };
 
 // Use the imported values with a fallback if needed
-const ERROR_TYPES = errorService?.ERROR_TYPES || IMPORTED_ERROR_TYPES || FALLBACK_ERROR_TYPES;
+const ERROR_TYPES = errorService?.ERROR_TYPES || IMPORTED_ERROR_TYPES || FALLBACK_TYPES;
 
 // Create a completion manager first
 const createCompletionManager = (totalModels, sendEvent, res) => {
   const completedModels = new Set();
   let completedResponses = 0;
+  let responseEnded = false;
 
-  const markCompleted = (modelId, finalResponse) => {
+  const markCompleted = (modelId) => {
     if (completedModels.has(modelId)) return;
     
     completedModels.add(modelId);
@@ -43,18 +46,54 @@ const createCompletionManager = (totalModels, sendEvent, res) => {
       }
     }
     
-    if (completedResponses === totalModels) {
+    if (completedResponses === totalModels && !responseEnded) {
       console.log('All models completed, ending response');
-      sendEvent({ done: true, allComplete: true });
-      res.end();
+      responseEnded = true; // Prevent multiple end calls
+      
+      try {
+        sendEvent({ done: true, allComplete: true });
+        
+        // Only end the response if it hasn't been ended yet
+        if (!res.writableEnded) {
+          res.end();
+        }
+      } catch (error) {
+        console.error('Error ending response:', error);
+      }
     }
   };
 
+  // Add a safety timeout to ensure the response always ends
+  const safetyTimeout = setTimeout(() => {
+    if (!responseEnded) {
+      console.warn(`Safety timeout triggered after completing ${completedResponses}/${totalModels} models`);
+      responseEnded = true;
+      
+      try {
+        sendEvent({ 
+          done: true, 
+          allComplete: true,
+          warning: `Only ${completedResponses} of ${totalModels} models completed properly` 
+        });
+        
+        if (!res.writableEnded) {
+          res.end();
+        }
+      } catch (error) {
+        console.error('Error ending response in safety timeout:', error);
+      }
+    }
+  }, 60000); // 60 second safety timeout
+  
+  // Return methods and cleanup function
   return {
     markCompleted,
     isCompleted: (modelId) => completedModels.has(modelId),
     getCompletedCount: () => completedResponses,
-    completedModels // Expose Set for checking completion status
+    completedModels, // Expose Set for checking completion status
+    cleanup: () => {
+      clearTimeout(safetyTimeout);
+    }
   };
 };
 
@@ -147,10 +186,14 @@ export default async function handler(req, res) {
   if (!session) return res.status(401).json({ error: "Unauthorized" });
 
   const { prompt, models, fileId } = req.query;
+  const threadId = req.query.threadId;
+  const conversationId = req.query.conversationId;
+  const useContext = req.query.useContext === 'true';
   const modelArray = models ? models.split(',') : [];
   
   let enhancedPrompt = prompt;
-  let pdfContext='';
+  let pdfContext = '';
+
   // Only get PDF context if fileId is provided and valid
   if (fileId) {
     try {
@@ -181,6 +224,87 @@ export default async function handler(req, res) {
     }
   }
   
+  // Get context for this request if useContext flag is set
+  let context = [];
+  
+  if (useContext) {
+    console.log(`Context request: threadId=${threadId}, conversationId=${conversationId}`);
+    
+    if (threadId || conversationId) {
+      // Try to use our in-memory context tracker first (fastest)
+      context = contextTracker.getContext(threadId, conversationId);
+      console.log(`Retrieved ${context.length} messages from in-memory context tracker`);
+      
+      // If no context in memory, try to load from database
+      if (context.length === 0 && session?.user?.id) {
+        try {
+          // Only do this if we have a threadId
+          if (threadId) {
+            console.log(`Attempting to load context from database for thread ${threadId}`);
+            const thread = await prisma.thread.findUnique({
+              where: {
+                id: threadId,
+                userId: session.user.id
+              },
+              include: {
+                conversations: {
+                  orderBy: {
+                    createdAt: 'desc'
+                  },
+                  take: 3,
+                  include: {
+                    messages: {
+                      orderBy: {
+                        createdAt: 'asc'
+                      }
+                    }
+                  }
+                }
+              }
+            });
+            
+            if (thread) {
+              // Extract messages from the most recent conversations
+              const messages = [];
+              thread.conversations.forEach(conv => {
+                console.log(`Processing conversation ${conv.id} with ${conv.messages.length} messages`);
+                conv.messages.forEach(msg => {
+                  messages.push(msg);
+                });
+              });
+              
+              // Sort by creation time
+              messages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+              
+              console.log(`Found ${messages.length} messages to import for thread ${threadId}`);
+              
+              // Import these messages into our context tracker
+              contextTracker.importMessages(threadId, messages);
+              
+              // Get the updated context
+              context = contextTracker.getContext(threadId, conversationId);
+              
+              console.log(`Loaded ${context.length} messages from database for thread ${threadId}`);
+            } else {
+              console.log(`No thread found with ID ${threadId} for user ${session.user.id}`);
+            }
+          }
+        } catch (error) {
+          console.error('Error loading context from database:', error);
+        }
+      }
+    } else {
+      console.log('No threadId or conversationId provided for context tracking');
+    }
+  }
+  
+  console.log(`Using ${context.length} context messages for this request`);
+
+  // If we have no context but we should have context, log a warning
+  if (context.length === 0 && useContext) {
+    console.warn('Context tracking enabled but no context messages found!');
+  }
+
   // Define providerMap at the top level to ensure it's in scope everywhere
   const providerMap = {
     'gpt-4.5-preview': 'openai',
@@ -393,6 +517,8 @@ export default async function handler(req, res) {
     }
   };
 
+  const startTime = Date.now();
+
   try {
     // Get custom models from localStorage (passed in request)
     const customModels = JSON.parse(req.query.customModels || '[]');
@@ -458,6 +584,11 @@ export default async function handler(req, res) {
     // Process each model stream independently
     const modelPromises = modelArray.map(async (modelId) => {
       try {
+        // Skip if this model was already marked as unavailable
+        if (completionManager.isCompleted(modelId)) {
+          return;
+        }
+        
         // First verify if user has the required API key
         if (!verifyApiKey(modelId, providerMap, userApiKeys)) {
           errorHandler.sendErrorEvent(modelId, ERROR_TYPES.API_KEY_MISSING);
@@ -473,20 +604,42 @@ export default async function handler(req, res) {
           streaming: false
         });
 
+        // Determine the model provider
+        let modelProvider = 'openai'; // default
+        if (modelId.includes('gpt')) modelProvider = 'openai';
+        if (modelId.includes('claude')) modelProvider = 'anthropic';
+        if (modelId.includes('gemini')) modelProvider = 'gemini';
+        if (modelId.includes('deepseek') || modelId.includes('mistral') || 
+            modelId.includes('llama') || modelId.includes('phi') || modelId.includes('qwen') || 
+            modelId.includes('openrouter') || modelId.includes('custom-')) {
+          modelProvider = 'openrouter';
+        }
+        
+        console.log(`Using ${modelProvider} format for ${modelId}`);
+        
+        // Get formatted context for this model type
+        const formattedContext = useContext 
+          ? contextTracker.formatContextForModel(threadId, conversationId, enhancedPrompt, modelProvider)
+          : modelProvider === 'gemini' 
+            ? [{ role: 'user', parts: [{ text: enhancedPrompt }] }]
+            : [{ role: 'user', content: enhancedPrompt }];
+        
+        console.log(`Formatted context for ${modelId}: ${formattedContext.length} messages`);
+        
         // Process model-specific streams with individual error handling
         try {
           if (openAIModels[modelId]) {
-            await handleOpenAIStream(modelId, enhancedPrompt, sendEvent, openai);
+            await handleOpenAIStream(modelId, formattedContext, sendEvent, openai);
           } else if (claudeModels[modelId]) {
-            await handleClaudeStream(modelId, enhancedPrompt, sendEvent, anthropic);
+            await handleClaudeStream(modelId, formattedContext, sendEvent, anthropic);
           } else if (geminiModels[modelId]) {
-            await handleGeminiStream(modelId, enhancedPrompt, sendEvent, genAI, geminiModels);
+            await handleGeminiStream(modelId, formattedContext, sendEvent, genAI, geminiModels);
           } else if (deepseekModels[modelId]) {
-            await handleDeepSeekStream(modelId, enhancedPrompt, sendEvent, deepseek);
+            await handleDeepSeekStream(modelId, formattedContext, sendEvent, deepseek);
           } else if (openRouterModels[modelId]) {
-            await handleOpenRouterStream(modelId, enhancedPrompt, sendEvent, openRouter, openRouterModels);
+            await handleOpenRouterStream(modelId, formattedContext, sendEvent, openRouter, openRouterModels);
           } else if (modelId.startsWith('custom-')) {
-            await handleCustomModelStream(modelId, enhancedPrompt, sendEvent, customModels);
+            await handleCustomModelStream(modelId, formattedContext, sendEvent, customModels);
           }
         } catch (error) {
           // Handle errors for individual models without affecting others
@@ -514,7 +667,7 @@ export default async function handler(req, res) {
         completionManager.markCompleted(modelId);
       }
     });
-
+    
     // Make sure to clear timeouts at the end of processing
     try {
       modelArray.forEach(modelId => {
@@ -530,6 +683,11 @@ export default async function handler(req, res) {
       console.error('Error during timeout cleanup:', cleanupError);
     }
     
+    // Clean up the completion manager
+    if (completionManager.cleanup) {
+      completionManager.cleanup();
+    }
+    
     // If we get here and still haven't ended the response, do it now
     if (!res.writableEnded) {
       console.log('Forcing response completion');
@@ -539,9 +697,38 @@ export default async function handler(req, res) {
       });
       res.end();
     }
+
+    // Ensure the allComplete event is always sent
+    // After await Promise.all(modelPromises);
+
+    // Make sure we send a final allComplete event
+    try {
+      console.log('All model streams processed, sending allComplete event');
+      
+      // Send the final all-complete event
+      sendEvent({
+        allComplete: true,
+        done: true,
+        processingTime: Date.now() - startTime
+      });
+      
+      // Close the response if it hasn't been closed yet
+      if (!res.writableEnded) {
+        console.log('Ending response stream');
+        res.end();
+      }
+    } catch (error) {
+      console.error('Error sending final event:', error);
+    }
   } catch (error) {
     console.error('Streaming error:', error);
-    sendEvent({ error: 'Failed to process streaming requests' });
+    
+    // Force sending an error event
+    try {
+      sendEvent({ error: 'Failed to process streaming requests', done: true });
+    } catch (sendError) {
+      console.error('Error sending error event:', sendError);
+    }
     
     // Force ending the response in case of overall error
     if (!res.writableEnded) {
@@ -604,16 +791,21 @@ const sendStreamEvent = async ({
   retryCount,
   maxRetries
 }) => {
-  sendEvent({
-    model: modelId,
-    text,
-    error,
-    loading,
-    streaming,
-    done,
-    ...(retryCount !== undefined && { retryCount }),
-    ...(maxRetries !== undefined && { maxRetries })
-  });
+  try {
+    const eventData = {
+      model: modelId,
+      ...(text !== undefined && { text }),
+      ...(error && { error }),
+      loading,
+      streaming,
+      done,
+      ...(retryCount !== undefined && { retryCount, maxRetries })
+    };
+    
+    await sendEvent(eventData);
+  } catch (e) {
+    console.error(`Error sending stream event for ${modelId}:`, e);
+  }
 };
 
 // Replace individual handlers with unified handler
@@ -624,8 +816,7 @@ async function handleModelStream(options) {
     sendEvent,
     client,
     generateStream,
-    processChunk,
-    processGeminiStream
+    processChunk
   } = options;
 
   const streamHandler = createStreamHandler({
@@ -646,24 +837,14 @@ async function handleModelStream(options) {
 
     const stream = await streamHandler.init(generateStream());
     let text = '';
+    let isStreamDone = false;
 
-    if (processGeminiStream) {
-      // Handle Gemini's unique stream format
-      for await (const chunk of stream.stream) {
-        const content = processChunk(chunk);
-        if (content) {
-          text += content;
-          streamHandler.markStarted();
-          await sendStreamEvent({
-            modelId,
-            text,
-            streaming: true,
-            sendEvent
-          });
-        }
-      }
-    } else {
-      // Handle standard streams
+    // Add a safety counter to prevent infinite loops
+    let chunkCounter = 0;
+    const MAX_CHUNKS = 1000; // Reasonable maximum for most responses
+
+    // Process the stream
+    try {
       for await (const chunk of stream) {
         const content = processChunk(chunk);
         if (content) {
@@ -676,123 +857,270 @@ async function handleModelStream(options) {
             sendEvent
           });
         }
+        
+        // Safety counter to prevent infinite loops
+        chunkCounter++;
+        if (chunkCounter > MAX_CHUNKS) {
+          console.warn(`[${modelId}] Safety limit of ${MAX_CHUNKS} chunks reached, forcing completion`);
+          break;
+        }
       }
+      
+      isStreamDone = true;
+    } catch (streamError) {
+      // If we get an error during streaming, log it but still try to send the text we received
+      console.error(`Stream processing error (${modelId}):`, streamError);
+      isStreamDone = true;
     }
 
+    // Always send a completion event when the stream finishes
     await sendStreamEvent({
       modelId,
-      text,
+      text: text,
+      loading: false,
+      streaming: false,
       done: true,
       sendEvent
     });
 
+    return text;
   } catch (error) {
     console.error(`Stream error (${modelId}):`, error);
     const errorType = error.message === 'TIMEOUT' ? ERROR_TYPES.TIMEOUT :
                      error.message.includes('API key') ? ERROR_TYPES.API_KEY_MISSING :
+                     error.message === 'Empty response received' ? ERROR_TYPES.EMPTY_RESPONSE :
                      ERROR_TYPES.UNKNOWN_ERROR;
     
     await sendStreamEvent({
       modelId,
-      error: `Model error: ${error.message}`,
+      error: error.message || 'Unknown error',
       errorType,
+      loading: false,
+      streaming: false,
       done: true,
       sendEvent
     });
+    
+    throw error;
   } finally {
     streamHandler.cleanup();
   }
 }
 
 // Replace individual model handlers with unified handler calls
-async function handleOpenAIStream(modelId, prompt, sendEvent, openai) {
+async function handleOpenAIStream(modelId, messages, sendEvent, openai) {
+  // Check if messages is an array or a string
+  const formattedMessages = Array.isArray(messages) 
+    ? messages 
+    : [{ role: 'user', content: messages }];
+  
+  console.log(`OpenAI: Using model ${modelId} with ${formattedMessages.length} messages`);
+  
   return handleModelStream({
     modelId,
-    prompt,
+    prompt: formattedMessages,
     sendEvent,
     client: openai,
     generateStream: () => openai.chat.completions.create({
       model: openAIModels[modelId] || modelId,
-      messages: [{ role: 'user', content: prompt }],
+      messages: formattedMessages,
       stream: true,
     }),
     processChunk: chunk => chunk.choices[0]?.delta?.content
   });
 }
 
-async function handleClaudeStream(modelId, prompt, sendEvent, anthropic) {
+async function handleClaudeStream(modelId, messages, sendEvent, anthropic) {
+  // Check if messages is an array or a string
+  const formattedMessages = Array.isArray(messages) 
+    ? messages 
+    : [{ role: 'user', content: messages }];
+  
+  console.log(`Claude: Using model ${modelId} with ${formattedMessages.length} messages`);
+  
   return handleModelStream({
     modelId,
-    prompt,
+    prompt: formattedMessages,
     sendEvent,
     client: anthropic,
     generateStream: () => anthropic.messages.create({
       model: claudeModels[modelId] || 'claude-3-7-sonnet-20250219',
       max_tokens: 1000,
-      messages: [{ role: 'user', content: prompt }],
+      messages: formattedMessages,
       stream: true,
     }),
     processChunk: chunk => chunk.type === 'content_block_delta' && chunk.delta.text ? chunk.delta.text : ''
   });
 }
 
-// Update Gemini stream handler to properly handle the stream format
-async function handleGeminiStream(modelId, prompt, sendEvent, genAI, geminiModels) {
-  return handleModelStream({
-    modelId,
-    prompt,
-    sendEvent,
-    client: genAI,
-    generateStream: async () => {
-      const model = geminiModels[modelId];
-      if (!model) {
-        throw new Error(`Invalid Gemini model: ${modelId}`);
-      }
-      const geminiModel = genAI.getGenerativeModel({ model: model.id });
-      return await geminiModel.generateContentStream([{ text: prompt }]);
-    },
-    processGeminiStream: true, // Add flag to identify Gemini streams
-    processChunk: chunk => {
-      try {
-        return chunk.text?.() || '';
-      } catch (error) {
-        console.error('Error processing Gemini chunk:', error);
-        return '';
+// Replace the handleGeminiStream function entirely
+
+async function handleGeminiStream(modelId, messages, sendEvent, genAI, geminiModels) {
+  const modelInfo = geminiModels[modelId];
+  if (!modelInfo) {
+    throw new Error(`Invalid Gemini model: ${modelId}`);
+  }
+  
+  let text = '';
+  const startTime = Date.now();
+  
+  try {
+    // Initial state for model
+    await sendEvent({
+      model: modelId,
+      text: '',
+      loading: true,
+      streaming: true
+    });
+    
+    console.log(`Gemini: Using model ${modelInfo.id} with ${Array.isArray(messages) ? messages.length : 'single'} messages`);
+    
+    // Initialize the model
+    const geminiModel = genAI.getGenerativeModel({ model: modelInfo.id });
+    
+    // Start streaming with context
+    const generationConfig = {
+      temperature: 0.7,
+      topP: 0.8,
+      topK: 40,
+      maxOutputTokens: 8192,
+    };
+    
+    // Ensure messages are in the correct format for Gemini
+    const geminiMessages = Array.isArray(messages) 
+      ? messages 
+      : [{ role: 'user', parts: [{ text: messages }] }];
+    
+    // Log a preview of the messages
+    if (geminiMessages.length > 0) {
+      console.log('Gemini context preview:');
+      geminiMessages.forEach((msg, i) => {
+        if (i < 3) { // Limit to first 3 for brevity
+          const role = msg.role;
+          const content = msg.parts && msg.parts[0] && msg.parts[0].text 
+            ? msg.parts[0].text.substring(0, 50) + '...'
+            : 'No content';
+          console.log(`[${i+1}] ${role}: ${content}`);
+        }
+      });
+      if (geminiMessages.length > 3) {
+        console.log(`...and ${geminiMessages.length - 3} more messages`);
       }
     }
-  });
+    
+    // Add safety mechanisms for stream processing
+    let streamComplete = false;
+    let chunkCounter = 0;
+    const MAX_CHUNKS = 500;
+    
+    try {
+      const result = await geminiModel.generateContentStream({
+        contents: geminiMessages,
+        generationConfig
+      });
+      
+      // Process the stream with a safety counter
+      for await (const chunk of result.stream) {
+        const content = chunk.text();
+        if (content) {
+          text += content;
+          await sendEvent({
+            model: modelId,
+            text,
+            streaming: true,
+            loading: true
+          });
+        }
+        
+        // Safety counter
+        chunkCounter++;
+        if (chunkCounter > MAX_CHUNKS) {
+          console.warn(`[${modelId}] Safety limit of ${MAX_CHUNKS} chunks reached, forcing completion`);
+          break;
+        }
+      }
+      
+      streamComplete = true;
+    } catch (streamError) {
+      console.error(`Gemini stream processing error (${modelId}):`, streamError);
+      streamComplete = true; // Mark as complete even on error
+    }
+    
+    // Stream completed successfully
+    const endTime = Date.now();
+    const elapsed = endTime - startTime;
+    
+    // Always send a final completion event
+    await sendEvent({
+      model: modelId,
+      text,
+      streaming: false,
+      loading: false,
+      processingTime: elapsed,
+      done: true // Add explicit done flag
+    });
+    
+    return text;
+  } catch (error) {
+    // Handle errors
+    console.error(`Stream error (${modelId}):`, error);
+    
+    // Make sure to send a final error event
+    await sendEvent({
+      model: modelId,
+      error: `Model error: ${error.message}`,
+      streaming: false,
+      loading: false,
+      done: true // Add explicit done flag
+    });
+    
+    throw error;
+  }
 }
 
-async function handleDeepSeekStream(modelId, prompt, sendEvent, deepseek) {
+// Update OpenRouter handler to support context
+async function handleOpenRouterStream(modelId, messages, sendEvent, openRouter, openRouterModels) {
+  // Check if messages is an array or a string
+  const formattedMessages = Array.isArray(messages) 
+    ? messages 
+    : [{ role: 'user', content: messages }];
+  
+  console.log(`OpenRouter: Using model ${openRouterModels[modelId]?.id || modelId} with ${formattedMessages.length} messages`);
+  
   return handleModelStream({
     modelId,
-    prompt,
+    prompt: formattedMessages,
     sendEvent,
-    client: deepseek,
-    generateStream: () => deepseek.chat.completions.create({
-      model: modelId,
-      messages: [{ role: 'user', content: prompt }],
+    client: openRouter,
+    generateStream: () => openRouter.chat.completions.create({
+      model: openRouterModels[modelId]?.id || modelId,
+      messages: formattedMessages,
       stream: true,
+      temperature: 0.7,
+      max_tokens: 4000
     }),
     processChunk: chunk => chunk.choices[0]?.delta?.content
   });
 }
 
-async function handleOpenRouterStream(modelId, prompt, sendEvent, openRouter, openRouterModels) {
+// Update DeepSeek handler to support context
+async function handleDeepSeekStream(modelId, messages, sendEvent, deepseek) {
+  // Check if messages is an array or a string
+  const formattedMessages = Array.isArray(messages) 
+    ? messages 
+    : [{ role: 'user', content: messages }];
+  
+  console.log(`DeepSeek: Using model ${modelId} with ${formattedMessages.length} messages`);
+  
   return handleModelStream({
     modelId,
-    prompt,
+    prompt: formattedMessages,
     sendEvent,
-    client: openRouter,
-    generateStream: () => openRouter.chat.completions.create({
-      model: openRouterModels[modelId].id,
-      messages: [{ role: 'user', content: prompt }],
+    client: deepseek,
+    generateStream: () => deepseek.chat.completions.create({
+      model: modelId,
+      messages: formattedMessages,
       stream: true,
-      temperature: 0.7,
-      max_tokens: 4000,
-      presence_penalty: 0,
-      frequency_penalty: 0,
-      stop: null
     }),
     processChunk: chunk => chunk.choices[0]?.delta?.content
   });
@@ -978,3 +1306,16 @@ const verifyApiKey = (modelId, providerMap, userApiKeys) => {
   const provider = providerMap[modelId];
   return provider && userApiKeys[provider] ? true : false;
 };
+
+function formatPromptWithContext(prompt, context) {
+  if (!context || context.length === 0) {
+    return prompt;
+  }
+
+  // Format context messages into a conversation string
+  const contextString = context
+    .map(msg => `${msg.role}: ${msg.content}`)
+    .join('\n');
+
+  return `Previous conversation:\n${contextString}\n\nCurrent message:\n${prompt}`;
+}

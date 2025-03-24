@@ -40,6 +40,8 @@ export default function Home() {
   const [hasInteracted, setHasInteracted] = useState(false);
   const universeRef = useRef(null);
   const starfieldRef = useRef(null);
+  const [contextEnabled, setContextEnabled] = useState(true);
+
   const [predefinedSuggestions] = useState([
     "Explain quantum computing in simple terms",
     "Write a short story about a robot learning to feel emotions",
@@ -50,7 +52,6 @@ export default function Home() {
     "What are the best practices for web accessibility?",
     "How does machine learning work?",
   ]);
-
   const promptSuggestions = {
     writing: [
       "Write a short story about time travel",
@@ -124,12 +125,8 @@ export default function Home() {
     };
   }, [showModelSelector]);
 
-  const handleModelButtonMouseEnter = () => {
-    setShowModelSelector(true);
-  };
-
-  const handleModelSelectorMouseLeave = () => {
-    setShowModelSelector(false);
+  const handleModelButtonClick = () => {
+    setShowModelSelector(!showModelSelector);
   };
 
   // Load API keys from localStorage on component mount
@@ -303,9 +300,10 @@ export default function Home() {
     
     setLoading(true);
     setIsProcessing(true);
-    const currentPrompt = promptText;
-    const id = Date.now().toString();
-    setCurrentPromptId(id);
+
+    // Generate a unique conversation ID
+    const conversationId = `conv-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    setCurrentPromptId(conversationId);
     
     // Clear previous responses before starting new request
     setResponses({});
@@ -324,42 +322,28 @@ export default function Home() {
     });
     
     setHistory(prev => [...prev, { 
-      id,
-      prompt: currentPrompt,
+      id: conversationId,
+      prompt: promptText,
       responses: initialResponses,
       activeModels: [...selectedModels],
+      timestamp: new Date(),
       isHistorical: false
     }]);
     
     setPrompt('');
     setResponses(initialResponses);
 
-    // Get custom models configuration
-    // const customModels = JSON.parse(localStorage.getItem('customLLMs') || '[]');
-    // const customModelIds = customModels.map(m => m.id);
-    
-    // // Check if any selected models are custom
-    // const hasCustomModels = selectedModels.some(id => customModelIds.includes(id));
+    // Construct query parameters with conversation ID
+    const queryParams = new URLSearchParams({
+      prompt: promptText,
+      models: selectedModels.join(','),
+      fileId: fileId || '',
+      conversationId,
+      threadId: activeThreadId || '',
+      useContext: contextEnabled.toString()
+    });
 
-      // Construct query parameters
-      // const queryParams = new URLSearchParams({
-      //   prompt: currentPrompt,
-      //   models: selectedModels.join(','),
-      //   fileId: fileId
-      // });
-      
-      // // Create URL with query params
-      // const streamUrl = `/api/stream?${queryParams.toString()}`
-    
-    const newEventSource = new EventSource(
-      `/api/stream?prompt=${encodeURIComponent(currentPrompt)}&models=${encodeURIComponent(selectedModels.join(','))}&fileId=${encodeURIComponent(fileId)}`
-    );
-      
-    // Create URL with query parameters
-    // const streamUrl = `/api/stream?${queryParams.toString()}`;
-    
-    // Set up event source
-    // const newEventSource = new EventSource(streamUrl);
+    const newEventSource = new EventSource(`/api/stream?${queryParams.toString()}`);
     eventSourceRef.current = newEventSource;
 
     newEventSource.onmessage = async (event) => {
@@ -383,7 +367,7 @@ export default function Home() {
         // Only update the current conversation's responses
         setHistory(prev => {
           const updated = [...prev];
-          const currentEntry = updated.find(entry => entry.id === id);
+          const currentEntry = updated.find(entry => entry.id === conversationId);
           if (currentEntry) {
             currentEntry.responses[data.model] = update;
           }
@@ -394,32 +378,37 @@ export default function Home() {
       // Handle final completion after all models are done
       if (data.allComplete) {
         try {
-          // Filter out responses with errors
-          const validResponses = Object.entries(completedResponses).reduce((acc, [model, response]) => {
-            if (!response.error) {
-              acc[model] = response;
-            }
-            return acc;
-          }, {});
+          const validResponses = Object.entries(completedResponses)
+            .filter(([_, response]) => !response.error)
+            .reduce((acc, [model, response]) => {
+              acc[model] = { 
+                text: response.text,
+                timestamp: Date.now()
+              };
+              return acc;
+            }, {});
 
-          // Only save if there are valid responses
           if (Object.keys(validResponses).length > 0) {
             const saveResponse = await fetch('/api/conversations/save', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                prompt: currentPrompt,
+                id: conversationId,
+                prompt: promptText,
                 responses: validResponses,
-                threadId: activeThreadId, // Use active thread if present
+                threadId: activeThreadId,
+                fileId: fileId
               }),
             });
+
+            if (!saveResponse.ok) {
+              throw new Error(`Failed to save conversation: ${saveResponse.statusText}`);
+            }
             
             const saveData = await saveResponse.json();
             
-            // If no active thread, we created a new one
             if (!activeThreadId && saveData.threadId) {
               setActiveThreadId(saveData.threadId);
-              // Refresh thread list
               fetchThreads();
             }
           }
@@ -910,6 +899,22 @@ export default function Home() {
     }
   }, [history.length, hasInteracted]);
 
+  const renderContextToggle = () => (
+    <div className="flex items-center space-x-2">
+      <switch
+        checked={contextEnabled}
+        onChange={setContextEnabled}
+        className="relative inline-flex h-6 w-11 items-center rounded-full"
+      >
+        <span className="sr-only">Enable conversation context</span>
+        {/* Switch UI */}
+      </switch>
+      <span className="text-sm text-gray-600 dark:text-gray-300">
+        Conversation Memory
+      </span>
+    </div>
+  );
+
   return (
     <div className="flex flex-col h-screen relative">
       <StarfieldBackground ref={starfieldRef} />
@@ -1015,7 +1020,7 @@ export default function Home() {
               <div className="flex-1 flex justify-center">
                 <button 
                   ref={modelButtonRef}
-                  onMouseEnter={handleModelButtonMouseEnter}
+                  onClick={handleModelButtonClick} // Replace onMouseEnter
                   className="group px-4 py-2 rounded-lg bg-white hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 text-sm font-medium transition-all duration-200 border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md"
                 >
                   <div className="flex items-center space-x-2">
@@ -1173,24 +1178,19 @@ export default function Home() {
         {/* Model Selector Dropdown */}
         {showModelSelector && (
           <>
-            {/* Backdrop */}
+            {/* Add backdrop div */}
             <div 
-              className="fixed inset-0 backdrop-blur-sm bg-black/10 z-40 model-selector-backdrop"
+              className="fixed inset-0 bg-black/30 z-40"
               onClick={() => setShowModelSelector(false)}
-              style={{
-                backdropFilter: 'blur(4px)',
-                WebkitBackdropFilter: 'blur(4px)'
-              }}
             />
-            {/* Model Selector Menu */}
+            
+            {/* Update model selector container */}
             <div
               ref={modelSelectorRef}
-              onMouseLeave={handleModelSelectorMouseLeave}
-              className="model-selector-menu fixed top-16 left-1/2 -translate-x-1/2 w-[calc(100vw-2rem)] max-w-3xl rounded-xl shadow-2xl ring-1 ring-black/5 dark:ring-white/5 z-50"
+              className="fixed top-16 left-1/2 -translate-x-1/2 w-[calc(100vw-2rem)] max-w-3xl rounded-xl bg-white/95 dark:bg-gray-900/95 shadow-2xl ring-1 ring-black/5 dark:ring-white/5 z-50 transition-all duration-200 ease-out transform"
               style={{
                 maxHeight: 'calc(100vh - 200px)',
-                overflowY: 'auto',
-                pointerEvents: 'auto'  // Ensure clicks work
+                overflowY: 'auto'
               }}
             >
               <ModelSelector 
@@ -1224,7 +1224,7 @@ export default function Home() {
                 <div className="max-w-3xl w-full space-y-8">
                   <div className="space-y-4">
                     <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 dark:text-white">
-                      Welcome to your AI ChatHub
+                      Prompt AI Models At Once
                     </h1>
                     <p className="text-xl text-gray-600 dark:text-gray-400">
                       Get instant responses from multiple AI models side by side
@@ -1247,36 +1247,39 @@ export default function Home() {
           </div>
         </main>
         
-        <footer className="px-4 py-4 sm:px-6 lg:px-8 bg-transparent">
-          <div className="max-w-4xl mx-auto">
-            <div className="flex items-center gap-3">
-              {/* Add dustbin button */}
-              {history.length > 0 && (
-                <button
-                  onClick={handleClear}
-                  className="p-2.5 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all duration-200 group"
-                  title="Clear screen"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" 
-                    className="w-5 h-5 transform group-hover:scale-110 transition-transform duration-200">
-                    <path fillRule="evenodd" d="M16.5 4.478v.227a48.816 48.816 0 013.878.512.75.75 0 11-.256 1.478l-.209-.035-1.005 13.07a3 3 0 01-2.991 2.77H8.084a3 3 0 01-2.991-2.77L4.087 6.66l-.209.035a.75.75 0 01-.256-1.478A48.567 48.567 0 017.5 4.705v-.227c0-1.564 1.213-2.9 2.816-2.951a52.662 52.662 0 013.369 0c1.603.051 2.815 1.387 2.815 2.951zm-6.136-1.452a51.196 51.196 0 013.273 0C14.39 3.05 15 3.684 15 4.478v.113a49.488 49.488 0 00-6 0v-.113c0-.794.609-1.428 1.364-1.452zm-.355 5.945a.75.75 0 10-1.5.058l.347 9a.75.75 0 101.499-.058l-.346-9zm5.48.058a.75.75 0 10-1.498-.058l-.347 9a.75.75 0 001.5.058l.345-9z" clipRule="evenodd" />
-                  </svg>
-                </button>
-              )}
-              <div className="flex-grow prompt-input-container rounded-lg bg-opacity-70">
-                <PromptInput 
-                  prompt={prompt} 
-                  setPrompt={setPrompt} 
-                  onSubmit={(e) => {
-                    if (!hasInteracted) {
-                      handleFirstPrompt();
-                    }
-                    handleSubmit(e);
-                  }}
-                  onClear={handleClear}
-                  disabled={loading || selectedModels.length === 0}  
-                  isProcessing={isProcessing}  
-                />
+        <footer className="px-4 py-4 sm:px-6 lg:px-8 bg-transparent relative z-[2]">
+          <div className="relative max-w-4xl mx-auto">
+            {/* Add glass effect container for prompt */}
+            <div className="relative rounded-2xl backdrop-blur-md bg-white/10 dark:bg-gray-900/20 border border-gray-200/20 dark:border-gray-700/20 shadow-lg overflow-hidden">
+              <div className="flex items-center gap-3 p-2">
+                {history.length > 0 && (
+                  <button
+                    onClick={handleClear}
+                    className="p-2.5 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 hover:bg-red-50/20 dark:hover:bg-red-900/20 rounded-lg transition-all duration-200 group"
+                    title="Clear screen"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" 
+                      className="w-5 h-5 transform group-hover:scale-110 transition-transform duration-200">
+                      <path fillRule="evenodd" d="M16.5 4.478v.227a48.816 48.816 0 013.878.512.75.75 0 11-.256 1.478l-.209-.035-1.005 13.07a3 3 0 01-2.991 2.77H8.084a3 3 0 01-2.991-2.77L4.087 6.66l-.209.035a.75.75 0 01-.256-1.478A48.567 48.567 0 017.5 4.705v-.227c0-1.564 1.213-2.9 2.816-2.951a52.662 52.662 0 013.369 0c1.603.051 2.815 1.387 2.815 2.951zm-6.136-1.452a51.196 51.196 0 013.273 0C14.39 3.05 15 3.684 15 4.478v.113a49.488 49.488 0 00-6 0v-.113c0-.794.609-1.428 1.364-1.452zm-.355 5.945a.75.75 0 10-1.5.058l.347 9a.75.75 0 101.499-.058l-.346-9zm5.48.058a.75.75 0 10-1.498-.058l-.347 9a.75.75 0 001.5.058l.345-9z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                )}
+                <div className="flex-grow">
+                  <PromptInput 
+                    prompt={prompt} 
+                    setPrompt={setPrompt} 
+                    onSubmit={(e) => {
+                      if (!hasInteracted) {
+                        handleFirstPrompt();
+                      }
+                      handleSubmit(e);
+                    }}
+                    onClear={handleClear}
+                    disabled={loading || selectedModels.length === 0}  
+                    isProcessing={isProcessing}
+                    preserveOnFocus={true} // Add this prop
+                  />
+                </div>
               </div>
             </div>
           </div>

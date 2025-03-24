@@ -223,127 +223,57 @@ a {
   scrollbar-color: rgba(75, 85, 99, 0.5) transparent;
 }
 
-/* Enhanced typography for response columns */
+/* Prose styling (with dark mode support) */
 .prose {
   @apply text-gray-800 dark:text-gray-200;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, 'Helvetica Neue', sans-serif;
-  line-height: 1.6;
-  font-feature-settings: 'kern', 'liga', 'calt';
-  text-rendering: optimizeLegibility;
 }
 
-/* Enhanced heading styles with larger, more professional titles */
+.prose p {
+  @apply my-4;
+}
+
+.prose h1, .prose h2, .prose h3, .prose h4 {
+  @apply font-semibold my-4 text-gray-900 dark:text-white;
+}
+
 .prose h1 {
-  @apply text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white;
-  margin-top: 0;
-  margin-bottom: 0.8em;
-  line-height: 1.2;
-  letter-spacing: -0.02em;
-  padding-bottom: 0.3em;
-  border-bottom: 1px solid rgba(209, 213, 219, 0.3);
+  @apply text-2xl;
 }
 
 .prose h2 {
-  @apply text-xl sm:text-2xl font-semibold text-gray-900 dark:text-white;
-  margin-top: 1.5em;
-  margin-bottom: 0.6em;
-  line-height: 1.3;
-  letter-spacing: -0.01em;
+  @apply text-xl;
 }
 
 .prose h3 {
-  @apply text-lg sm:text-xl font-semibold text-gray-800 dark:text-gray-100;
-  margin-top: 1.3em;
-  margin-bottom: 0.5em;
-  line-height: 1.35;
+  @apply text-lg;
 }
 
-.prose h4 {
-  @apply text-base sm:text-lg font-medium text-gray-800 dark:text-gray-100;
-  margin-top: 1.25em;
-  margin-bottom: 0.5em;
-  line-height: 1.4;
-}
-
-/* Improved paragraph styling */
-.prose p {
-  @apply my-4 text-gray-700 dark:text-gray-300;
-  line-height: 1.65;
-}
-
-/* Enhanced code block styling */
-.prose pre {
-  @apply my-6 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg;
-  font-size: 0.9em;
-}
-
-.prose p + pre {
-  @apply mt-4;
-}
-
-.prose pre + p {
-  @apply mt-4;
-}
-
-/* Line breaks before and after code blocks */
-.prose p + pre::before {
-  content: '\A';
-  white-space: pre;
-  display: block;
-  height: 0.5em;
-}
-
-.prose pre + p::before {
-  content: '\A';
-  white-space: pre;
-  display: block;
-  height: 0.5em;
-}
-
-/* Enhanced blockquote styling */
-.prose blockquote {
-  @apply border-l-4 border-gray-300 dark:border-gray-700 pl-4 py-0.5 my-5 text-gray-700 dark:text-gray-300 italic;
-  font-size: 1.05em;
-}
-
-/* Enhanced list styling */
 .prose ul, .prose ol {
-  @apply my-4 pl-6;
+  @apply my-4 pl-5;
 }
 
-.prose li {
-  @apply mb-2;
-  line-height: 1.6;
+.prose ul {
+  @apply list-disc;
 }
 
-/* Enhanced table styling */
-.prose table {
-  @apply w-full my-6 text-sm;
-  border-collapse: collapse;
+.prose ol {
+  @apply list-decimal;
 }
 
-.prose thead {
-  @apply bg-gray-50 dark:bg-gray-800;
+.prose code {
+  @apply bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded text-sm font-mono text-gray-800 dark:text-gray-200;
 }
 
-.prose th {
-  @apply py-3 px-4 text-left font-semibold text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700;
+.prose pre {
+  @apply bg-gray-100 dark:bg-gray-800 p-3 rounded-lg my-4 overflow-auto;
 }
 
-.prose td {
-  @apply py-2 px-4 border-b border-gray-200 dark:border-gray-700;
+.prose pre code {
+  @apply bg-transparent p-0;
 }
 
-/* Better link styling */
-.prose a {
-  @apply text-blue-600 dark:text-blue-400 font-medium;
-  text-decoration: none;
-  border-bottom: 1px solid rgba(59, 130, 246, 0.3);
-  transition: border-color 0.2s;
-}
-
-.prose a:hover {
-  border-bottom-color: rgba(59, 130, 246, 0.8);
+.prose blockquote {
+  @apply border-l-4 border-gray-300 dark:border-gray-700 pl-4 italic my-4 text-gray-700 dark:text-gray-300;
 }
 
 /* Add a smooth transition for all color changes */
@@ -619,19 +549,13 @@ a {
 }
 
 /* Backdrop blur when model selector is open */
-.backdrop-blur-active::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.3);
-  z-index: 40;
+.backdrop-blur-active {
+  @apply bg-gray-900/10;
+  transition: backdrop-filter 0.3s ease, background-color 0.3s ease;
 }
 
-/* Remove the old backdrop-blur-active class styles */
-.backdrop-blur-active {
-  /* Remove these styles as they were causing the issue */
-  /*@apply backdrop-blur-[2px] bg-gray-900/10;*/
-  /*transition: backdrop-filter 0.3s ease, background-color 0.3s ease;*/
+.backdrop-blur-active::before {
+  display: none;
 }
 
 /* Enhanced prompt input hover effect */
@@ -799,19 +723,17 @@ main {
 
 footer {
   @apply sticky bottom-0 z-10;
-  /* Ensure footer stays above content but doesn't block stars */
+  /* Ensure footer stays above content */
   background: linear-gradient(to top,
-    rgba(255, 255, 255, 0.7) 0%,
-    rgba(255, 255, 255, 0.5) 100%
+    rgba(255, 255, 255, 1) 0%,
+    rgba(255, 255, 255, 0.9) 100%
   );
-  position: relative;
-  z-index: 3;
 }
 
 .dark footer {
   background: linear-gradient(to top,
-    rgba(17, 17, 17, 0.7) 0%,
-    rgba(17, 17, 17, 0.5) 100%
+    rgba(17, 17, 17, 1) 0%,
+    rgba(17, 17, 17, 0.9) 100%
   );
 }
 
@@ -837,7 +759,7 @@ footer {
   transform: translateY(-1px);
 }
 
-/* Scrolling prompts animation with more subtle transparency and fading */
+/* Scrolling prompts animation */
 @keyframes scroll {
   0% { transform: translateY(0); }
   100% { transform: translateY(-50%); }
@@ -847,26 +769,8 @@ footer {
   animation: scroll 15s linear infinite;
 }
 
-/* Updated scrolling-prompts-container with subtler masking/fading effect */
 .scrolling-prompts-container {
-  mask-image: linear-gradient(
-    to bottom,
-    transparent 0%,
-    rgba(0, 0, 0, 0.7) 5%,
-    rgba(0, 0, 0, 1) 15%,
-    rgba(0, 0, 0, 1) 85%,
-    rgba(0, 0, 0, 0.7) 95%,
-    transparent 100%
-  );
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    transparent 0%,
-    rgba(0, 0, 0, 0.7) 5%,
-    rgba(0, 0, 0, 1) 15%,
-    rgba(0, 0, 0, 1) 85%,
-    rgba(0, 0, 0, 0.7) 95%,
-    transparent 100%
-  );
+  mask-image: linear-gradient(to bottom, transparent, black 10%, black 90%, transparent);
 }
 
 /* Thread sidebar animations */
@@ -934,6 +838,21 @@ footer {
   transition: opacity 300ms, transform 300ms, backdrop-filter 300ms;
 }
 
+/* Improve scrolling for prompts */
+.scrolling-prompts-container {
+  mask-image: linear-gradient(to bottom, transparent, black 10%, black 90%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, black 10%, black 90%, transparent);
+}
+
+.animate-scroll {
+  animation: scroll 15s linear infinite;
+}
+
+@keyframes scroll {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-50%); }
+}
+
 /* Enhanced glassmorphism for dark theme */
 .dark .glass-effect {
   background: rgba(17, 24, 39, 0.7);
@@ -945,13 +864,7 @@ footer {
 
 /* Universe animation styles */
 .universe-canvas {
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
-  z-index: 0 !important;
-  pointer-events: none !important;
+  pointer-events: none;
 }
 
 /* Ensure content appears above canvas */
@@ -979,7 +892,6 @@ footer {
   width: 100% !important;
   height: 100% !important;
   z-index: 0 !important;
-  pointer-events: none !important;
 }
 
 /* Ensure content appears above starfield */
@@ -999,131 +911,65 @@ footer {
   backdrop-filter: blur(4px);
 }
 
-/* Remove old backdrop blur styles */
-.backdrop-blur-active::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.3);
-  z-index: 40;
-}
-
-/* Remove conflicting backdrop blur styles */
-.backdrop-blur-active {
-  /* Remove any existing styles */
-}
-
-/* Model selector styles */
-.model-selector-menu {
+/* Add styles for the model selector */
+.model-selector-container {
   background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  backdrop-filter: none; /* Remove blur from container itself */
 }
 
-.dark .model-selector-menu {
+.dark .model-selector-container {
   background: rgba(17, 24, 39, 0.98);
 }
 
-/* Model selector specific styles */
-.model-selector-menu {
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-  pointer-events: auto !important;
-  /* Ensure menu is always clickable */
-}
-
-.dark .model-selector-menu {
-  background: rgba(17, 24, 39, 0.98);
-}
-
-/* Update model selector backdrop styles */
-.model-selector-backdrop {
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  background: rgba(0, 0, 0, 0.1);
-  pointer-events: auto;
-  transition: backdrop-filter 0.3s ease, background-color 0.3s ease;
-}
-
-/* Remove conflicting backdrop blur styles */
-.backdrop-blur-active::before {
-  display: none; /* Remove the old backdrop */
-}
-
-/* Input area should be partially transparent to see stars */
-.prompt-input-container {
-  background-color: rgba(255, 255, 255, 0.7) !important;
-}
-
-.dark .prompt-input-container {
-  background-color: rgba(17, 24, 39, 0.7) !important;
-}
-
-/* Onboarding page animations */
-@keyframes floatingElement {
-  0% { transform: translateY(0px); }
-  50% { transform: translateY(-15px); }
-  100% { transform: translateY(0px); }
-}
-
-.floating-element {
-  animation: floatingElement 6s ease-in-out infinite;
-}
-
-.floating-element-delay-1 {
-  animation-delay: 1s;
-}
-
-.floating-element-delay-2 {
-  animation-delay: 2s;
-}
-
-/* Gradient background animation for onboarding */
-.bg-gradient-animate {
-  background-size: 400% 400%;
-  animation: gradient 15s ease infinite;
-}
-
-@keyframes gradient {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
-}
-
-/* Glowing card effect */
-.card-glow {
+/* Enhanced prompt area styling */
+.prompt-container {
   position: relative;
-  overflow: hidden;
+  z-index: 2;
 }
 
-.card-glow::after {
+/* Glass effect for prompt area */
+.prompt-glass {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.05),
+    rgba(255, 255, 255, 0.1)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.dark .prompt-glass {
+  background: linear-gradient(
+    to bottom,
+    rgba(17, 17, 17, 0.3),
+    rgba(17, 17, 17, 0.4)
+  );
+  border-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Glow effect for prompt area */
+.prompt-container::after {
   content: '';
   position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: linear-gradient(
-    to bottom right,
-    rgba(255, 255, 255, 0) 0%,
-    rgba(255, 255, 255, 0.05) 50%,
-    rgba(255, 255, 255, 0) 100%
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(
+    circle at center bottom,
+    rgba(99, 102, 241, 0.15),
+    transparent 70%
   );
-  transform: rotate(30deg);
-  animation: glowSweep 8s linear infinite;
+  filter: blur(20px);
+  opacity: 0.5;
+  transition: opacity 0.3s ease;
 }
 
-@keyframes glowSweep {
-  0% { transform: rotate(30deg) translateX(-100%); }
-  100% { transform: rotate(30deg) translateX(100%); }
+.prompt-container:focus-within::after {
+  opacity: 0.8;
 }
 
-/* Enhanced fade in animation with staggered delay support */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.animate-fade-in {
-  opacity: 0;
-  animation: fadeIn 0.6s ease-out forwards;
+/* Update existing footer style to be transparent */
+footer {
+  background: transparent !important;
 }

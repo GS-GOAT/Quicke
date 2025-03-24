@@ -1,6 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
 
-export default function PromptInput({ prompt, setPrompt, onSubmit, disabled, isProcessing, threadId }) {
+export default function PromptInput({ 
+  prompt, 
+  setPrompt, 
+  onSubmit, 
+  disabled, 
+  isProcessing,
+  preserveOnFocus = true,
+  threadId 
+}) {
   const textareaRef = useRef(null);
   const [uploadedFile, setUploadedFile] = useState(null);
   const [pdfContext, setPdfContext] = useState('');
@@ -142,16 +150,14 @@ export default function PromptInput({ prompt, setPrompt, onSubmit, disabled, isP
         e.preventDefault();
         textareaRef.current?.focus();
         
-        // If it's a letter/number, also set it as the first character
-        if (e.key.match(/[a-zA-Z0-9]/)) {
-          setPrompt(e.key);
-        }
+        // Always include the pressed key in the prompt
+        setPrompt(prev => prev + e.key);
       }
     };
 
     document.addEventListener('keypress', handleKeyPress);
     return () => document.removeEventListener('keypress', handleKeyPress);
-  }, []);
+  }, [setPrompt]);
 
   return (
     <div className="space-y-4">
@@ -194,7 +200,7 @@ export default function PromptInput({ prompt, setPrompt, onSubmit, disabled, isP
                   className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors group"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400 group-hover:text-gray-600 dark:text-gray-500 dark:group-hover:text-gray-300" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 011.414 1.414L11.414 10l4.293 4.293a1 1 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 01-1.414-1.414L8.586 10 4.293 5.707a1 1 010-1.414z" clipRule="evenodd" />
                   </svg>
                 </button>
               </div>
