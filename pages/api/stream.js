@@ -332,6 +332,8 @@ export default async function handler(req, res) {
     'nemotron-70b': 'openrouter',
     'mistral-small-3': 'openrouter',
     'mistral-nemo': 'openrouter',
+    'mistral-small-31': 'openrouter', // Add new model
+    'deepseek-v3-0324': 'openrouter', // Add new model
     // 'olympiccoder': 'openrouter'
     // Anthropic
     'claude-3-7': 'anthropic',
@@ -456,47 +458,55 @@ export default async function handler(req, res) {
   // Map of OpenRouter model IDs and their display names
   const openRouterModels = {
     'mistral-7b': {
-      id: 'mistralai/mistral-7b-instruct:free',
+      id: 'mistralai/mistral-7b-instruct:free:online',
       name: 'Mistral 7B Instruct'
     },
     'llama2-70b': {
-      id: 'meta-llama/llama-3.3-70b-instruct:free',
+      id: 'meta-llama/llama-3.3-70b-instruct:free:online',
       name: 'Llama-2 70B'
     },
     'phi3': {
-      id: 'microsoft/phi-3-medium-128k-instruct:free',
+      id: 'microsoft/phi-3-medium-128k-instruct:free:online',
       name: 'Phi-3'
     },
     'qwen-32b': {
-      id: 'qwen/qwen-2.5-coder-32b-instruct:free',
+      id: 'qwen/qwen-2.5-coder-32b-instruct:free:online',
       name: 'Qwen Coder 32B'
     },
     'openchat': {
-      id: 'openchat/openchat-7b:free',
+      id: 'openchat/openchat-7b:free:online',
       name: 'OpenChat 3.5'
     },
     'deepseek-distill': {  
-      id: 'deepseek/deepseek-r1-distill-llama-70b:free',
+      id: 'deepseek/deepseek-r1-distill-llama-70b:free:online',
       name: 'DeepSeek R1'
     },
     'deepseek-v3-openrouter': {
-      id: 'deepseek/deepseek-chat:free',
+      id: 'deepseek/deepseek-chat:free:online',
       name: 'DeepSeek V3'
     },
     'nemotron-70b': {
-      id: 'nvidia/llama-3.1-nemotron-70b-instruct:free',
+      id: 'nvidia/llama-3.1-nemotron-70b-instruct:free:online',
       name: 'Nemotron 70B'
     },
     'mistral-small-3': {
-      id: 'mistralai/mistral-small-24b-instruct-2501:free',
+      id: 'mistralai/mistral-small-24b-instruct-2501:free:online',
       name: 'Mistral Small 3'
     },
+    'mistral-small-31': {  // Add new model configuration
+      id: 'mistralai/mistral-small-3.1-24b-instruct:free:online',
+      name: 'Mistral Small 3.1'
+    },
     'mistral-nemo': {
-      id: 'mistralai/mistral-nemo',
+      id: 'mistralai/mistral-nemo:free:online',
       name: 'Mistral Nemo'
     },
+    'deepseek-v3-0324': {  // Add new model configuration
+      id: 'deepseek/deepseek-chat-v3-0324:free:online',
+      name: 'DeepSeek V3 0324'
+    },
     // 'olympiccoder': {
-    //   id: 'open-r1/olympiccoder-7b:free',
+    //   id: 'open-r1/olympiccoder-7b:free:online',
     //   name: 'OlympicCoder 7B'
     // }
   };

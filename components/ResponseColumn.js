@@ -29,7 +29,7 @@ const modelDisplayNames = {
   'deepseek-coder': 'DeepSeek Coder',
   'deepseek-reasoner': 'DeepSeek R1',
   // OpenRouter models
-  'deepseek-distill': 'DeepSeek R1 Distill 70B',
+  'deepseek-distill': 'DeepSeek R1 70B',
   'deepseek-v3-openrouter': 'DeepSeek V3 (Free)',
   'mistral-7b': 'Mistral Medium',
   'llama2-70b': 'Llama-2 70B',
@@ -38,11 +38,43 @@ const modelDisplayNames = {
   'openchat': 'OpenChat 3.5',
   'nemotron-70b': 'Nemotron 70B',
   'mistral-small-3': 'Mistral Small 3',
+  'mistral-small-31': 'Mistral Small 3.1 24B', // Add new model display name
   'mistral-nemo': 'Mistral Nemo',
+  'deepseek-v3-0324': 'DeepSeek V3 0324', // Add new model display name
   // 'olympiccoder': 'OlympicCoder 7B',
   // Anthropic
   'claude-3-7': 'Claude 3.7 Sonnet',
   'claude-3-5': 'Claude 3.5 Sonnet',
+};
+
+// Add provider map
+const providerMap = {
+  'gpt-4.5-preview': 'OpenAI',
+  'gpt-4o': 'OpenAI',
+  'gpt-4o-mini': 'OpenAI',
+  'o1': 'OpenAI',
+  'o3-mini': 'OpenAI',
+  'o1-mini': 'OpenAI',
+  'gemini-flash': 'Google',
+  'gemini-pro': 'Google', 
+  'gemini-thinking': 'Google',
+  'deepseek-chat': 'DeepSeek',
+  'deepseek-coder': 'DeepSeek',
+  'deepseek-reasoner': 'DeepSeek',
+  'deepseek-distill': 'OpenRouter',
+  'deepseek-v3-openrouter': 'OpenRouter',
+  'deepseek-v3-0324': 'OpenRouter',
+  'mistral-7b': 'OpenRouter',
+  'llama2-70b': 'OpenRouter',
+  'phi3': 'OpenRouter',
+  'qwen-32b': 'OpenRouter',
+  'openchat': 'OpenRouter',
+  'nemotron-70b': 'OpenRouter',
+  'mistral-small-3': 'OpenRouter',
+  'mistral-small-31': 'OpenRouter',
+  'mistral-nemo': 'OpenRouter',
+  'claude-3-7': 'Anthropic',
+  'claude-3-5': 'Anthropic'
 };
 
 export default function ResponseColumn({ model, response, streaming, className, conversationId, onRetry }) {  // Add conversationId prop
@@ -710,6 +742,9 @@ export default function ResponseColumn({ model, response, streaming, className, 
           <div className="w-2 h-2 rounded-full bg-primary-500"></div>
           <div className="flex items-center">
             <h3 className="text-lg font-medium text-gray-200">{modelDisplayName}</h3>
+            {/* <span className="ml-2 text-xs text-gray-400">
+              {providerMap[model]?.charAt(0).toUpperCase() + providerMap[model]?.slice(1) || 'Unknown'}
+            </span> */}
             {elapsedTime && renderTimer(elapsedTime)}
             {isLoading && renderThinkingState()}
           </div>

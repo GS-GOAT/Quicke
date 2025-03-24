@@ -34,104 +34,116 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
       }
     ],
     openrouter: [
-      {
-        id: 'nemotron-70b',
-        name: 'Nemotron 70B',
-        provider: 'NVIDIA',
-        description: 'NVIDIA\'s advanced Llama 3.1 based instruction model',
-        context: '32K',
-        color: 'from-green-500 to-green-700',
-        icon: '🎮'
-      },
-      {
-        id: 'deepseek-v3-openrouter',
-        name: 'DeepSeek V3 (Free)',
-        provider: 'DeepSeek',
-        description: 'Latest DeepSeek chat model optimized for performance',
-        context: '32K',
-        color: 'from-purple-400 to-purple-600',
-        icon: '🌌'
-      },
-      {
-        id: 'deepseek-distill',
-        name: 'DeepSeek R1 Distill 70B',
-        provider: 'DeepSeek',
-        description: 'Advanced reasoning model',
-        context: '164K',
-        color: 'from-violet-400 to-violet-600',
-        icon: '🔮'
-      },
-      {
-        id: 'mistral-small-3',
-        name: 'Mistral Small 3',
-        provider: 'Mistral AI',
-        description: 'Compact yet powerful 24B parameter instruction model',
-        context: '32K',
-        color: 'from-blue-400 to-blue-600',
-        icon: '🌪️'
-      },
-      {
-        id: 'mistral-nemo',
-        name: 'Mistral Nemo',
-        provider: 'Mistral AI',
-        description: 'Advanced Mistral model with enhanced capabilities',
-        context: '32K',
-        color: 'from-indigo-400 to-indigo-600',
-        icon: '🌊'
-      },
-      // {
-        //   id: 'olympiccoder',
-      //   name: 'OlympicCoder 7B',
-      //   provider: 'OpenRouter',
-      //   description: 'Specialized coding model optimized for programming tasks',
-      //   context: '16K',
-      //   color: 'from-yellow-400 to-yellow-600',
-      //   icon: '🏆'
-      // },
-      {
-        id: 'qwen-32b',
-        name: 'Qwen Coder 32B',
-        provider: 'Alibaba',
-        description: 'Code-Specific Qwen large language models',
-        context:'32K',
-        color: 'from-red-400 to-red-600',
-        icon: '🌏'
-      },
-      {
-        id: 'llama2-70b',
-        name: 'Llama-2 70B',
-        provider: 'Meta',
-        description: 'Meta\'s largest open model',
-        context:'128K',
-        color: 'from-blue-500 to-blue-700',
-        icon: '🦙'
-      },
-      {
-        id: 'mistral-7b',
-        name: 'Mistral 7B Instruct',
-        provider: 'Mistral AI',
-        description: 'A high-performing model with optimizations for speed and context length.',
-        color: 'from-purple-400 to-purple-600',
-        icon: '🌪️'
-      },
-      {
-        id: 'phi3',
-        name: 'Phi-3',
-        provider: 'Microsoft',
-        description: 'Compact but capable model',
-        context:'8K',
-        color: 'from-cyan-400 to-cyan-600',
-        icon: 'φ'
-      },
-      {
-        id: 'openchat',
-        name: 'OpenChat 3.5',
-        provider: 'OpenChat',
-        description: 'Open-source chat model',
-        context:'8K',
-        color: 'from-green-400 to-green-600',
-        icon: '💬'
-      }
+        {
+          id: 'deepseek-v3-0324',
+          name: 'DeepSeek V3 0324',
+          description: 'DeepSeek V3, a 685B-parameter, mixture-of-experts model',
+          provider: 'OpenRouter',
+          color: 'from-purple-400 to-purple-600',
+          badge: 'Free',
+          context: '32K',
+          icon: '🧠',
+          highlighted: true
+        },
+        {
+          id: 'nemotron-70b',
+          name: 'Nemotron 70B',
+          provider: 'Openrouter',
+          description: 'NVIDIA\'s advanced Llama 3.1 based instruction model',
+          context: '32K',
+          color: 'from-green-500 to-green-700',
+          icon: '🎮'
+        },
+        {
+          id: 'deepseek-v3-openrouter',
+          name: 'DeepSeek V3 (Free)',
+          provider: 'Openrouter',
+          description: 'Latest DeepSeek chat model optimized for performance',
+          context: '32K',
+          color: 'from-purple-400 to-purple-600',
+          icon: '🌌'
+        },
+        {
+          id: 'deepseek-distill',
+          name: 'DeepSeek R1 Distill 70B',
+          provider: 'Openrouter',
+          description: 'Advanced reasoning model',
+          context: '164K',
+          color: 'from-violet-400 to-violet-600',
+          icon: '🔮'
+        },
+        {
+          id: 'mistral-small-3',
+          name: 'Mistral Small 3',
+          provider: 'Openrouter',
+          description: 'Compact yet powerful 24B parameter instruction model',
+          context: '32K',
+          color: 'from-blue-400 to-blue-600',
+          icon: '🌪️'
+        },
+        {
+          id: 'mistral-nemo',
+          name: 'Mistral Nemo',
+          provider: 'Openrouter',
+          description: 'Advanced Mistral model with enhanced capabilities',
+          context: '32K',
+          color: 'from-indigo-400 to-indigo-700',
+          icon: '🌊'
+        },
+        {
+          id: 'mistral-small-31',
+          name: 'Mistral Small 3.1 24B',
+          description: 'Latest Mistral small model with improved reasoning',
+          provider: 'Openrouter',
+          color: 'from-purple-400 to-purple-600',
+          badge: 'Free',
+          icon: '🏆',
+          // highlighted: true
+        },
+        {
+          id: 'qwen-32b',
+          name: 'Qwen Coder 32B',
+          provider: 'Openrouter',
+          description: 'Code-Specific Qwen large language models',
+          context:'32K',
+          color: 'from-red-400 to-red-600',
+          icon: '🌏'
+        },
+        {
+          id: 'llama2-70b',
+          name: 'Llama-2 70B',
+          provider: 'Openrouter',
+          description: 'Meta\'s largest open model',
+          context:'128K',
+          color: 'from-blue-500 to-blue-700',
+          icon: '🦙'
+        },
+        {
+          id: 'mistral-7b',
+          name: 'Mistral 7B Instruct',
+          provider: 'Openrouter',
+          description: 'A high-performing model with optimizations for speed and context length.',
+          color: 'from-purple-400 to-purple-600',
+          icon: '🌪️'
+        },
+        {
+          id: 'phi3',
+          name: 'Phi-3',
+          provider: 'Openrouter',
+          description: 'Compact but capable model',
+          context:'8K',
+          color: 'from-cyan-400 to-cyan-600',
+          icon: 'φ'
+        },
+        {
+          id: 'openchat',
+          name: 'OpenChat 3.5',
+          provider: 'Openrouter',
+          description: 'Open-source chat model',
+          context:'8K',
+          color: 'from-green-400 to-green-600',
+          icon: '💬'
+        }
     ],
     OpenAI: [
       {
