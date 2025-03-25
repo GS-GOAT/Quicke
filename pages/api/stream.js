@@ -986,7 +986,12 @@ async function handleGeminiStream(modelId, messages, sendEvent, genAI, geminiMod
     console.log(`Gemini: Using model ${modelInfo.id} with ${Array.isArray(messages) ? messages.length : 'single'} messages`);
     
     // Initialize the model
-    const geminiModel = genAI.getGenerativeModel({ model: modelInfo.id });
+    const geminiModel = genAI.getGenerativeModel({ model: modelInfo.id ,
+      api_version:'v1alpha' ,
+      tools: [
+        {'google_search': {}}
+      ]
+    });
     
     // Start streaming with context
     const generationConfig = {

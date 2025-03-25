@@ -935,7 +935,7 @@ export default function Home() {
           <link rel="icon" href="/favicon.ico" />
         </Head>
 
-        <header className="relative z-10 bg-white/80 dark:bg-darksurface/80 backdrop-blur-sm shadow-sm border-b border-gray-200 dark:border-gray-800">
+        <header className="relative z-10 bg-white/80 dark:bg-darksurface/80 backdrop-blur-sm shadow-sm border-b border-gray-200 dark:border-gray-800 safe-area-top">
           <div className="max-w-7xl mx-auto px-4 sm:px-6">
             <div className="flex items-center justify-between h-16">
               {/* Logo & Brand */}
@@ -1217,7 +1217,7 @@ export default function Home() {
           </div>
         )}
         
-        <main className="flex-grow overflow-auto px-4 py-2">
+        <main className="flex-grow overflow-auto px-2 sm:px-4 py-2 mobile-scrollbar">
           <div className="max-w-5xl mx-auto">
             {history.length === 0 ? (
               <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
@@ -1247,7 +1247,7 @@ export default function Home() {
           </div>
         </main>
         
-        <footer className="px-4 py-4 sm:px-6 lg:px-8 bg-transparent relative z-[2]">
+        <footer className="px-2 sm:px-4 py-2 sm:py-4 bg-transparent relative z-[2] safe-area-bottom">
           <div className="relative max-w-4xl mx-auto">
             {/* Add glass effect container for prompt */}
             <div className="relative rounded-2xl backdrop-blur-md bg-white/10 dark:bg-gray-900/20 border border-gray-200/20 dark:border-gray-700/20 shadow-lg overflow-hidden">

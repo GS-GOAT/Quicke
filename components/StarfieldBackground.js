@@ -1,4 +1,4 @@
-import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useEffect, useRef, forwardRef, useImperativeHandle, useCallback } from 'react';
 
 class Star {
   constructor(canvas) {
@@ -129,6 +129,33 @@ class Universe {
 const StarfieldBackground = forwardRef((props, ref) => {
   const canvasRef = useRef(null);
   const universeRef = useRef(null);
+  const frameRef = useRef();
+  const starsRef = useRef([]);
+
+  const generateStars = useCallback((count) => {
+    // Get actual canvas dimensions
+    const canvas = canvasRef.current;
+    const width = canvas.width;
+    const height = canvas.height;
+
+    // Calculate star count based on screen size and device
+    const isMobile = window.innerWidth <= 768;
+    const density = isMobile ? 0.00015 : 0.00020; // Lower density for mobile
+    const baseCount = width * height * density;
+    const finalCount = Math.min(Math.max(baseCount, 50), 400); // Ensure minimum and maximum
+
+    const stars = [];
+    for (let i = 0; i < finalCount; i++) {
+      stars.push({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        size: Math.random() * 2 + 0.5,
+        speed: Math.random() * 0.5 + 0.1,
+        brightness: Math.random() * 0.5 + 0.5
+      });
+    }
+    return stars;
+  }, []);
 
   useImperativeHandle(ref, () => ({
     stopAnimation: () => {
@@ -149,6 +176,30 @@ const StarfieldBackground = forwardRef((props, ref) => {
       universe.destroy();
     };
   }, []);
+
+  // Add resize handler
+  useEffect(() => {
+    const handleResize = () => {
+      if (!canvasRef.current) return;
+      
+      const canvas = canvasRef.current;
+      const { innerWidth, innerHeight } = window;
+      
+      // Update canvas size
+      canvas.width = innerWidth * window.devicePixelRatio;
+      canvas.height = innerHeight * window.devicePixelRatio;
+      canvas.style.width = `${innerWidth}px`;
+      canvas.style.height = `${innerHeight}px`;
+      
+      // Regenerate stars for new dimensions
+      starsRef.current = generateStars();
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    
+    return () => window.removeEventListener('resize', handleResize);
+  }, [generateStars]);
 
   return (
     <canvas 

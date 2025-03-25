@@ -48,7 +48,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         {
           id: 'nemotron-70b',
           name: 'Nemotron 70B',
-          provider: 'Openrouter',
+          provider: 'OpenRouter',
           description: 'NVIDIA\'s advanced Llama 3.1 based instruction model',
           context: '32K',
           color: 'from-green-500 to-green-700',
@@ -57,7 +57,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         {
           id: 'deepseek-v3-openrouter',
           name: 'DeepSeek V3 (Free)',
-          provider: 'Openrouter',
+          provider: 'OpenRouter',
           description: 'Latest DeepSeek chat model optimized for performance',
           context: '32K',
           color: 'from-purple-400 to-purple-600',
@@ -66,7 +66,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         {
           id: 'deepseek-distill',
           name: 'DeepSeek R1 Distill 70B',
-          provider: 'Openrouter',
+          provider: 'OpenRouter',
           description: 'Advanced reasoning model',
           context: '164K',
           color: 'from-violet-400 to-violet-600',
@@ -75,7 +75,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         {
           id: 'mistral-small-3',
           name: 'Mistral Small 3',
-          provider: 'Openrouter',
+          provider: 'OpenRouter',
           description: 'Compact yet powerful 24B parameter instruction model',
           context: '32K',
           color: 'from-blue-400 to-blue-600',
@@ -84,7 +84,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         {
           id: 'mistral-nemo',
           name: 'Mistral Nemo',
-          provider: 'Openrouter',
+          provider: 'OpenRouter',
           description: 'Advanced Mistral model with enhanced capabilities',
           context: '32K',
           color: 'from-indigo-400 to-indigo-700',
@@ -94,7 +94,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
           id: 'mistral-small-31',
           name: 'Mistral Small 3.1 24B',
           description: 'Latest Mistral small model with improved reasoning',
-          provider: 'Openrouter',
+          provider: 'OpenRouter',
           color: 'from-purple-400 to-purple-600',
           badge: 'Free',
           icon: '🏆',
@@ -103,7 +103,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         {
           id: 'qwen-32b',
           name: 'Qwen Coder 32B',
-          provider: 'Openrouter',
+          provider: 'OpenRouter',
           description: 'Code-Specific Qwen large language models',
           context:'32K',
           color: 'from-red-400 to-red-600',
@@ -112,7 +112,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         {
           id: 'llama2-70b',
           name: 'Llama-2 70B',
-          provider: 'Openrouter',
+          provider: 'OpenRouter',
           description: 'Meta\'s largest open model',
           context:'128K',
           color: 'from-blue-500 to-blue-700',
@@ -121,7 +121,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         {
           id: 'mistral-7b',
           name: 'Mistral 7B Instruct',
-          provider: 'Openrouter',
+          provider: 'OpenRouter',
           description: 'A high-performing model with optimizations for speed and context length.',
           color: 'from-purple-400 to-purple-600',
           icon: '🌪️'
@@ -129,7 +129,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         {
           id: 'phi3',
           name: 'Phi-3',
-          provider: 'Openrouter',
+          provider: 'OpenRouter',
           description: 'Compact but capable model',
           context:'8K',
           color: 'from-cyan-400 to-cyan-600',
@@ -138,7 +138,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         {
           id: 'openchat',
           name: 'OpenChat 3.5',
-          provider: 'Openrouter',
+          provider: 'OpenRouter',
           description: 'Open-source chat model',
           context:'8K',
           color: 'from-green-400 to-green-600',

@@ -973,3 +973,71 @@ footer {
 footer {
   background: transparent !important;
 }
+
+/* Mobile Optimizations */
+@media (max-width: 768px) {
+  /* Adjust header for mobile */
+  header {
+    @apply px-2;
+  }
+  
+  /* Make response columns full width on mobile */
+  .response-column {
+    @apply w-full !important;
+  }
+  
+  /* Adjust prompt input area */
+  .prompt-container {
+    @apply px-2 pb-2;
+  }
+  
+  textarea {
+    @apply text-base;
+    font-size: 16px !important; /* Prevent iOS zoom */
+  }
+  
+  /* Improve button tap targets */
+  button {
+    @apply min-h-[44px] min-w-[44px];
+  }
+  
+  /* Adjust model selector for mobile */
+  .model-selector-container {
+    @apply fixed inset-x-2 top-20 max-h-[80vh];
+  }
+  
+  /* Enhanced scrollbar for mobile */
+  .mobile-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  
+  .mobile-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Add safe area insets support */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 1rem);
+}
+
+.safe-area-top {
+  padding-top: env(safe-area-inset-top, 1rem);
+}
+
+/* Responsive font sizes */
+.responsive-text {
+  @apply text-sm sm:text-base;
+}
+
+.responsive-heading {
+  @apply text-lg sm:text-xl md:text-2xl;
+}
+
+/* Enhanced touch targets for mobile */
+.touch-target {
+  @apply p-2 sm:p-1;
+  min-height: 44px;
+  min-width: 44px;
+}
