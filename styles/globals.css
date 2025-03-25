@@ -974,6 +974,13 @@ footer {
   background: transparent !important;
 }
 
+/* Backdrop blur styles */
+.backdrop-blur-sm {
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: all 0.2s ease;
+}
+
 /* Mobile Optimizations */
 @media (max-width: 768px) {
   /* Adjust header for mobile */

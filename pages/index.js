@@ -1178,9 +1178,9 @@ export default function Home() {
         {/* Model Selector Dropdown */}
         {showModelSelector && (
           <>
-            {/* Add backdrop div */}
+            {/* Add backdrop div with blur effect */}
             <div 
-              className="fixed inset-0 bg-black/30 z-40"
+              className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40"
               onClick={() => setShowModelSelector(false)}
             />
             
@@ -1224,7 +1224,7 @@ export default function Home() {
                 <div className="max-w-3xl w-full space-y-8">
                   <div className="space-y-4">
                     <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 dark:text-white">
-                      Prompt AI Models At Once
+                      Welcome to your AI ChatHub
                     </h1>
                     <p className="text-xl text-gray-600 dark:text-gray-400">
                       Get instant responses from multiple AI models side by side
