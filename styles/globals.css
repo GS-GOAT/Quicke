@@ -21,8 +21,23 @@ html {
 }
 
 a {
-  color: inherit;
+  color: #0066cc;
   text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+a:hover {
+  color: #0052a3;
+  text-decoration: underline;
+}
+
+/* Dark mode link styles */
+.dark a {
+  color: #66b3ff;
+}
+
+.dark a:hover {
+  color: #99ccff;
 }
 
 * {

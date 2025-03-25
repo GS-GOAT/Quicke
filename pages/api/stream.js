@@ -986,16 +986,17 @@ async function handleGeminiStream(modelId, messages, sendEvent, genAI, geminiMod
     console.log(`Gemini: Using model ${modelInfo.id} with ${Array.isArray(messages) ? messages.length : 'single'} messages`);
     
     // Initialize the model
-    const geminiModel = genAI.getGenerativeModel({ model: modelInfo.id ,
-      api_version:'v1alpha' ,
-      tools: [
-        {'google_search': {}}
-      ]
+    const geminiModel = genAI.getGenerativeModel({ 
+      model: modelInfo.id,
+      api_version: 'v1alpha',
+      ...(modelInfo.id !== 'gemini-2.0-flash-thinking-exp-01-21' && {
+        tools: [{ 'google_search': {} }]
+      })
     });
     
     // Start streaming with context
     const generationConfig = {
-      temperature: 0.7,
+      temperature: 1.0,
       topP: 0.8,
       topK: 40,
       maxOutputTokens: 8192,
@@ -1026,7 +1027,7 @@ async function handleGeminiStream(modelId, messages, sendEvent, genAI, geminiMod
     // Add safety mechanisms for stream processing
     let streamComplete = false;
     let chunkCounter = 0;
-    const MAX_CHUNKS = 500;
+    const MAX_CHUNKS = 1500;
     
     try {
       const result = await geminiModel.generateContentStream({
