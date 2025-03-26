@@ -5,6 +5,15 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
 
   const modelCategories = {
     Google: [
+      {
+        id: 'gemini-2.5-pro',
+        name: 'Gemini 2.5 Pro',
+        provider: 'Google',
+        description: 'Latest Gemini 2.5 Pro with enhanced capabilities',
+        context: 0,
+        color: 'from-emerald-400 to-emerald-600',
+        icon: '🧠'
+      },
       { 
         id: 'gemini-flash',
         name: 'Gemini 2.0 Flash',

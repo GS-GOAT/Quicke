@@ -17,7 +17,7 @@ export default function Home() {
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState([]);
-  const [selectedModels, setSelectedModels] = useState(['gemini-flash', 'gemini-pro', 'gemini-thinking', 'deepseek-distill']);
+  const [selectedModels, setSelectedModels] = useState(['gemini-2.5-pro','gemini-flash', 'gemini-pro', 'gemini-thinking', 'deepseek-distill']);
   const [error, setError] = useState(null);
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [showApiKeyManager, setShowApiKeyManager] = useState(false);

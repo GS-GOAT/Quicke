@@ -317,6 +317,7 @@ export default async function handler(req, res) {
     'gemini-flash': 'google',
     'gemini-pro': 'google',
     'gemini-thinking': 'google',
+    'gemini-2.5-pro': 'google', // Add new model
     // Official DeepSeek models
     'deepseek-chat': 'deepseek',
     'deepseek-coder': 'deepseek',
@@ -524,6 +525,10 @@ export default async function handler(req, res) {
     'gemini-thinking': {
       id: 'gemini-2.0-flash-thinking-exp-01-21',
       name: 'Gemini 2.0 Flash Thinking'
+    },
+    'gemini-2.5-pro': {
+      id: 'gemini-2.5-pro-exp-03-25',
+      name: 'Gemini 2.5 Pro'
     }
   };
 

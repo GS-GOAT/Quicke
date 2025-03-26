@@ -24,6 +24,7 @@ const modelDisplayNames = {
   'gemini-flash': 'Gemini 2.0 Flash',
   'gemini-pro': 'Gemini 2.0 Pro',
   'gemini-thinking': 'Gemini 2.0 Flash Thinking',
+  'gemini-2.5-pro': 'Gemini 2.5 Pro', // Add new model
   // DeepSeek official models
   'deepseek-chat': 'DeepSeek V3',
   'deepseek-coder': 'DeepSeek Coder',
@@ -58,6 +59,7 @@ const providerMap = {
   'gemini-flash': 'Google',
   'gemini-pro': 'Google', 
   'gemini-thinking': 'Google',
+  'gemini-2.5-pro': 'Google', // Add new model
   'deepseek-chat': 'DeepSeek',
   'deepseek-coder': 'DeepSeek',
   'deepseek-reasoner': 'DeepSeek',
