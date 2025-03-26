@@ -856,7 +856,7 @@ async function handleModelStream(options) {
 
     // Add a safety counter to prevent infinite loops
     let chunkCounter = 0;
-    const MAX_CHUNKS = 1000; // Reasonable maximum for most responses
+    const MAX_CHUNKS = 5000; // Reasonable maximum for most responses
 
     // Process the stream
     try {
@@ -1032,7 +1032,7 @@ async function handleGeminiStream(modelId, messages, sendEvent, genAI, geminiMod
     // Add safety mechanisms for stream processing
     let streamComplete = false;
     let chunkCounter = 0;
-    const MAX_CHUNKS = 1500;
+    const MAX_CHUNKS = 5000;
     
     try {
       const result = await geminiModel.generateContentStream({
