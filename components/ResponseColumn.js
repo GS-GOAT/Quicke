@@ -41,7 +41,7 @@ const modelDisplayNames = {
   'mistral-small-3': 'Mistral Small 3',
   'mistral-small-31': 'Mistral Small 3.1 24B', // Add new model display name
   'mistral-nemo': 'Mistral Nemo',
-  'deepseek-v3-0324': 'DeepSeek V3 0324', // Add new model display name
+  'deepseek-v3-0324': 'DeepSeek V3 Latest', // Add new model display name
   // 'olympiccoder': 'OlympicCoder 7B',
   // Anthropic
   'claude-3-7': 'Claude 3.7 Sonnet',

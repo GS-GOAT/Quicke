@@ -45,7 +45,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
     openrouter: [
         {
           id: 'deepseek-v3-0324',
-          name: 'DeepSeek V3 0324',
+          name: 'DeepSeek V3 Latest',
           description: 'DeepSeek V3, a 685B-parameter, mixture-of-experts model',
           provider: 'OpenRouter',
           color: 'from-purple-400 to-purple-600',

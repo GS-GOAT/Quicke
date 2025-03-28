@@ -201,23 +201,8 @@ export default async function handler(req, res) {
       if(extractedText) {
         pdfContext=extractedText;
       }
-      // const file = await prisma.uploadedFile.findFirst({
-      //   where: {
-      //     id: fileId,
-      //     userId: session.user.id
-      //   },
-      //   select: {
-      //     content: true,
-      //     fileType: true
-      //   }
-      // });
       enhancedPrompt = pdfContext? `The following is content from a PDF document:\n\n${pdfContext}\n\n${prompt}`
       : prompt;
-
-      // if (file && file.fileType === 'application/pdf' && file.content) {
-      //   enhancedPrompt = `Context from PDF:\n\n${file.content}\n\nUser Query: ${prompt}`;
-      //   console.log("PDF fetched and enhanced prompt created with: " ,file.fileName)
-      // }
     } catch (error) {
       console.error('Error getting PDF context:', error);
       // Continue with original prompt if error occurs
@@ -960,7 +945,7 @@ async function handleClaudeStream(modelId, messages, sendEvent, anthropic) {
     client: anthropic,
     generateStream: () => anthropic.messages.create({
       model: claudeModels[modelId] || 'claude-3-7-sonnet-20250219',
-      max_tokens: 1000,
+      max_tokens: 5000,
       messages: formattedMessages,
       stream: true,
     }),
@@ -1004,7 +989,7 @@ async function handleGeminiStream(modelId, messages, sendEvent, genAI, geminiMod
       temperature: 1.0,
       topP: 0.8,
       topK: 40,
-      maxOutputTokens: 8192,
+      maxOutputTokens: 12192,
     };
     
     // Ensure messages are in the correct format for Gemini
@@ -1099,7 +1084,7 @@ async function handleGeminiStream(modelId, messages, sendEvent, genAI, geminiMod
   }
 }
 
-// Update OpenRouter handler to support context
+// Update OpenRouter handler to support context and handle premature closures
 async function handleOpenRouterStream(modelId, messages, sendEvent, openRouter, openRouterModels) {
   // Check if messages is an array or a string
   const formattedMessages = Array.isArray(messages) 
@@ -1113,14 +1098,35 @@ async function handleOpenRouterStream(modelId, messages, sendEvent, openRouter, 
     prompt: formattedMessages,
     sendEvent,
     client: openRouter,
-    generateStream: () => openRouter.chat.completions.create({
-      model: openRouterModels[modelId]?.id || modelId,
-      messages: formattedMessages,
-      stream: true,
-      temperature: 0.7,
-      max_tokens: 4000
-    }),
-    processChunk: chunk => chunk.choices[0]?.delta?.content
+    generateStream: async () => {
+      try {
+        return await openRouter.chat.completions.create({
+          model: openRouterModels[modelId]?.id || modelId,
+          messages: formattedMessages,
+          stream: true,
+          temperature: 0.7,
+          max_tokens: 8000
+        });
+      } catch (error) {
+        // Check for premature closure
+        if (error.code === 'ERR_STREAM_PREMATURE_CLOSE') {
+          console.warn(`[${modelId}] Stream closed prematurely, attempting retry...`);
+          // Small delay before retry
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          // Retry the stream creation
+          return await openRouter.chat.completions.create({
+            model: openRouterModels[modelId]?.id || modelId,
+            messages: formattedMessages,
+            stream: true,
+            temperature: 0.7,
+            max_tokens: 8000
+          });
+        }
+        throw error; // Re-throw other errors
+      }
+    },
+    processChunk: chunk => chunk.choices[0]?.delta?.content,
+    maxRetries: 2 // Allow up to 2 retries for premature closures
   });
 }
 
