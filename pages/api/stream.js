@@ -29,6 +29,18 @@ const createCompletionManager = (totalModels, sendEvent, res) => {
   let completedResponses = 0;
   let responseEnded = false;
 
+  const safelyEndResponse = () => {
+    if (!responseEnded && !res.writableEnded) {
+      responseEnded = true;
+      try {
+        sendEvent({ done: true, allComplete: true });
+        res.end();
+      } catch (error) {
+        console.error('[SSE Stream] Error ending response:', error);
+      }
+    }
+  };
+
   const markCompleted = (modelId) => {
     if (completedModels.has(modelId)) return;
     
@@ -37,7 +49,7 @@ const createCompletionManager = (totalModels, sendEvent, res) => {
     
     console.log(`[${modelId}] Completed (${completedResponses}/${totalModels})`);
     
-    // Clear any pending timeouts
+    // Clear model timeout
     if (errorService?.modelTimers) {
       const timerId = errorService.modelTimers.get(`timeout_${modelId}`);
       if (timerId) {
@@ -46,51 +58,24 @@ const createCompletionManager = (totalModels, sendEvent, res) => {
       }
     }
     
-    if (completedResponses === totalModels && !responseEnded) {
-      console.log('All models completed, ending response');
-      responseEnded = true; // Prevent multiple end calls
-      
-      try {
-        sendEvent({ done: true, allComplete: true });
-        
-        // Only end the response if it hasn't been ended yet
-        if (!res.writableEnded) {
-          res.end();
-        }
-      } catch (error) {
-        console.error('Error ending response:', error);
-      }
+    if (completedResponses === totalModels) {
+      safelyEndResponse();
     }
   };
 
-  // Add a safety timeout to ensure the response always ends
+  // Increase safety timeout duration
   const safetyTimeout = setTimeout(() => {
     if (!responseEnded) {
-      console.warn(`Safety timeout triggered after completing ${completedResponses}/${totalModels} models`);
-      responseEnded = true;
-      
-      try {
-        sendEvent({ 
-          done: true, 
-          allComplete: true,
-          warning: `Only ${completedResponses} of ${totalModels} models completed properly` 
-        });
-        
-        if (!res.writableEnded) {
-          res.end();
-        }
-      } catch (error) {
-        console.error('Error ending response in safety timeout:', error);
-      }
+      console.warn(`[SSE Stream] Safety timeout triggered after ${completedResponses}/${totalModels} models`);
+      safelyEndResponse();
     }
-  }, 60000); // 60 second safety timeout
-  
-  // Return methods and cleanup function
+  }, 120000); // Increased to 120 seconds
+
   return {
     markCompleted,
     isCompleted: (modelId) => completedModels.has(modelId),
     getCompletedCount: () => completedResponses,
-    completedModels, // Expose Set for checking completion status
+    completedModels,
     cleanup: () => {
       clearTimeout(safetyTimeout);
     }
@@ -168,6 +153,26 @@ async function getPDFContext(userId, fileId) {
     return null;
   }
 }
+
+// Update sendEvent helper function with safety checks
+const createSafeEventSender = (res) => (data) => {
+  if (res.writableEnded) {
+    console.log('[SSE Stream] Attempted write after stream ended:', 
+      JSON.stringify(data).substring(0, 100) + '...');
+    return;
+  }
+
+  try {
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+    if (res.flush && !res.writableEnded) {
+      res.flush();
+    }
+  } catch (error) {
+    if (error.code !== 'ERR_STREAM_WRITE_AFTER_END') {
+      console.error('[SSE Stream] Error writing event:', error);
+    }
+  }
+};
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -298,6 +303,7 @@ export default async function handler(req, res) {
     'o1': 'openai',
     'o3-mini': 'openai',
     'o1-mini': 'openai',
+    'gpt-4o-mini-or': 'openrouter', // Add this line
     // Google
     'gemini-flash': 'google',
     'gemini-pro': 'google',
@@ -361,17 +367,8 @@ export default async function handler(req, res) {
     return modelId || 'Unknown';
   };
   
-  // Helper function to send SSE with immediate flush
-  const sendEvent = (data) => {
-    try {
-      res.write(`data: ${JSON.stringify(data)}\n\n`);
-      if (res.flush) res.flush();
-    } catch (error) {
-      console.error('Error sending event:', error);
-    }
-  };
-
   // Initialize completion manager first
+  const sendEvent = createSafeEventSender(res);
   const completionManager = createCompletionManager(modelArray.length, sendEvent, res);
   
   // Then create error handler with completion manager
@@ -443,6 +440,10 @@ export default async function handler(req, res) {
 
   // Map of OpenRouter model IDs and their display names
   const openRouterModels = {
+    'gpt-4o-mini-or': {  // Add this entry
+      id: 'openai/gpt-4o-mini:free:online',
+      name: 'GPT-4O Mini'
+    },
     'mistral-7b': {
       id: 'mistralai/mistral-7b-instruct:free:online',
       name: 'Mistral 7B Instruct'
@@ -721,17 +722,14 @@ export default async function handler(req, res) {
       console.error('Error sending final event:', error);
     }
   } catch (error) {
-    console.error('Streaming error:', error);
+    console.error('[SSE Stream] Fatal error:', error);
     
-    // Force sending an error event
-    try {
-      sendEvent({ error: 'Failed to process streaming requests', done: true });
-    } catch (sendError) {
-      console.error('Error sending error event:', sendError);
-    }
-    
-    // Force ending the response in case of overall error
     if (!res.writableEnded) {
+      sendEvent({ 
+        error: 'Stream processing failed', 
+        done: true, 
+        allComplete: true 
+      });
       res.end();
     }
   }

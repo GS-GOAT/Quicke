@@ -12,7 +12,8 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         description: 'Latest Gemini 2.5 Pro with enhanced capabilities',
         context: 0,
         color: 'from-emerald-400 to-emerald-600',
-        icon: '🧠'
+        icon: '🧠',
+        badge: 'Free',
       },
       { 
         id: 'gemini-flash',
@@ -21,7 +22,8 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         description: 'Fastest performance optimized model',
         context: 0,
         color: 'from-blue-400 to-blue-600',
-        icon: '🚀'
+        icon: '🚀',
+        badge: 'Free',
       },
       {
         id: 'gemini-pro',
@@ -30,7 +32,8 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         description: 'Full-featured model with enhanced capabilities',
         context: 0,
         color: 'from-indigo-400 to-indigo-600',
-        icon: '🌟'
+        icon: '🌟',
+        badge: 'Free',
       },
       {
         id: 'gemini-thinking',
@@ -39,10 +42,22 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         description: 'Advanced reasoning for more thoughtful responses',
         context: 0,
         color: 'from-purple-400 to-purple-600',
-        icon: '🤔'
+        icon: '🤔',
+        badge: 'Free',
       }
     ],
     openrouter: [
+        // {
+        //   id: 'gpt-4o-mini-or',
+        //   name: 'GPT-4o Mini',
+        //   description: 'GPT-4 Mini optimized model via OpenRouter',
+        //   provider: 'OpenRouter',
+        //   color: 'from-blue-400 to-blue-600',
+        //   badge: 'Paid',
+        //   context: '8K',
+        //   icon: '⚡',
+        //   highlighted: true
+        // },
         {
           id: 'deepseek-v3-0324',
           name: 'DeepSeek V3 Latest',
@@ -60,6 +75,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
           provider: 'OpenRouter',
           description: 'NVIDIA\'s advanced Llama 3.1 based instruction model',
           context: '32K',
+          badge: 'Free',
           color: 'from-green-500 to-green-700',
           icon: '🎮'
         },
@@ -69,6 +85,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
           provider: 'OpenRouter',
           description: 'Latest DeepSeek chat model optimized for performance',
           context: '32K',
+          badge: 'Free',
           color: 'from-purple-400 to-purple-600',
           icon: '🌌'
         },
@@ -78,6 +95,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
           provider: 'OpenRouter',
           description: 'Advanced reasoning model',
           context: '164K',
+          badge: 'Free',
           color: 'from-violet-400 to-violet-600',
           icon: '🔮'
         },
@@ -87,6 +105,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
           provider: 'OpenRouter',
           description: 'Compact yet powerful 24B parameter instruction model',
           context: '32K',
+          badge: 'Free',
           color: 'from-blue-400 to-blue-600',
           icon: '🌪️'
         },
@@ -96,6 +115,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
           provider: 'OpenRouter',
           description: 'Advanced Mistral model with enhanced capabilities',
           context: '32K',
+          badge: 'Free',
           color: 'from-indigo-400 to-indigo-700',
           icon: '🌊'
         },
@@ -115,6 +135,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
           provider: 'OpenRouter',
           description: 'Code-Specific Qwen large language models',
           context:'32K',
+          badge: 'Free',
           color: 'from-red-400 to-red-600',
           icon: '🌏'
         },
@@ -124,6 +145,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
           provider: 'OpenRouter',
           description: 'Meta\'s largest open model',
           context:'128K',
+          badge: 'Free',
           color: 'from-blue-500 to-blue-700',
           icon: '🦙'
         },
@@ -132,6 +154,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
           name: 'Mistral 7B Instruct',
           provider: 'OpenRouter',
           description: 'A high-performing model with optimizations for speed and context length.',
+          badge: 'Free',
           color: 'from-purple-400 to-purple-600',
           icon: '🌪️'
         },
@@ -141,6 +164,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
           provider: 'OpenRouter',
           description: 'Compact but capable model',
           context:'8K',
+          badge: 'Free',
           color: 'from-cyan-400 to-cyan-600',
           icon: 'φ'
         },
@@ -150,6 +174,7 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
           provider: 'OpenRouter',
           description: 'Open-source chat model',
           context:'8K',
+          badge: 'Free',
           color: 'from-green-400 to-green-600',
           icon: '💬'
         }
@@ -161,8 +186,9 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         provider: 'OpenAI',
         description: 'Latest GPT-4.5 preview model with enhanced capabilities',
         context: 0,
-        color: 'from-violet-400 to-fuchsia-600',  // Changed from emerald to violet-fuchsia
-        icon: '🔮'
+        color: 'from-violet-400 to-fuchsia-600',
+        icon: '🔮',
+        badge: 'Paid',
       },
       {
         id: 'gpt-4o',
@@ -170,8 +196,9 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         provider: 'OpenAI',
         description: 'Advanced GPT-4 Omega model',
         context: 0,
-        color: 'from-blue-400 to-indigo-600',  // Changed from emerald to blue-indigo
-        icon: 'Ω'
+        color: 'from-blue-400 to-indigo-600',
+        icon: 'Ω',
+        badge: 'Paid',
       },
       {
         id: 'gpt-4o-mini',
@@ -179,8 +206,9 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         provider: 'OpenAI',
         description: 'Compact version of GPT-4 Omega',
         context: 0,
-        color: 'from-cyan-400 to-blue-600',  // Changed from emerald to cyan-blue
-        icon: 'ω'
+        color: 'from-cyan-400 to-blue-600',
+        icon: 'ω',
+        badge: 'Paid',
       },
       {
         id: 'o1',
@@ -188,8 +216,9 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         provider: 'OpenAI',
         description: 'Next generation O1 model',
         context: 0,
-        color: 'from-rose-400 to-pink-600',  // Changed from teal to rose-pink
-        icon: '🌟'
+        color: 'from-rose-400 to-pink-600',
+        icon: '🌟',
+        badge: 'Paid',
       },
       {
         id: 'o3-mini',
@@ -197,8 +226,9 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         provider: 'OpenAI',
         description: 'Compact O3 model with efficient performance',
         context: 0,
-        color: 'from-purple-400 to-violet-600',  // Changed from teal to purple-violet
-        icon: '💫'
+        color: 'from-purple-400 to-violet-600',
+        icon: '💫',
+        badge: 'Paid',
       },
       {
         id: 'o1-mini',
@@ -206,8 +236,9 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         provider: 'OpenAI',
         description: 'Efficient and compact O1 model',
         context: 0,
-        color: 'from-fuchsia-400 to-purple-600',  // Changed from teal to fuchsia-purple
-        icon: '✨'
+        color: 'from-fuchsia-400 to-purple-600',
+        icon: '✨',
+        badge: 'Paid',
       }
     ],
     Anthropic: [
@@ -218,7 +249,8 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         description: 'Latest Claude model with superior reasoning and analysis',
         context: 0,
         color: 'from-orange-400 to-orange-600',
-        icon: '🧠'
+        icon: '🧠',
+        badge: 'Paid',
       },
       {
         id: 'claude-3-5',
@@ -227,7 +259,8 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         description: 'Advanced Claude model optimized for complex tasks',
         context: 0,
         color: 'from-orange-500 to-orange-700',
-        icon: '🤖'
+        icon: '🤖',
+        badge: 'Paid',
       }
     ],
     DeepSeek: [
@@ -238,7 +271,8 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         description: 'Latest DeepSeek chat model optimized for performance',
         context: '32K',
         color: 'from-purple-400 to-purple-600',
-        icon: '🌌'
+        icon: '🌌',
+        badge: 'Paid',
       },
       {
         id: 'deepseek-coder',
@@ -247,7 +281,8 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         description: 'Specialized model for coding tasks and technical discussions',
         context: '32K',
         color: 'from-indigo-400 to-indigo-600',
-        icon: '👨‍💻'
+        icon: '👨‍💻',
+        badge: 'Paid',
       },
       {
         id: 'deepseek-reasoner',
@@ -256,7 +291,8 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
         description: 'Advanced model with chain-of-thought reasoning',
         context: '32K',
         color: 'from-blue-400 to-blue-600',
-        icon: '🤔'
+        icon: '🤔',
+        badge: 'Paid',
       }
     ]
   };
@@ -435,9 +471,20 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
                 
                 <div>
                   <h4 className="font-medium text-gray-900 dark:text-white mb-1">{model.name}</h4>
-                  <span className="inline-block text-xs px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 mb-2">
-                    {model.provider}
-                  </span>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                      {model.provider}
+                    </span>
+                    {model.badge && (
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                        model.badge === 'Free' 
+                          ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                          : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+                      }`}>
+                        {model.badge}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-sm text-gray-600 dark:text-gray-400">{model.description}</p>
                 </div>
               </div>

@@ -17,6 +17,7 @@ const modelDisplayNames = {
   'gpt-4.5-preview': 'GPT-4.5 Preview',
   'gpt-4o': 'GPT-4o',
   'gpt-4o-mini': 'GPT-4o Mini',
+  'gpt-4o-mini-or': 'GPT-4o Mini',
   'o1': 'O1',
   'o3-mini': 'O3 Mini',
   'o1-mini': 'O1 Mini',
@@ -53,13 +54,14 @@ const providerMap = {
   'gpt-4.5-preview': 'OpenAI',
   'gpt-4o': 'OpenAI',
   'gpt-4o-mini': 'OpenAI',
+  'gpt-4o-mini-or': 'OpenRouter', 
   'o1': 'OpenAI',
   'o3-mini': 'OpenAI',
   'o1-mini': 'OpenAI',
   'gemini-flash': 'Google',
   'gemini-pro': 'Google', 
   'gemini-thinking': 'Google',
-  'gemini-2.5-pro': 'Google', // Add new model
+  'gemini-2.5-pro': 'Google', 
   'deepseek-chat': 'DeepSeek',
   'deepseek-coder': 'DeepSeek',
   'deepseek-reasoner': 'DeepSeek',
@@ -77,6 +79,12 @@ const providerMap = {
   'mistral-nemo': 'OpenRouter',
   'claude-3-7': 'Anthropic',
   'claude-3-5': 'Anthropic'
+};
+
+// Update display provider function
+const getDisplayProvider = (provider) => {
+  if (provider === 'OpenRouter') return 'OR';
+  return provider;
 };
 
 export default function ResponseColumn({ model, response, streaming, className, conversationId, onRetry }) {  // Add conversationId prop
@@ -730,6 +738,19 @@ export default function ResponseColumn({ model, response, streaming, className, 
         </code>
       );
     },
+    // Add link component configuration
+    a: ({ node, children, href }) => {
+      return (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-500"
+        >
+          {children}
+        </a>
+      );
+    },
   };
 
   return (
@@ -744,10 +765,15 @@ export default function ResponseColumn({ model, response, streaming, className, 
         <div className="flex items-center space-x-2">
           <div className="w-2 h-2 rounded-full bg-primary-500"></div>
           <div className="flex items-center">
-            <h3 className="text-lg font-medium text-gray-200">{modelDisplayName}</h3>
-            {/* <span className="ml-2 text-xs text-gray-400">
-              {providerMap[model]?.charAt(0).toUpperCase() + providerMap[model]?.slice(1) || 'Unknown'}
-            </span> */}
+            <h3 className="text-lg font-medium text-gray-200 flex items-center gap-1.5">
+              {modelDisplayName}
+              <span 
+                className="text-[9px] px-1 py-0.5 rounded-md bg-gray-800/50 text-gray-400 font-medium leading-none tracking-wide uppercase"
+                title={`Provider: ${providerMap[model]}`}
+              >
+                {getDisplayProvider(providerMap[model])}
+              </span>
+            </h3>
             {elapsedTime && renderTimer(elapsedTime)}
             {isLoading && renderThinkingState()}
           </div>
