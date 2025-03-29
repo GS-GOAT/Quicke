@@ -20,7 +20,7 @@ function MyApp({ Component, pageProps }) {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="theme-color" content="#0ea5e9" />
         <meta name="description" content="Get responses from multiple LLMs side by side" />
-        <title>Quicke - LLM Response Comparison</title>
+        <title>Quicke - The AI ChatHub</title>
         
         {/* Script to check dark mode preference before page renders to prevent flash */}
         <Script id="dark-mode-check" strategy="beforeInteractive">

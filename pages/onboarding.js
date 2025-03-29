@@ -61,15 +61,24 @@ export default function Onboarding() {
     setError('');
     
     try {
-      // Simulate API call to save keys
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Filter out empty API keys
+      const nonEmptyKeys = Object.fromEntries(
+        Object.entries(apiKeys).filter(([_, value]) => value.trim() !== '')
+      );
       
-      // Save API keys to localStorage or your backend
-      Object.entries(apiKeys).forEach(([provider, key]) => {
-        if (key.trim()) {
-          localStorage.setItem(`${provider}_api_key`, key.trim());
-        }
+      // Send keys to API endpoint
+      const response = await fetch('/api/settings/api-keys', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ keys: nonEmptyKeys })
       });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to save API keys');
+      }
       
       // Show success animation
       setSuccess(true);
@@ -80,7 +89,8 @@ export default function Onboarding() {
       }, 1500);
       
     } catch (err) {
-      setError('Failed to save API keys. Please try again.');
+      console.error('Error saving API keys:', err);
+      setError(err.message || 'Failed to save API keys. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -280,7 +290,7 @@ export default function Onboarding() {
                 ) : success ? (
                   <span className="flex items-center">
                     <svg className="-ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 001.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                     </svg>
                     Success!
                   </span>
@@ -307,4 +317,4 @@ export default function Onboarding() {
       </div>
     </div>
   );
-} 
+}

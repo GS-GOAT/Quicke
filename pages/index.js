@@ -930,7 +930,7 @@ export default function Home() {
       {/* Wrap all content in a relative container with z-index */}
       <div className="relative z-[2] flex flex-col h-screen">
         <Head>
-          <title>Quicke - LLM Response Comparison</title>
+          <title>Quicke - The AI ChatHub</title>
           <meta name="description" content="Get responses from multiple LLMs side by side" />
           <link rel="icon" href="/favicon.ico" />
         </Head>
