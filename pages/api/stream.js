@@ -1,3 +1,16 @@
+// Add this at the top of the file, before any other code
+const getLLMProvider = (modelId, providerMap) => {
+  if (providerMap[modelId]) {
+    return providerMap[modelId].charAt(0).toUpperCase() + providerMap[modelId].slice(1);
+  }
+  
+  if (modelId && modelId.startsWith('custom-')) {
+    return 'Custom Model';
+  }
+  
+  return modelId || 'Unknown';
+};
+
 import { OpenAI } from 'openai';
 import { Anthropic } from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
@@ -88,7 +101,7 @@ const createErrorHandler = (completionManager, sendEvent) => {
     try {
       console.log(`[${modelId}] Sending error event: ${errorType}`);
       
-      const provider = getLLMProvider(modelId);
+      const provider = getLLMProvider(modelId, providerMap);
       const retryCount = errorService?.getRetryCount?.(modelId) || 0;
       const errorMessage = errorService?.getErrorMessage?.(errorType, modelId, provider) 
         || `Error with ${provider}: ${errorType}`;
@@ -368,19 +381,6 @@ export default async function handler(req, res) {
     'deepseek-reasoner': 'reasoner'
   };
 
-  // Helper function to get provider name from model ID
-  const getLLMProvider = (modelId) => {
-    if (providerMap[modelId]) {
-      return providerMap[modelId].charAt(0).toUpperCase() + providerMap[modelId].slice(1);
-    }
-    
-    if (modelId && modelId.startsWith('custom-')) {
-      return 'Custom Model';
-    }
-    
-    return modelId || 'Unknown';
-  };
-  
   // Initialize completion manager first
   const sendEvent = createSafeEventSender(res);
   const completionManager = createCompletionManager(modelArray.length, sendEvent, res);
