@@ -82,7 +82,7 @@ export default function PromptInput({
   const handleFileInputClick = () => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = 'application/pdf';
+    input.accept = 'application/pdf,image/jpeg,image/jpg,image/png,image/webp';
     input.onchange = (e) => handleFileChange(e);
     input.click();
   };
@@ -90,9 +90,17 @@ export default function PromptInput({
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    const acceptedTypes = [
+      'application/pdf', 
+      'image/jpeg', 
+      'image/jpg', // Add explicit support for image/jpg
+      'image/png', 
+      'image/webp'
+    ];
   
-    if (file.type !== 'application/pdf') {
-      alert('Only PDF files are allowed');
+    if (!acceptedTypes.includes(file.type)) {
+      alert('Only PDF and image files are allowed');
       return;
     }
   
@@ -228,7 +236,7 @@ export default function PromptInput({
               <button
                 onClick={handleFileInputClick}
                 className="p-1.5 rounded-full transition-colors text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                title="Upload PDF"
+                title="Upload PDF and Images"
                 disabled={isProcessing}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
@@ -276,7 +284,7 @@ export default function PromptInput({
       <input
         type="file"
         className="hidden"
-        accept="application/pdf"
+        accept="application/pdf,image/jpeg,image/jpg,image/png,image/webp"
         onChange={handleFileChange}
         ref={fileInputRef}
       />

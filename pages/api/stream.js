@@ -190,30 +190,44 @@ export default async function handler(req, res) {
   const session = await getServerSession(req, res, authOptions);
   if (!session) return res.status(401).json({ error: "Unauthorized" });
 
-  const { prompt, models, fileId } = req.query;
+  const { prompt, models, fileId, fileType } = req.query;
   const threadId = req.query.threadId;
   const conversationId = req.query.conversationId;
   const useContext = req.query.useContext === 'true';
   const modelArray = models ? models.split(',') : [];
   
   let enhancedPrompt = prompt;
-  let pdfContext = '';
+  let fileData = null;
 
-  // Only get PDF context if fileId is provided and valid
+  // Get file content if fileId is provided
   if (fileId) {
     try {
-      const extractedText=await getPDFContext(session.user.id, fileId);
-      if(extractedText) {
-        pdfContext=extractedText;
+      const file = await prisma.uploadedFile.findFirst({
+        where: {
+          id: fileId,
+          userId: session.user.id
+        }
+      });
+
+      if (file) {
+        fileData = {
+          fileId: file.id,
+          fileType: file.fileType,
+          content: file.content,
+          isPdf: file.fileType === 'application/pdf',
+          isImage: file.fileType.startsWith('image/')
+        };
+
+        // For PDFs, enhance prompt with content
+        if (fileData.isPdf) {
+          enhancedPrompt = `The following is content from a PDF document:\n\n${file.content}\n\n${prompt}`;
+        }
       }
-      enhancedPrompt = pdfContext? `The following is content from a PDF document:\n\n${pdfContext}\n\n${prompt}`
-      : prompt;
     } catch (error) {
-      console.error('Error getting PDF context:', error);
-      // Continue with original prompt if error occurs
+      console.error('Error getting file data:', error);
     }
   }
-  
+
   // Get context for this request if useContext flag is set
   let context = [];
   
@@ -520,6 +534,44 @@ export default async function handler(req, res) {
 
   const startTime = Date.now();
 
+  // Update formatMessagesForModel to handle images
+  const formatMessagesForModel = (modelId, messages, fileData) => {
+    if (!fileData) return messages;
+
+    const provider = providerMap[modelId];
+    
+    if (fileData.isImage) {
+      if (provider === 'google') {
+        return [{
+          role: "user",
+          parts: [
+            {
+              inlineData: {
+                mimeType: fileData.fileType,
+                data: fileData.content
+              }
+            },
+            { text: enhancedPrompt }
+          ]
+        }];
+      }
+      
+      // For other providers (OpenAI, Anthropic, etc)
+      return [{
+        role: "user",
+        content: [
+          { type: "text", text: enhancedPrompt },
+          {
+            type: "image_url",
+            image_url: { url: `data:${fileData.fileType};base64,${fileData.content}` }
+          }
+        ]
+      }];
+    }
+
+    return messages;
+  };
+
   try {
     // Get custom models from localStorage (passed in request)
     const customModels = JSON.parse(req.query.customModels || '[]');
@@ -629,18 +681,24 @@ export default async function handler(req, res) {
         
         // Process model-specific streams with individual error handling
         try {
+          const formattedMessages = formatMessagesForModel(
+            modelId,
+            formattedContext,
+            fileData
+          );
+
           if (openAIModels[modelId]) {
-            await handleOpenAIStream(modelId, formattedContext, sendEvent, openai);
+            await handleOpenAIStream(modelId, formattedMessages, sendEvent, openai);
           } else if (claudeModels[modelId]) {
-            await handleClaudeStream(modelId, formattedContext, sendEvent, anthropic);
+            await handleClaudeStream(modelId, formattedMessages, sendEvent, anthropic);
           } else if (geminiModels[modelId]) {
-            await handleGeminiStream(modelId, formattedContext, sendEvent, genAI, geminiModels);
+            await handleGeminiStream(modelId, formattedMessages, sendEvent, genAI, geminiModels);
           } else if (deepseekModels[modelId]) {
-            await handleDeepSeekStream(modelId, formattedContext, sendEvent, deepseek);
+            await handleDeepSeekStream(modelId, formattedMessages, sendEvent, deepseek);
           } else if (openRouterModels[modelId]) {
-            await handleOpenRouterStream(modelId, formattedContext, sendEvent, openRouter, openRouterModels);
+            await handleOpenRouterStream(modelId, formattedMessages, sendEvent, openRouter, openRouterModels);
           } else if (modelId.startsWith('custom-')) {
-            await handleCustomModelStream(modelId, formattedContext, sendEvent, customModels);
+            await handleCustomModelStream(modelId, formattedMessages, sendEvent, customModels);
           }
         } catch (error) {
           // Handle errors for individual models without affecting others
@@ -1084,26 +1142,34 @@ async function handleGeminiStream(modelId, messages, sendEvent, genAI, geminiMod
 
 // Update OpenRouter handler to support context and handle premature closures
 async function handleOpenRouterStream(modelId, messages, sendEvent, openRouter, openRouterModels) {
-  // Check if messages is an array or a string
-  const formattedMessages = Array.isArray(messages) 
-    ? messages 
-    : [{ role: 'user', content: messages }];
-  
-  console.log(`OpenRouter: Using model ${openRouterModels[modelId]?.id || modelId} with ${formattedMessages.length} messages`);
-  
+  console.log(`OpenRouter: Using model ${openRouterModels[modelId]?.id || modelId}`);
+
+  // Check if message contains an image
+  const hasImage = messages.some(msg => 
+    Array.isArray(msg.content) && 
+    msg.content.some(c => c.type === 'image_url')
+  );
+
   return handleModelStream({
     modelId,
-    prompt: formattedMessages,
+    prompt: messages,
     sendEvent,
     client: openRouter,
     generateStream: async () => {
       try {
         return await openRouter.chat.completions.create({
           model: openRouterModels[modelId]?.id || modelId,
-          messages: formattedMessages,
+          messages: messages,
           stream: true,
           temperature: 0.7,
-          max_tokens: 8000
+          max_tokens: 8000,
+          // Add vision model parameters if image is present
+          ...(hasImage && {
+            vision_model: 'large', // Use high quality vision model
+            vision_config: {
+              detail: 'high'
+            }
+          })
         });
       } catch (error) {
         // Check for premature closure
@@ -1114,10 +1180,16 @@ async function handleOpenRouterStream(modelId, messages, sendEvent, openRouter, 
           // Retry the stream creation
           return await openRouter.chat.completions.create({
             model: openRouterModels[modelId]?.id || modelId,
-            messages: formattedMessages,
+            messages: messages,
             stream: true,
             temperature: 0.7,
-            max_tokens: 8000
+            max_tokens: 8000,
+            ...(hasImage && {
+              vision_model: 'large',
+              vision_config: {
+                detail: 'high'
+              }
+            })
           });
         }
         throw error; // Re-throw other errors

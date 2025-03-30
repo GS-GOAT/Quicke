@@ -3,8 +3,8 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "./auth/[...nextauth]";
 import prisma from '../../lib/prisma';
 import { extractTextFromPDF } from '../../utils/pdfProcessor';
+import { processImage } from '../../utils/imageProcessor';
 import fs from 'fs';
-import path from 'path';
 
 export const config = {
   api: {
@@ -17,70 +17,77 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // We'll make the session check optional for testing purposes
   let session;
   try {
     session = await getServerSession(req, res, authOptions);
-    console.log("Session status:", session ? "Authenticated" : "Not authenticated");
-    
-    // Continue with or without a session for testing
-  } catch (error) {
-    console.error('Authentication error:', error);
-    // Continue without authentication for testing
-  }
+    if (!session) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
 
-  const form = new IncomingForm({
-    keepExtensions: true,
-    maxFileSize: 10 * 1024 * 1024, // 10MB limit
-  });
+    const form = new IncomingForm({
+      keepExtensions: true,
+      maxFileSize: 10 * 1024 * 1024, // 10MB limit
+    });
 
-  return new Promise((resolve, reject) => {
-    form.parse(req, async (err, fields, files) => {
-      if (err) {
-        console.error('Form parse error:', err);
-        res.status(500).json({ error: 'Upload failed' });
-        return resolve();
-      }
-
-      try {
-        const fileField = files.file;
-        if (!fileField || (Array.isArray(fileField) && fileField.length === 0)) {
-          res.status(400).json({ error: 'No file uploaded' });
-          return resolve();
-        }
-        
-        const file = Array.isArray(fileField) ? fileField[0] : fileField;
-        
-        if (file.mimetype !== 'application/pdf') {
-          if (file.filepath && fs.existsSync(file.filepath)) {
-            fs.unlinkSync(file.filepath);
-          }
-          res.status(400).json({ error: 'Only PDF files are allowed' });
+    return new Promise((resolve) => {
+      form.parse(req, async (err, fields, files) => {
+        if (err) {
+          console.error('Form parse error:', err);
+          res.status(500).json({ error: 'Upload failed' });
           return resolve();
         }
 
         try {
-          // Extract text from the temporary PDF file
-          const pdfResult = await extractTextFromPDF(file.filepath);
-          
-          // Use a default user ID if no session (for testing only)
-          const userId = session?.user?.id || "test-user-id";
-          
-          // Save to database
+          const file = files.file?.[0];
+          if (!file) {
+            res.status(400).json({ error: 'No file uploaded' });
+            return resolve();
+          }
+
+          const isImage = file.mimetype.startsWith('image/');
+          const isPdf = file.mimetype === 'application/pdf';
+
+          if (!isImage && !isPdf) {
+            res.status(400).json({ 
+              error: 'Invalid file type. Only images and PDFs are supported.' 
+            });
+            return resolve();
+          }
+
+          // Process file content based on type
+          let content;
+          try {
+            if (isImage) {
+              const base64Content = await processImage(file.filepath);
+              content = base64Content; // Store base64 string directly
+            } else if (isPdf) {
+              const pdfText = await extractTextFromPDF(file.filepath);
+              content = typeof pdfText === 'string' ? pdfText : JSON.stringify(pdfText);
+            }
+
+            if (!content) {
+              throw new Error('Failed to process file content');
+            }
+          } catch (processError) {
+            console.error('File processing error:', processError);
+            throw new Error('Failed to process file content');
+          }
+
+          // Save to database with proper content handling
           const uploadedFile = await prisma.uploadedFile.create({
             data: {
-              userId: userId,
+              userId: session.user.id,
               fileName: file.originalFilename,
               fileType: file.mimetype,
               fileSize: file.size,
-              filePath: "processed-pdf",
-              content: pdfResult.text,
+              filePath: "processed-file",
+              content: content || '', // Ensure content is never null
               threadId: fields.threadId?.[0] || null,
               conversationId: fields.conversationId?.[0] || null,
             }
           });
 
-          // Clean up temporary file
+          // Clean up temp file
           try {
             if (file.filepath && fs.existsSync(file.filepath)) {
               fs.unlinkSync(file.filepath);
@@ -93,27 +100,22 @@ export default async function handler(req, res) {
             success: true, 
             file: {
               id: uploadedFile.id,
-              name: file.originalFilename,
               type: file.mimetype,
-              size: file.size
+              name: file.originalFilename,
+              content: isImage ? content : undefined, // Only send back image content
+              isImage,
+              isPdf 
             }
           });
-        } catch (err) {
-          console.error('Error processing upload:', err);
-          try {
-            if (file.filepath && fs.existsSync(file.filepath)) {
-              fs.unlinkSync(file.filepath);
-            }
-          } catch (cleanupErr) {
-            console.error('Error cleaning up temporary file:', cleanupErr);
-          }
-          res.status(500).json({ error: 'Failed to process PDF' });
+        } catch (error) {
+          console.error('Upload error:', error);
+          res.status(500).json({ error: 'Upload failed' });
         }
-      } catch (error) {
-        console.error('Error saving file:', error);
-        res.status(500).json({ error: 'Failed to process upload' });
-      }
-      return resolve();
+        return resolve();
+      });
     });
-  });
+  } catch (error) {
+    console.error('Server error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
 }

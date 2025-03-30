@@ -87,6 +87,40 @@ const getDisplayProvider = (provider) => {
   return provider;
 };
 
+// // Add this function to render multimodal content
+// const renderContent = (content) => {
+//   // Check if content is an array (multimodal response)
+//   if (Array.isArray(content)) {
+//     return content.map((item, index) => {
+//       if (item.type === 'text') {
+//         return (
+//           <ReactMarkdown key={index} components={MarkdownComponents}>
+//             {item.text}
+//           </ReactMarkdown>
+//         );
+//       } else if (item.type === 'image_url') {
+//         return (
+//           <div key={index} className="my-4">
+//             <img 
+//               src={item.image_url.url} 
+//               alt="Generated image" 
+//               className="max-w-full rounded-lg"
+//             />
+//           </div>
+//         );
+//       }
+//       return null;
+//     });
+//   }
+  
+//   // Regular text response
+//   return (
+//     <ReactMarkdown components={MarkdownComponents}>
+//       {content}
+//     </ReactMarkdown>
+//   );
+// };
+
 export default function ResponseColumn({ model, response, streaming, className, conversationId, onRetry }) {  // Add conversationId prop
   const contentRef = useRef(null);
   const [displayedText, setDisplayedText] = useState('');

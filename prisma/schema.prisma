@@ -41,6 +41,8 @@ model Conversation {
   uploadedFiles UploadedFile[]
   user          User           @relation(fields: [userId], references: [id])
   thread        Thread         @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  fileId        String?        
+  file          UploadedFile?  @relation("ConversationFile", fields: [fileId], references: [id]) 
 }
 
 model Message {
@@ -76,7 +78,8 @@ model UploadedFile {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  user         User          @relation(fields: [userId], references: [id])
-  thread       Thread?       @relation(fields: [threadId], references: [id], onDelete: SetNull)
-  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  user          User           @relation(fields: [userId], references: [id])
+  thread        Thread?        @relation(fields: [threadId], references: [id], onDelete: SetNull)
+  conversation  Conversation?  @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  conversations Conversation[] @relation("ConversationFile") 
 }

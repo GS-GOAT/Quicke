@@ -10,8 +10,17 @@ export default function FileUpload({ onUploadComplete, threadId, conversationId 
     const file = e.target.files[0];
     if (!file) return;
 
-    if (file.type !== 'application/pdf') {
-      setError('Only PDF files are allowed');
+    // Update file type check to include images
+    const acceptedTypes = [
+      'application/pdf',
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/webp'
+    ];
+
+    if (!acceptedTypes.includes(file.type)) {
+      setError('Only PDF and image files (JPEG, PNG, WebP) are allowed');
       return;
     }
 
@@ -77,7 +86,7 @@ export default function FileUpload({ onUploadComplete, threadId, conversationId 
         type="file"
         ref={fileInputRef}
         className="hidden"
-        accept="application/pdf"
+        accept="application/pdf,image/jpeg,image/jpg,image/png,image/webp"
         onChange={handleFileChange}
       />
       
@@ -94,7 +103,7 @@ export default function FileUpload({ onUploadComplete, threadId, conversationId 
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
             </svg>
-            Upload PDF
+            Upload File {/* Changed text to be more generic */}
           </>
         )}
       </button>
