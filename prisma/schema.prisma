@@ -67,21 +67,20 @@ model Thread {
 }
 
 model UploadedFile {
-  id             String   @id @default(cuid())
+  id             String         @id @default(cuid())
   userId         String
   fileName       String
   fileType       String
   fileSize       Int
-  filePath       String
+  filePath       String?
   content        String?
   threadId       String?
   conversationId String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  user           User           @relation(fields: [userId], references: [id])
-  thread         Thread?        @relation(fields: [threadId], references: [id], onDelete: SetNull)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @default(now()) @updatedAt
+  user           User          @relation(fields: [userId], references: [id])
+  thread         Thread?       @relation(fields: [threadId], references: [id], onDelete: SetNull)
   conversations  Conversation[] @relation("ConversationFiles")
   associatedWith Conversation[] @relation("AssociatedFile")
-  conversation   Conversation?  @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
 }

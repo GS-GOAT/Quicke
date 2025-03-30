@@ -80,7 +80,7 @@ export default async function handler(req, res) {
               fileName: file.originalFilename,
               fileType: file.mimetype,
               fileSize: file.size,
-              // filePath: "",           // Set to null since we don't use it anymore
+              filePath: null,        // Add this line with null value since we don't store files
               content: content || '',
               threadId: fields.threadId?.[0] || null,
               conversationId: fields.conversationId?.[0] || null,
