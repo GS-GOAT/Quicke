@@ -1,4 +1,3 @@
-// Add this at the top of the file, before any other code
 const getLLMProvider = (modelId, providerMap) => {
   if (providerMap[modelId]) {
     return providerMap[modelId].charAt(0).toUpperCase() + providerMap[modelId].slice(1);
@@ -188,21 +187,145 @@ const createSafeEventSender = (res) => (data) => {
 };
 
 export default async function handler(req, res) {
-  if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  // Set headers for proper SSE
+  // Set headers right at the start for all requests
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache, no-transform',
     'Connection': 'keep-alive',
   });
 
-  // Get user session
+  // Get user session early
   const session = await getServerSession(req, res, authOptions);
-  if (!session) return res.status(401).json({ error: "Unauthorized" });
+  if (!session) {
+    res.write(`data: ${JSON.stringify({ error: "Unauthorized" })}\n\n`);
+    return res.end();
+  }
 
+  // Update summarizer request handling
+  if (req.query.isSummarizer === 'true') {
+    try {
+      console.log('[Summary] Starting summary generation');
+      const responses = JSON.parse(req.query.responses);
+      
+      console.log('[Summary] Input responses:', Object.keys(responses).length);
+      
+      const apiKey = await prisma.apiKey.findFirst({
+        where: { userId: session.user.id, provider: 'google' },
+        select: { encryptedKey: true }
+      });
+
+      if (!apiKey) {
+        console.error('[Summary] Missing Google API key');
+        res.write(`data: ${JSON.stringify({
+          error: 'Google API key required',
+          loading: false,
+          streaming: false,
+          done: true
+        })}\n\n`);
+        return res.end();
+      }
+
+      const genAI = new GoogleGenerativeAI(apiKey.encryptedKey);
+      const model = genAI.getGenerativeModel({ 
+        model: 'gemini-2.0-flash',
+        api_version: 'v1alpha'
+      });
+
+      // Format the responses in a more structured way
+      const formattedResponses = Object.entries(responses)
+        .map(([model, text]) => `${model}:\n${text}\n`)
+        .join('\n---\n');
+
+      console.log('[Summary] Formatted responses:', formattedResponses);
+
+      const prompt = `Compare these AI responses and provide a concise synthesis highlighting key similarities and differences:
+
+${formattedResponses}
+
+Format your response as a clear, concise analysis.`;
+
+      try {
+        console.log('[Summary] Sending request to Gemini');
+        
+        // Send initial state immediately
+        res.write(`data: ${JSON.stringify({
+          text: '',
+          loading: true,
+          streaming: true
+        })}\n\n`);
+
+        const result = await model.generateContentStream({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.7,
+            topK: 40,
+            topP: 0.8,
+            maxOutputTokens: 1000,
+          },
+        });
+
+        console.log('[Summary] Stream started');
+        let accumulatedText = '';
+
+        // Process the stream
+        for await (const chunk of result.stream) {
+          if (res.writableEnded) {
+            console.log('[Summary] Response ended early');
+            break;
+          }
+          
+          const content = chunk.text();
+          if (content) {
+            accumulatedText += content;
+            console.log('[Summary] Chunk:', content.substring(0, 50) + '...');
+            
+            res.write(`data: ${JSON.stringify({
+              text: accumulatedText,
+              loading: false,
+              streaming: true
+            })}\n\n`);
+          }
+        }
+
+        // Send completion
+        console.log('[Summary] Stream complete, sending final update');
+        if (!res.writableEnded) {
+          res.write(`data: ${JSON.stringify({
+            text: accumulatedText,
+            loading: false,
+            streaming: false,
+            done: true
+          })}\n\n`);
+          res.end();
+        }
+
+      } catch (streamError) {
+        console.error('[Summary] Stream processing error:', streamError);
+        if (!res.writableEnded) {
+          res.write(`data: ${JSON.stringify({
+            error: 'Summary generation failed: ' + streamError.message,
+            loading: false,
+            streaming: false,
+            done: true
+          })}\n\n`);
+          res.end();
+        }
+      }
+
+      return;
+    } catch (error) {
+      console.error('[Summary] Fatal error:', error);
+      res.write(`data: ${JSON.stringify({
+        error: 'Summary generation failed: ' + error.message,
+        loading: false,
+        streaming: false,
+        done: true
+      })}\n\n`);
+      return res.end();
+    }
+  }
+
+  // Continue with regular model streaming...
   const { prompt, models, fileId, fileType } = req.query;
   const threadId = req.query.threadId;
   const conversationId = req.query.conversationId;

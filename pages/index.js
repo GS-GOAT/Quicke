@@ -85,6 +85,10 @@ export default function Home() {
     ]
   };
 
+  // Add new state for summary
+  const [showSummary, setShowSummary] = useState({});
+  const [summaryLoading, setSummaryLoading] = useState({});
+
   // Modify auto-scroll to only trigger on new prompt addition
   useEffect(() => {
     if (messagesEndRef.current && history.length > 0) {
@@ -377,25 +381,30 @@ export default function Home() {
       
       // Handle final completion after all models are done
       if (data.allComplete) {
+        console.log('Processing completion, checking for summary');
+        
+        const validResponses = Object.entries(completedResponses)
+          .filter(([_, response]) => !response.error);
+          
+        console.log(`Found ${validResponses.length} valid responses for summarization`);
+        
         try {
-          const validResponses = Object.entries(completedResponses)
-            .filter(([_, response]) => !response.error)
-            .reduce((acc, [model, response]) => {
-              acc[model] = { 
-                text: response.text,
-                timestamp: Date.now()
-              };
-              return acc;
-            }, {});
+          const validResponsesData = validResponses.reduce((acc, [model, response]) => {
+            acc[model] = { 
+              text: response.text,
+              timestamp: Date.now()
+            };
+            return acc;
+          }, {});
 
-          if (Object.keys(validResponses).length > 0) {
+          if (Object.keys(validResponsesData).length > 0) {
             const saveResponse = await fetch('/api/conversations/save', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 id: conversationId,
                 prompt: promptText,
-                responses: validResponses,
+                responses: validResponsesData,
                 threadId: activeThreadId,
                 fileId: fileId
               }),
@@ -464,6 +473,56 @@ export default function Home() {
     setShowContinueButton(true); // Now this will work
   };
 
+  // Add summary generation function
+  const generateSummary = async (conversationId) => {
+    if (!conversationId) return;
+    
+    const conversation = history.find(h => h.id === conversationId);
+    if (!conversation) return;
+    
+    // Get valid responses
+    const validResponses = Object.entries(conversation.responses)
+      .filter(([_, response]) => !response.error)
+      .reduce((acc, [model, response]) => {
+        acc[model] = { text: response.text };
+        return acc;
+      }, {});
+      
+    setSummaryLoading(prev => ({ ...prev, [conversationId]: true }));
+    
+    try {
+      const res = await fetch('/api/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ responses: validResponses })
+      });
+      
+      const summary = await res.json();
+      
+      setHistory(prev => prev.map(h => {
+        if (h.id === conversationId) {
+          return {
+            ...h,
+            responses: {
+              ...h.responses,
+              summary: {
+                text: summary.text,
+                loading: false,
+                streaming: false
+              }
+            }
+          };
+        }
+        return h;
+      }));
+      
+      setShowSummary(prev => ({ ...prev, [conversationId]: true }));
+    } catch (error) {
+      console.error('Summary generation failed:', error);
+    } finally {
+      setSummaryLoading(prev => ({ ...prev, [conversationId]: false }));
+    }
+  };
 
   // Add separator component between conversations
   const ConversationSeparator = () => (
@@ -583,26 +642,59 @@ export default function Home() {
           </div>
           
           <div className={getResponseLayoutClass()}>
+            {/* Render normal responses */}
             {(entry.activeModels || []).map(model => (
               <ResponseColumn 
                 key={`${entry.id}-${model}`}
                 model={model}
-                conversationId={entry.id}  // Add conversation ID
-                response={
-                  // Only pass current responses if this is the active conversation
-                  currentPromptId === entry.id 
-                    ? responses[model] 
-                    : entry.responses?.[model]
-                }
-                streaming={
-                  currentPromptId === entry.id && 
-                  (responses[model]?.streaming || entry.responses?.[model]?.streaming)
-                }
+                conversationId={entry.id}
+                response={currentPromptId === entry.id ? responses[model] : entry.responses?.[model]}
+                streaming={currentPromptId === entry.id && responses[model]?.streaming}
                 className="light-response-column"
                 onRetry={handleModelRetry}
               />
             ))}
+            
+            {/* Render summary if available */}
+            {entry.responses?.summary && (
+              <ResponseColumn
+                model="summary"
+                conversationId={entry.id}
+                response={currentPromptId === entry.id ? responses.summary : entry.responses.summary}
+                streaming={currentPromptId === entry.id && responses.summary?.streaming}
+                className="light-response-column"
+                isSummary={true}
+              />
+            )}
           </div>
+
+          {/* Add summarize button */}
+          {!showSummary[entry.id] && !currentPromptId && (
+            <div className="flex justify-center mt-4">
+              <button
+                onClick={() => generateSummary(entry.id)}
+                disabled={summaryLoading[entry.id]}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-400 hover:text-white bg-gray-800/50 hover:bg-gray-700/50 rounded-lg transition-all duration-200"
+              >
+                {summaryLoading[entry.id] ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    <span>Generating Summary...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                    </svg>
+                    <span>Summarize Responses</span>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
         </div>
       ))}
     </div>

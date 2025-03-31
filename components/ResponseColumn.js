@@ -47,6 +47,7 @@ const modelDisplayNames = {
   // Anthropic
   'claude-3-7': 'Claude 3.7 Sonnet',
   'claude-3-5': 'Claude 3.5 Sonnet',
+  'summary': 'Summarizer',  // Add summary model display name
 };
 
 // Add provider map
@@ -78,7 +79,8 @@ const providerMap = {
   'mistral-small-31': 'OpenRouter',
   'mistral-nemo': 'OpenRouter',
   'claude-3-7': 'Anthropic',
-  'claude-3-5': 'Anthropic'
+  'claude-3-5': 'Anthropic',
+  'summary': 'System',  // Add summary provider
 };
 
 // Update display provider function
@@ -121,7 +123,7 @@ const getDisplayProvider = (provider) => {
 //   );
 // };
 
-export default function ResponseColumn({ model, response, streaming, className, conversationId, onRetry }) {  // Add conversationId prop
+export default function ResponseColumn({ model, response, streaming, className, conversationId, onRetry, isSummary }) {  // Add conversationId prop
   const contentRef = useRef(null);
   const [displayedText, setDisplayedText] = useState('');
   const [copiedCode, setCopiedCode] = useState(null);  // state for code copy functionality
@@ -787,6 +789,9 @@ export default function ResponseColumn({ model, response, streaming, className, 
     },
   };
 
+  // Add special styling for summary
+  const columnClassName = `${className} ${isSummary ? 'col-span-full bg-gray-900/40 border-t border-gray-700/30 mt-4' : ''}`;
+
   return (
     <div className={`rounded-xl overflow-hidden flex flex-col transition-all duration-300 ${
       isExpanded 
@@ -794,7 +799,7 @@ export default function ResponseColumn({ model, response, streaming, className, 
         : isCollapsed
           ? 'h-[56px]' 
           : 'h-full'
-    } ${className}`}>
+    } ${columnClassName}`}>
       <div className="px-4 py-3 flex justify-between items-center border-b border-gray-800">
         <div className="flex items-center space-x-2">
           <div className="w-2 h-2 rounded-full bg-primary-500"></div>
