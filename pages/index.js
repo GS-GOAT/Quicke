@@ -218,9 +218,9 @@ export default function Home() {
         // Find the user message (should be the first one)
         const userMessage = conv.messages.find(msg => msg.role === 'user');
         
-        // Get all assistant messages and parse their content
+        // Get all assistant messages and summary
         const assistantMessages = conv.messages
-          .filter(msg => msg.role === 'assistant')
+          .filter(msg => msg.role === 'assistant' || msg.role === 'summary')
           .map(msg => {
             try {
               return JSON.parse(msg.content);
@@ -231,7 +231,7 @@ export default function Home() {
           })
           .filter(Boolean);
 
-        // Create responses object
+        // Create responses object including summary if it exists
         const responses = {};
         assistantMessages.forEach(parsed => {
           const { model, timestamp, ...responseData } = parsed;
@@ -246,9 +246,9 @@ export default function Home() {
           id: conv.id,
           prompt: userMessage.content,
           responses,
-          activeModels: Object.keys(responses),
+          activeModels: Object.keys(responses).filter(model => model !== 'summary'),
           timestamp: new Date(conv.createdAt),
-          isHistorical: true // Flag to identify retrieved conversations
+          isHistorical: true
         };
       });
 
@@ -499,6 +499,7 @@ export default function Home() {
       
       const summary = await res.json();
       
+      // Update local state
       setHistory(prev => prev.map(h => {
         if (h.id === conversationId) {
           return {
@@ -517,6 +518,24 @@ export default function Home() {
       }));
       
       setShowSummary(prev => ({ ...prev, [conversationId]: true }));
+
+      // Save the summary to the database
+      const saveResponse = await fetch('/api/conversations/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: conversationId,
+          prompt: conversation.prompt,
+          responses: conversation.responses,
+          threadId: activeThreadId,
+          summary: summary.text
+        })
+      });
+
+      if (!saveResponse.ok) {
+        throw new Error('Failed to save summary');
+      }
+
     } catch (error) {
       console.error('Summary generation failed:', error);
     } finally {
@@ -670,26 +689,45 @@ export default function Home() {
 
           {/* Add summarize button */}
           {!showSummary[entry.id] && !currentPromptId && (
-            <div className="flex justify-center mt-4">
+            <div className="flex justify-center mt-6">
               <button
                 onClick={() => generateSummary(entry.id)}
                 disabled={summaryLoading[entry.id]}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-400 hover:text-white bg-gray-800/50 hover:bg-gray-700/50 rounded-lg transition-all duration-200"
+                className={`
+                  group relative flex items-center gap-3 px-6 py-2.5 
+                  text-sm font-medium transition-all duration-300
+                  ${summaryLoading[entry.id]
+                    ? 'text-purple-300 bg-purple-900/20'
+                    : 'text-gray-300 hover:text-white bg-gradient-to-r from-purple-900/30 via-gray-800/30 to-purple-900/30 hover:from-purple-800/40 hover:via-gray-700/40 hover:to-purple-800/40'
+                  }
+                  rounded-xl border border-purple-500/20 hover:border-purple-500/30
+                  shadow-lg hover:shadow-purple-500/10
+                  backdrop-blur-sm
+                `}
               >
                 {summaryLoading[entry.id] ? (
                   <>
-                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    <span>Generating Summary...</span>
+                    <div className="relative">
+                      <div className="w-4 h-4 rounded-full border-2 border-current border-r-transparent animate-spin"></div>
+                    </div>
+                    <span>Analyzing Responses...</span>
                   </>
                 ) : (
                   <>
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                    <svg 
+                      xmlns="http://www.w3.org/2000/svg" 
+                      viewBox="0 0 24 24" 
+                      fill="currentColor" 
+                      className="w-5 h-5 transition-transform duration-300 group-hover:scale-110"
+                    >
+                      <path d="M21 6.375c0 2.692-4.03 4.875-9 4.875S3 9.067 3 6.375 7.03 1.5 12 1.5s9 2.183 9 4.875z" />
+                      <path d="M12 12.75c2.685 0 5.19-.586 7.078-1.609a8.283 8.283 0 001.897-1.384c.016.121.025.244.025.368C21 12.817 16.97 15 12 15s-9-2.183-9-4.875c0-.124.009-.247.025-.368a8.285 8.285 0 001.897 1.384C6.809 12.164 9.315 12.75 12 12.75z" />
+                      <path d="M12 16.5c2.685 0 5.19-.586 7.078-1.609a8.282 8.282 0 001.897-1.384c.016.121.025.244.025.368 0 2.692-4.03 4.875-9 4.875s-9-2.183-9-4.875c0-.124.009-.247.025-.368a8.284 8.284 0 001.897 1.384C6.809 15.914 9.315 16.5 12 16.5z" />
                     </svg>
                     <span>Summarize Responses</span>
+                    
+                    {/* Add subtle glow effect */}
+                    <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-purple-500/0 via-purple-500/5 to-purple-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
                   </>
                 )}
               </button>

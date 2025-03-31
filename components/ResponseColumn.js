@@ -790,7 +790,9 @@ export default function ResponseColumn({ model, response, streaming, className, 
   };
 
   // Add special styling for summary
-  const columnClassName = `${className} ${isSummary ? 'col-span-full bg-gray-900/40 border-t border-gray-700/30 mt-4' : ''}`;
+  const columnClassName = `${className} ${isSummary ? 
+    'col-span-full bg-gradient-to-b from-gray-900/60 to-gray-800/40 border-t border-purple-500/20 mt-6 backdrop-blur-sm shadow-2xl rounded-2xl overflow-hidden' 
+    : ''}`;
 
   return (
     <div className={`rounded-xl overflow-hidden flex flex-col transition-all duration-300 ${
@@ -800,26 +802,47 @@ export default function ResponseColumn({ model, response, streaming, className, 
           ? 'h-[56px]' 
           : 'h-full'
     } ${columnClassName}`}>
-      <div className="px-4 py-3 flex justify-between items-center border-b border-gray-800">
+      <div className={`px-4 py-3 flex justify-between items-center border-b ${
+        isSummary 
+          ? 'border-purple-500/20 bg-gradient-to-r from-purple-900/20 via-gray-800/40 to-purple-900/20' 
+          : 'border-gray-800'
+      }`}>
         <div className="flex items-center space-x-2">
-          <div className="w-2 h-2 rounded-full bg-primary-500"></div>
-          <div className="flex items-center">
-            <h3 className="text-lg font-medium text-gray-200 flex items-center gap-1.5">
-              {modelDisplayName}
-              <span 
-                className="text-[9px] px-1 py-0.5 rounded-md bg-gray-800/50 text-gray-400 font-medium leading-none tracking-wide uppercase"
-                title={`Provider: ${providerMap[model]}`}
-              >
-                {getDisplayProvider(providerMap[model])}
-              </span>
-            </h3>
-            {elapsedTime && renderTimer(elapsedTime)}
-            {isLoading && renderThinkingState()}
-          </div>
+          {isSummary ? (
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <div className="w-2 h-2 rounded-full bg-purple-400 animate-pulse"></div>
+                <div className="absolute inset-0 w-2 h-2 rounded-full bg-purple-400 animate-ping opacity-75"></div>
+              </div>
+              <h3 className="text-lg font-medium text-gray-200 flex items-center gap-2">
+                Summary
+                <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-medium border border-purple-500/20">
+                  Synthesizer
+                </span>
+              </h3>
+            </div>
+          ) : (
+            <div className="flex items-center space-x-2">
+              <div className="w-2 h-2 rounded-full bg-primary-500"></div>
+              <div className="flex items-center">
+                <h3 className="text-lg font-medium text-gray-200 flex items-center gap-1.5">
+                  {modelDisplayName}
+                  <span 
+                    className="text-[9px] px-1 py-0.5 rounded-md bg-gray-800/50 text-gray-400 font-medium leading-none tracking-wide uppercase"
+                    title={`Provider: ${providerMap[model]}`}
+                  >
+                    {getDisplayProvider(providerMap[model])}
+                  </span>
+                </h3>
+                {elapsedTime && renderTimer(elapsedTime)}
+                {isLoading && renderThinkingState()}
+              </div>
+            </div>
+          )}
         </div>
         <div className="flex items-center space-x-2">
-          {/* Add Retry Button in header */}
-          {!isLoading && !streaming && (displayedText || response?.text || response?.error) && (
+          {/* Only show retry button if not summary */}
+          {!isSummary && !isLoading && !streaming && (displayedText || response?.text || response?.error) && (
             <button
               onClick={handleRetry}
               className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all duration-200"
