@@ -67,19 +67,25 @@ export default function Onboarding() {
       );
       
       // Send keys to API endpoint
-      const response = await fetch('/api/settings/api-keys', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ keys: nonEmptyKeys })
-      });
+      const responses = await Promise.all(
+        Object.entries(nonEmptyKeys).map(([provider, key]) =>
+          fetch('/api/user/api-keys', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ provider, key })
+          })
+        )
+      );
 
-      if (!response.ok) {
-        const error = await response.json();
+      // Check if any response failed
+      const failedResponses = responses.filter(response => !response.ok);
+      if (failedResponses.length > 0) {
+        const error = await failedResponses[0].json();
         throw new Error(error.message || 'Failed to save API keys');
       }
-      
+
       // Show success animation
       setSuccess(true);
       
@@ -87,7 +93,6 @@ export default function Onboarding() {
       setTimeout(() => {
         router.push('/');
       }, 1500);
-      
     } catch (err) {
       console.error('Error saving API keys:', err);
       setError(err.message || 'Failed to save API keys. Please try again.');
