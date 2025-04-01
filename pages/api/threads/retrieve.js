@@ -51,10 +51,14 @@ export default async function handler(req, res) {
       const userMessage = conv.messages.find(msg => msg.role === 'user');
       
       const assistantMessages = conv.messages
-        .filter(msg => msg.role === 'assistant')
+        .filter(msg => msg.role === 'assistant' || msg.role === 'summary')
         .map(msg => {
           try {
-            return JSON.parse(msg.content);
+            const parsed = JSON.parse(msg.content);
+            return {
+              ...parsed,
+              role: msg.role
+            };
           } catch (e) {
             console.error('Error parsing message:', msg.content);
             return null;
@@ -63,22 +67,30 @@ export default async function handler(req, res) {
         .filter(Boolean);
 
       const responses = {};
+      let summaryText = null;
+
       assistantMessages.forEach(parsed => {
-        const { model, timestamp, ...responseData } = parsed;
-        responses[model] = {
-          ...responseData,
-          loading: false,
-          streaming: false
-        };
+        const { model, timestamp, role, ...responseData } = parsed;
+        
+        if (role === 'summary') {
+          summaryText = responseData.text;
+        } else {
+          responses[model] = {
+            ...responseData,
+            loading: false,
+            streaming: false
+          };
+        }
       });
 
       return {
         id: conv.id,
         prompt: userMessage?.content || "",
         responses,
-        activeModels: Object.keys(responses),
+        activeModels: Object.keys(responses).filter(model => model !== 'summary'),
         timestamp: new Date(conv.createdAt),
-        isHistorical: true
+        isHistorical: true,
+        summary: summaryText
       };
     });
 

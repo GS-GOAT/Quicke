@@ -218,14 +218,18 @@ export default function Home() {
         // Find the user message (should be the first one)
         const userMessage = conv.messages.find(msg => msg.role === 'user');
         
-        // Get all assistant messages and summary
+        // Get all assistant messages and summary, maintaining order
         const assistantMessages = conv.messages
           .filter(msg => msg.role === 'assistant' || msg.role === 'summary')
+          .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
           .map(msg => {
             try {
-              return JSON.parse(msg.content);
-            } catch (e) {
-              console.error('Error parsing message:', msg.content);
+              return {
+                ...JSON.parse(msg.content),
+                role: msg.role
+              };
+            } catch (error) {
+              console.error('Failed to parse message content:', error);
               return null;
             }
           })
@@ -233,13 +237,20 @@ export default function Home() {
 
         // Create responses object including summary if it exists
         const responses = {};
+        let summaryText = null;
+
         assistantMessages.forEach(parsed => {
-          const { model, timestamp, ...responseData } = parsed;
-          responses[model] = {
-            ...responseData,
-            loading: false,
-            streaming: false
-          };
+          const { model, timestamp, role, ...responseData } = parsed;
+          
+          if (role === 'summary') {
+            summaryText = responseData.text;
+          } else {
+            responses[model] = {
+              ...responseData,
+              loading: false,
+              streaming: false
+            };
+          }
         });
 
         return {
@@ -248,7 +259,8 @@ export default function Home() {
           responses,
           activeModels: Object.keys(responses).filter(model => model !== 'summary'),
           timestamp: new Date(conv.createdAt),
-          isHistorical: true
+          isHistorical: true,
+          summary: summaryText
         };
       });
 
@@ -261,9 +273,20 @@ export default function Home() {
       // Prepend new conversations if loading more, otherwise replace
       setHistory(prev => 
         pageNum > 1 
-          ? [...historicalConversations, ...prev]  // Changed this line to prepend
+          ? [...historicalConversations, ...prev]
           : historicalConversations
       );
+      
+      // Update showSummary state for loaded summaries
+      setShowSummary(prev => {
+        const updatedState = { ...prev };
+        historicalConversations.forEach(conv => {
+          if (conv.summary) {
+            updatedState[conv.id] = true;
+          }
+        });
+        return updatedState;
+      });
       
       // Only scroll on initial load (page 1) or maintain scroll position for load more
       if (pageNum === 1) {
@@ -475,27 +498,45 @@ export default function Home() {
 
   // Add summary generation function
   const generateSummary = async (conversationId) => {
-    if (!conversationId) return;
-    
-    const conversation = history.find(h => h.id === conversationId);
-    if (!conversation) return;
-    
-    // Get valid responses
-    const validResponses = Object.entries(conversation.responses)
-      .filter(([_, response]) => !response.error)
-      .reduce((acc, [model, response]) => {
-        acc[model] = { text: response.text };
-        return acc;
-      }, {});
-      
-    setSummaryLoading(prev => ({ ...prev, [conversationId]: true }));
-    
     try {
+      // Find the conversation
+      const conversation = history.find(h => h.id === conversationId);
+      if (!conversation) {
+        throw new Error('Conversation not found');
+      }
+
+      // If the conversation already has a summary, just display it
+      if (conversation.summary) {
+        setShowSummary(prev => ({ ...prev, [conversationId]: true }));
+        return;
+      }
+      
+      // Otherwise, generate a new summary
+      setSummaryLoading(prev => ({ ...prev, [conversationId]: true }));
+      
+      // Format responses for the API
+      const validResponses = Object.entries(conversation.responses)
+        .filter(([_, response]) => !response.error && response.text)
+        .reduce((acc, [model, response]) => {
+          acc[model] = { text: response.text };
+          return acc;
+        }, {});
+      
+      // Check if we have responses to summarize
+      if (Object.keys(validResponses).length === 0) {
+        throw new Error('No valid responses to summarize');
+      }
+      
+      // Call summary API
       const res = await fetch('/api/summarize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ responses: validResponses })
       });
+      
+      if (!res.ok) {
+        throw new Error('Failed to generate summary');
+      }
       
       const summary = await res.json();
       
@@ -504,14 +545,7 @@ export default function Home() {
         if (h.id === conversationId) {
           return {
             ...h,
-            responses: {
-              ...h.responses,
-              summary: {
-                text: summary.text,
-                loading: false,
-                streaming: false
-              }
-            }
+            summary: summary.text
           };
         }
         return h;
@@ -637,6 +671,65 @@ export default function Home() {
               />
             ))}
           </div>
+          
+          {/* Display summary if available */}
+          {entry.summary && (
+            <ResponseColumn
+              model="summary"
+              response={{ text: entry.summary }}
+              streaming={false}
+              isCollapsed={false}
+              className="w-full"
+              isSummary={true}
+            />
+          )}
+          
+          {/* Add summarize button if summary not showing */}
+          {!entry.summary && !currentPromptId && (
+            <div className="flex justify-center mt-6">
+              <button
+                onClick={() => generateSummary(entry.id)}
+                disabled={summaryLoading[entry.id]}
+                className={`
+                  group relative flex items-center gap-3 px-6 py-2.5 
+                  text-sm font-medium transition-all duration-300
+                  ${summaryLoading[entry.id]
+                    ? 'text-purple-300 bg-purple-900/20'
+                    : 'text-gray-300 hover:text-white bg-gradient-to-r from-purple-900/30 via-gray-800/30 to-purple-900/30 hover:from-purple-800/40 hover:via-gray-700/40 hover:to-purple-800/40'
+                  }
+                  rounded-xl border border-purple-500/20 hover:border-purple-500/30
+                  shadow-lg hover:shadow-purple-500/10
+                  backdrop-blur-sm
+                `}
+              >
+                {summaryLoading[entry.id] ? (
+                  <>
+                    <div className="relative">
+                      <div className="w-4 h-4 rounded-full border-2 border-current border-r-transparent animate-spin"></div>
+                    </div>
+                    <span>Analyzing Responses...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg 
+                      xmlns="http://www.w3.org/2000/svg" 
+                      viewBox="0 0 24 24" 
+                      fill="currentColor" 
+                      className="w-5 h-5 transition-transform duration-300 group-hover:scale-110"
+                    >
+                      <path d="M21 6.375c0 2.692-4.03 4.875-9 4.875S3 9.067 3 6.375 7.03 1.5 12 1.5s9 2.183 9 4.875z" />
+                      <path d="M12 12.75c2.685 0 5.19-.586 7.078-1.609a8.283 8.283 0 001.897-1.384c.016.121.025.244.025.368C21 12.817 16.97 15 12 15s-9-2.183-9-4.875c0-.124.009-.247.025-.368a8.285 8.285 0 001.897 1.384C6.809 12.164 9.315 12.75 12 12.75z" />
+                      <path d="M12 16.5c2.685 0 5.19-.586 7.078-1.609a8.282 8.282 0 001.897-1.384c.016.121.025.244.025.368 0 2.692-4.03 4.875-9 4.875s-9-2.183-9-4.875c0-.124.009-.247.025-.368a8.284 8.284 0 001.897 1.384C6.809 15.914 9.315 16.5 12 16.5z" />
+                    </svg>
+                    <span>Summarize Responses</span>
+                    
+                    {/* Add subtle glow effect */}
+                    <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-purple-500/0 via-purple-500/5 to-purple-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
         </div>
       ))}
 
@@ -674,21 +767,21 @@ export default function Home() {
               />
             ))}
             
-            {/* Render summary if available */}
-            {entry.responses?.summary && (
+            {/* Display summary if available */}
+            {entry.summary && (
               <ResponseColumn
                 model="summary"
-                conversationId={entry.id}
-                response={currentPromptId === entry.id ? responses.summary : entry.responses.summary}
-                streaming={currentPromptId === entry.id && responses.summary?.streaming}
-                className="light-response-column"
+                response={{ text: entry.summary }}
+                streaming={false}
+                isCollapsed={false}
+                className="w-full"
                 isSummary={true}
               />
             )}
           </div>
 
           {/* Add summarize button */}
-          {!showSummary[entry.id] && !currentPromptId && (
+          {!entry.summary && !currentPromptId && (
             <div className="flex justify-center mt-6">
               <button
                 onClick={() => generateSummary(entry.id)}
