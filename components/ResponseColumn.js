@@ -6,10 +6,8 @@ import 'katex/dist/katex.min.css';
 import { InlineMath, BlockMath } from 'react-katex';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
-import katex from 'katex';
-import CodeBlock from './CodeBlock'; // Add this import
-import remarkGfm from 'remark-gfm';  // Add this import at the top with other imports
-import remarkParse from 'remark-parse';
+import remarkGfm from 'remark-gfm';
+// import CodeBlock from './CodeBlock'; // Add this import
 
 // Model display names mapping
 const modelDisplayNames = {
@@ -126,16 +124,14 @@ const getDisplayProvider = (provider) => {
 export default function ResponseColumn({ model, response, streaming, className, conversationId, onRetry, isSummary }) {  // Add conversationId prop
   const contentRef = useRef(null);
   const [displayedText, setDisplayedText] = useState('');
-  const [copiedCode, setCopiedCode] = useState(null);  // state for code copy functionality
+  const [copiedText, setCopiedText] = useState(false);
   const lastResponseRef = useRef('');
   const processingTimeoutRef = useRef(null);
-  const [isActive, setIsActive] = useState(false);  // to track if this column is currently receiving updates
-  const previousResponseRef = useRef('');  // to track previous response
-  const currentConversationRef = useRef(conversationId);  // Add ref to track conversation
+  const [isActive, setIsActive] = useState(false);
+  const previousResponseRef = useRef('');
+  const currentConversationRef = useRef(conversationId);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
-
-  // Simplify timer-related state to just what's needed
   const [elapsedTime, setElapsedTime] = useState(null);
   const timerRef = useRef(null);
   const startTimeRef = useRef(null);
@@ -207,12 +203,12 @@ export default function ResponseColumn({ model, response, streaming, className, 
     }
   }, [response?.text, streaming, response?.loading, conversationId]);
 
-  // Remove or modify the auto-scroll during streaming
+  // Auto-scroll during streaming
   useEffect(() => {
     if (contentRef.current && streaming) {
-      // Only auto-scroll the response container if user has scrolled to bottom
+      // Only auto-scroll if user has scrolled to bottom
       const container = contentRef.current;
-      const isAtBottom = container.scrollHeight - container.scrollTop === container.clientHeight;
+      const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 100;
       
       if (isAtBottom) {
         container.scrollTop = container.scrollHeight;
@@ -220,7 +216,7 @@ export default function ResponseColumn({ model, response, streaming, className, 
     }
   }, [displayedText, streaming]);
 
-  // Single timer effect to handle all cases
+  // Timer effect
   useEffect(() => {
     // Clear existing timer
     if (timerRef.current) {
@@ -275,7 +271,7 @@ export default function ResponseColumn({ model, response, streaming, className, 
     };
   }, []);
 
-  // Enhanced timer display component
+  // Timer display component
   const renderTimer = (time) => (
     <div className="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700/50 ml-2 border border-gray-200 dark:border-gray-600">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" 
@@ -288,39 +284,17 @@ export default function ResponseColumn({ model, response, streaming, className, 
     </div>
   );
 
+  // Copy response to clipboard
   const copyToClipboard = () => {
     const textToCopy = response?.text || displayedText;
     if (textToCopy) {
       navigator.clipboard.writeText(textToCopy);
-      const notificationEl = document.createElement('div');
-      notificationEl.className = 'fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg transition-opacity duration-300 z-50';
-      notificationEl.textContent = `Copied ${modelDisplayName}'s response`;
-      document.body.appendChild(notificationEl);
-      
-      setTimeout(() => {
-        notificationEl.style.opacity = '0';
-        setTimeout(() => {
-          document.body.removeChild(notificationEl);
-        }, 300);
-      }, 2000);
+      setCopiedText(true);
+      setTimeout(() => setCopiedText(false), 2000);
     }
   };
 
-  // Copy code function
-  const copyCode = (code, language) => {
-    navigator.clipboard.writeText(code);
-    setCopiedCode(language);
-    setTimeout(() => setCopiedCode(null), 2000);
-  };
-
-  // Determine the current state
-  const isLoading = response?.loading === true;
-  const hasError = response?.error != null;
-  const hasText = (displayedText && displayedText.length > 0) || 
-                  (response?.text && response.text.length > 0);
-  const waitingForPrompt = !isLoading && !hasError && !hasText;
-
-  // Replace the current processMathInText function with this robust version
+  // Process mathematical expressions in text
   const processMathInText = (text) => {
     if (!text) return text;
     
@@ -337,47 +311,46 @@ export default function ResponseColumn({ model, response, streaming, className, 
       return `INLINE_CODE_${inlineCodes.length - 1}`;
     });
 
-    // Fix the specific math patterns from the examples
+    // Simple detector for square brackets containing LaTeX expressions
+    processedText = processedText.replace(/\[(.*?\\frac.*?|.*?\\sqrt.*?|.*?\\boxed.*?)\]/g, (match, p1) => {
+      // Skip if it looks like a link
+      if (p1.includes('](') || p1.includes('http')) {
+        return match;
+      }
+      return `$$${p1}$$`;
+    });
+
+    // Handle common math pattern replacements
     
-    // 1. Fix \x2 and \x3 patterns (LaTeX-style exponents)
-    processedText = processedText.replace(/\\x\s*2/g, 'x^2');
-    processedText = processedText.replace(/\\x\s*3/g, 'x^3');
+    // LaTeX-style exponents
+    processedText = processedText.replace(/\\x\s*([0-9]+)/g, 'x^$1');
     
-    // 2. Handle integration expressions with commas and boxed results
+    // Integration expressions with boxed results
     processedText = processedText.replace(
-      /\[\s*\\int\s+([^\],]+),?\s*dx\s*=\s*\\boxed\{\\dfrac\{([^{}]+)\}\{([^{}]+)\}\s*\+\s*C\s*\}\s*\]/g,
-      '$$\\int $1\\,dx = \\boxed{\\dfrac{$2}{$3} + C}$$'
+      /\[\s*\\int\s+([^\],]+),?\s*dx\s*=\s*\\boxed\{([^{}]+)\}\s*\]/g,
+      '$$\\int $1\\,dx = \\boxed{$2}$$'
     );
     
-    // 3. Handle simpler integration expressions
+    // Simple integrations
     processedText = processedText.replace(
-      /\[\s*\\int\s+([^\],]+),?\s*dx\s*=\s*\\frac\{([^{}]+)\}\{([^{}]+)\}\s*\+\s*C\s*\]/g,
-      '$$\\int $1\\,dx = \\frac{$2}{$3} + C$$'
+      /\[\s*\\int\s+([^\],]+),?\s*dx\s*=\s*([^\\[\]]+)\s*\]/g,
+      '$$\\int $1\\,dx = $2$$'
     );
     
-    // 4. Handle integration with Unicode symbol
+    // Unicode integration symbol
     processedText = processedText.replace(
-      /∫\s+([^\n,]+),?\s*dx\s*=\s*\(([^)]+)\)\/([^+]+)\s*\+\s*C/g,
-      '$$\\int $1\\,dx = \\frac{$2}{$3} + C$$'
+      /∫\s+([^\n,]+),?\s*dx\s*=\s*([^]+)/g,
+      '$$\\int $1\\,dx = $2$$'
     );
     
-    // 5. Handle standalone fraction expressions
+    // Standalone LaTeX expressions
     processedText = processedText.replace(
-      /\\frac\{([^{}]+)\}\{([^{}]+)\}/g,
-      '$$\\frac{$1}{$2}$$'
+      /\\(frac|boxed|sqrt|vec|overrightarrow|hat|bar)\{([^{}]+)\}\{?([^{}]*)\}?/g,
+      '$$\\$1{$2}{$3}$$'
     );
-    
-    // 6. Handle standalone boxed expressions
-    processedText = processedText.replace(
-      /\\boxed\{([^{}]+)\}/g,
-      '$$\\boxed{$1}$$'
-    );
-    
-    // 7. Handle special square bracket notations for integrals
-    processedText = processedText.replace(
-      /\[\s*(\\int|∫)\s+([^,=]+),?\s*d([a-z])\s*=\s*([^\\[\]]+)\s*\]/g,
-      '$$\\int $2\\,d$3 = $4$$'
-    );
+
+    // Fix problematic math expressions
+    processedText = processedText.replace(/KaTeX can only parse string typed expression/g, '');
     
     // Restore code blocks and inline code
     processedText = processedText.replace(/CODE_BLOCK_(\d+)/g, (_, i) => codeBlocks[parseInt(i)]);
@@ -386,11 +359,19 @@ export default function ResponseColumn({ model, response, streaming, className, 
     return processedText;
   };
 
-  // Enhanced Math component with better error handling and options
+  // Enhanced Math component with better error handling
   const Math = ({ value, inline }) => {
+    // Clean up problematic text
+    const cleanValue = value ? value
+      .replace(/KaTeX can only parse string typed expression/g, '')
+      .replace(/​/g, '') // Remove zero-width spaces
+      .replace(/\s+([{}])/g, '$1') // Remove spaces before braces
+      .replace(/([{}])\s+/g, '$1') // Remove spaces after braces
+      .trim() : '';
+
     const options = {
       throwOnError: false,
-      errorColor: '#aaa', // Less noticeable neutral color for error fallback
+      errorColor: '#aaa',
       strict: false,
       trust: true,
       macros: {
@@ -400,46 +381,169 @@ export default function ResponseColumn({ model, response, streaming, className, 
         "\\Q": "\\mathbb{Q}",
         "\\C": "\\mathbb{C}",
         "\\implies": "\\Rightarrow",
-        "\\iff": "\\Leftrightarrow",
-        "\\norm": "\\|#1\\|",
-        "\\set": "\\{#1\\}",
-        "\\abs": "|#1|",
-        "\\probability": "\\mathbb{P}\\left(#1\\right)",
-        "\\expectation": "\\mathbb{E}\\left[#1\\right]",
-        "\\variance": "\\text{Var}\\left[#1\\right]",
-        "\\diff": "\\mathrm{d}",
-        "\\pd": "\\partial",
-        "\\transpose": "^{\\mathsf{T}}",
-        "\\inverse": "^{-1}",
-        "\\argmin": "\\underset{#1}{\\text{arg min}}",
-        "\\argmax": "\\underset{#1}{\\text{arg max}}",
-        "\\mod": "\\text{ mod }",
-        "\\equiv": "\\text{ equiv }",
-        "\\ceil": "\\lceil#1\\rceil",
-        "\\floor": "\\lfloor#1\\rfloor",
-        "\\norm": "\\left\\|#1\\right\\|",
-        "\\paren": "\\left(#1\\right\\right)",
-        "\\ang": "\\langle#1\\rangle",
-        "\\abs": "\\left|#1\\right|",
-        "\\set": "\\{#1\\}",
-        "\\card": "\\left|#1\\right|",
-        "\\vectornorm": "\\left\\|#1\\right\\|",
-        "\\interior": "\\mathop{\\mathrm{int}}"
+        "\\iff": "\\Leftrightarrow"
       },
     };
 
     try {
       return inline ? (
-        <InlineMath math={value} settings={options} />
+        <InlineMath math={cleanValue} settings={options} />
       ) : (
-        <BlockMath math={value} settings={options} />
+        <BlockMath math={cleanValue} settings={options} />
       );
     } catch (error) {
       console.error('KaTeX error:', error);
-      // Return a neutral fallback without red color
       return <code className="text-gray-400 bg-gray-800/60 px-1.5 py-0.5 rounded font-mono text-sm">{value}</code>;
     }
   };
+
+  // Show thinking state during loading
+  const renderThinkingState = () => (
+    <span className="ml-2 text-xs text-gray-400 thinking-pulse">
+      Thinking
+      <span className="thinking-dots">
+        <span className="thinking-dot"></span>
+        <span className="thinking-dot"></span>
+        <span className="thinking-dot"></span>
+      </span>
+    </span>
+  );
+
+  // Toggle response collapse
+  const toggleCollapse = (e) => {
+    e.stopPropagation();
+    setIsCollapsed(!isCollapsed);
+    if (isExpanded) setIsExpanded(false);
+  };
+
+  // Toggle fullscreen expand
+  const toggleExpand = (e) => {
+    e.stopPropagation();
+    setIsExpanded(!isExpanded);
+    if (isCollapsed) setIsCollapsed(false);
+  };
+
+  // Handle retry click
+  const handleRetry = () => {
+    if (typeof onRetry === 'function') {
+      onRetry(model, conversationId);
+    }
+  };
+
+  // Handle API key warning
+  const handleApiKeyWarning = () => {
+    const event = new CustomEvent('toggleApiKeyManager', {
+      detail: { show: true }
+    });
+    window.dispatchEvent(event);
+  };
+
+  // Render error states
+  const renderError = () => {
+    const errorType = response.errorType || 'UNKNOWN_ERROR';
+    
+    const getErrorStyles = () => {
+      switch (errorType) {
+        case 'API_KEY_MISSING':
+          return 'border-yellow-600/30 bg-yellow-900/20 cursor-pointer hover:bg-yellow-900/30';
+        case 'MODEL_UNAVAILABLE':
+        case 'TIMEOUT':
+          return 'border-orange-600/30 bg-orange-900/20';
+        case 'RATE_LIMIT':
+          return 'border-purple-600/30 bg-purple-900/20';
+        default:
+          return 'border-red-800/30 bg-red-900/20';
+      }
+    };
+
+    const getErrorTitle = () => {
+      switch (errorType) {
+        case 'API_KEY_MISSING': return 'API Key Required';
+        case 'MODEL_UNAVAILABLE': return 'Model Unavailable';
+        case 'TIMEOUT': return 'Response Timeout';
+        case 'RATE_LIMIT': return 'Rate Limit Exceeded';
+        case 'MAX_RETRIES_EXCEEDED': return 'Max Retries Exceeded';
+        case 'EMPTY_RESPONSE': return 'Empty Response';
+        case 'NETWORK_ERROR': return 'Network Error';
+        default: return 'Error Encountered';
+      }
+    };
+
+    const getErrorMessage = () => {
+      if (response.retryCount > 0) {
+        return `${response.error} (Retry ${response.retryCount}/${response.maxRetries || 2})`;
+      }
+      return response.error;
+    };
+
+    const getErrorIcon = () => {
+      switch (errorType) {
+        case 'API_KEY_MISSING':
+          return (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+              <path fillRule="evenodd" d="M8 7a5 5 0 113.61 4.804l-1.903 1.903A1 1 0 019 14H8v1a1 1 0 01-1 1H6v1a1 1 0 01-1 1H3a1 1 0 01-1-1v-2a1 1 0 01.293-.707L8.196 8.39A5.002 5.002 0 018 7zm5-3a.75.75 0 000 1.5A1.5 1.5 0 0114.5 7 .75.75 0 0016 7a3 3 0 00-3-3z" clipRule="evenodd" />
+            </svg>
+          );
+        case 'TIMEOUT':
+        case 'MODEL_UNAVAILABLE':
+          return (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z" clipRule="evenodd" />
+            </svg>
+          );
+        default:
+          return (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+            </svg>
+          );
+      }
+    };
+
+    const errorTextClass = () => {
+      switch (errorType) {
+        case 'API_KEY_MISSING': return 'text-yellow-400';
+        case 'MODEL_UNAVAILABLE':
+        case 'TIMEOUT': return 'text-orange-400';
+        case 'RATE_LIMIT': return 'text-purple-400';
+        default: return 'text-red-400';
+      }
+    };
+
+    return (
+      <div className={`p-4 rounded-lg border ${getErrorStyles()} transition-colors duration-200`}>
+        <div className="flex items-start space-x-3">
+          <div className={`p-1.5 rounded-full ${errorTextClass()} bg-opacity-20`}>
+            {getErrorIcon()}
+          </div>
+          <div>
+            <p className={`font-medium ${errorTextClass()}`}>{getErrorTitle()}</p>
+            <p className="mt-1 text-sm text-gray-300">{getErrorMessage()}</p>
+            {errorType === 'API_KEY_MISSING' && (
+              <button 
+                onClick={handleApiKeyWarning}
+                className="mt-2 text-xs text-yellow-500 hover:text-yellow-400 font-medium flex items-center"
+              >
+                Add API key →
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Improved loading animation
+  const renderLoading = () => (
+    <div className="flex flex-col items-center justify-center py-8 space-y-4">
+      <div className="w-full max-w-md h-4 rounded-full loading-gradient opacity-70"></div>
+      <div className="w-3/4 max-w-sm h-4 rounded-full loading-gradient opacity-50"></div>
+      <div className="w-1/2 max-w-xs h-4 rounded-full loading-gradient opacity-30"></div>
+      <div className="dot-typing-container mt-2">
+        <div className="dot-typing"></div>
+      </div>
+    </div>
+  );
 
   // Updated CodeBlock component with fixed JSX structure
   const CodeBlockWrapper = ({ node, inline, className, children, ...props }) => {
@@ -491,212 +595,76 @@ export default function ResponseColumn({ model, response, streaming, className, 
     );
   };
 
-  const handleApiKeyWarning = () => {
-    const event = new CustomEvent('toggleApiKeyManager', {
-      detail: { show: true }
-    });
-    window.dispatchEvent(event);
-  };
-
-  const renderError = () => {
-    const errorType = response.errorType || 'UNKNOWN_ERROR';
-    
-    const getErrorStyles = () => {
-      switch (errorType) {
-        case 'API_KEY_MISSING':
-          return 'border-yellow-600/30 bg-yellow-900/20 cursor-pointer hover:bg-yellow-900/30';
-        case 'MODEL_UNAVAILABLE':
-          return 'border-orange-600/30 bg-orange-900/20';
-        case 'TIMEOUT':
-          return 'border-orange-600/30 bg-orange-900/20';
-        case 'RATE_LIMIT':
-          return 'border-purple-600/30 bg-purple-900/20';
-        case 'MAX_RETRIES_EXCEEDED':
-          return 'border-red-600/30 bg-red-900/20';
-        case 'EMPTY_RESPONSE':
-          return 'border-blue-600/30 bg-blue-900/20';
-        default:
-          return 'border-red-800/30 bg-red-900/20';
-      }
-    };
-
-    const getErrorTitle = () => {
-      switch (errorType) {
-        case 'API_KEY_MISSING':
-          return 'API Key Required';
-        case 'MODEL_UNAVAILABLE':
-          return 'Model Unavailable';
-        case 'TIMEOUT':
-          return 'Response Timeout';
-        case 'RATE_LIMIT':
-          return 'Rate Limit Exceeded';
-        case 'MAX_RETRIES_EXCEEDED':
-          return 'Max Retries Exceeded';
-        case 'EMPTY_RESPONSE':
-          return 'Empty Response';
-        case 'NETWORK_ERROR':
-          return 'Network Error';
-        default:
-          return 'Error Encountered';
-      }
-    };
-
-    const getErrorMessage = () => {
-      if (response.retryCount > 0) {
-        return `${response.error} (Retry ${response.retryCount}/${response.maxRetries || 2})`;
-      }
-      return response.error;
-    };
-
-    const getErrorIcon = () => {
-      switch (errorType) {
-        case 'API_KEY_MISSING':
-          return (
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-              <path fillRule="evenodd" d="M8 7a5 5 0 113.61 4.804l-1.903 1.903A1 1 0 019 14H8v1a1 1 0 01-1 1H6v1a1 1 0 01-1 1H3a1 1 0 01-1-1v-2a1 1 0 01.293-.707L8.196 8.39A5.002 5.002 0 018 7zm5-3a.75.75 0 000 1.5A1.5 1.5 0 0114.5 7 .75.75 0 0016 7a3 3 0 00-3-3z" clipRule="evenodd" />
-            </svg>
-          );
-        case 'TIMEOUT':
-        case 'MODEL_UNAVAILABLE':
-          return (
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z" clipRule="evenodd" />
-            </svg>
-          );
-        case 'EMPTY_RESPONSE':
-          return (
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-              <path d="M3.75 3A1.75 1.75 0 002 4.75v3.26a3.235 3.235 0 011.75-.51h12.5c.644 0 1.245.188 1.75.51V6.75A1.75 1.75 0 0016.25 5h-4.836a.25.25 0 01-.177-.073L9.823 3.513A1.75 1.75 0 008.586 3H3.75zM3.75 9A1.75 1.75 0 002 10.75v4.5c0 .966.784 1.75 1.75 1.75h12.5A1.75 1.75 0 0018 15.25v-4.5A1.75 1.75 0 0016.25 9H3.75z" />
-            </svg>
-          );
-        default:
-          return (
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-            </svg>
-          );
-      }
-    };
-
-    const errorTextClass = () => {
-      switch (errorType) {
-        case 'API_KEY_MISSING':
-          return 'text-yellow-400';
-        case 'MODEL_UNAVAILABLE':
-        case 'TIMEOUT':
-          return 'text-orange-400';
-        case 'RATE_LIMIT':
-          return 'text-purple-400';
-        case 'MAX_RETRIES_EXCEEDED':
-          return 'text-red-400';
-        case 'EMPTY_RESPONSE':
-          return 'text-blue-400';
-        default:
-          return 'text-red-400';
-      }
-    };
-
-    return (
-      <div className={`p-4 rounded-lg border ${getErrorStyles()} transition-colors duration-200`}>
-        <div className="flex items-start space-x-3">
-          <div className={`p-1.5 rounded-full ${errorTextClass()} bg-opacity-20`}>
-            {getErrorIcon()}
-          </div>
-          <div>
-            <p className={`font-medium ${errorTextClass()}`}>
-              {getErrorTitle()}
-            </p>
-            <p className="mt-1 text-sm text-gray-300">{getErrorMessage()}</p>
-            {errorType === 'API_KEY_MISSING' && (
-              <button 
-                onClick={handleApiKeyWarning}
-                className="mt-2 text-xs text-yellow-500 hover:text-yellow-400 font-medium flex items-center"
-              >
-                Add API key →
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const renderLoading = (isSlowModel) => (
-    <div className="flex flex-col items-center justify-center h-full space-y-4">
-      <div className="w-full max-w-md h-4 rounded-full loading-gradient"></div>
-      <div className="w-3/4 max-w-sm h-4 rounded-full loading-gradient"></div>
-      <div className="dot-typing-container">
-        <div className="dot-typing"></div>
-      </div>
-    </div>
-  );
-
-  // Update the thinking animation in header
-  const renderThinkingState = () => (
-    <span className="ml-2 text-xs text-gray-400 thinking-pulse">
-      Thinking
-      <span className="thinking-dots">
-        <span className="thinking-dot"></span>
-        <span className="thinking-dot"></span>
-        <span className="thinking-dot"></span>
-      </span>
-    </span>
-  );
-
-  const toggleCollapse = (e) => {
-    e.stopPropagation();
-    setIsCollapsed(!isCollapsed);
-    if (isExpanded) setIsExpanded(false);
-  };
-
-  const toggleExpand = (e) => {
-    e.stopPropagation();
-    setIsExpanded(!isExpanded);
-    if (isCollapsed) setIsCollapsed(false);
-  };
-
-  // Handle retry click
-  const handleRetry = () => {
-    console.log('Retry clicked for model:', model, 'conversation:', conversationId);
-    if (typeof onRetry === 'function') {
-      onRetry(model, conversationId);
-    }
-  };
-
-  // Define table components outside the main render
+  // Define markdown rendering components
   const MarkdownComponents = {
+    // Headings with proper typography and spacing
+    h1: ({ children }) => (
+      <h1 className="text-2xl font-semibold mt-6 mb-4 pb-2 border-b border-gray-700/30 text-white">{children}</h1>
+    ),
+    h2: ({ children }) => (
+      <h2 className="text-xl font-semibold mt-5 mb-3 text-white">{children}</h2>
+    ),
+    h3: ({ children }) => (
+      <h3 className="text-lg font-medium mt-4 mb-2 text-white">{children}</h3>
+    ),
+    h4: ({ children }) => (
+      <h4 className="text-base font-medium mt-3 mb-2 text-gray-100">{children}</h4>
+    ),
+    
+    // Paragraphs with proper line height and spacing
+    p: ({ children }) => (
+      <p className="my-3 leading-relaxed text-gray-200">{children}</p>
+    ),
+    
+    // Enhanced unordered lists
+    ul: ({ children }) => (
+      <ul className="my-3 pl-6 space-y-2">{children}</ul>
+    ),
+    
+    // Enhanced ordered lists
+    ol: ({ children }) => (
+      <ol className="my-3 pl-6 space-y-2 list-decimal">{children}</ol>
+    ),
+    
+    // List items with better spacing and bullets
+    li: ({ children }) => (
+      <li className="text-gray-200 leading-relaxed">{children}</li>
+    ),
+    
+    // Blockquotes with elegant styling
+    blockquote: ({ children }) => (
+      <blockquote className="border-l-4 border-gray-500/50 pl-4 my-4 italic text-gray-300 bg-gray-800/30 py-2 pr-3 rounded-r">
+        {children}
+      </blockquote>
+    ),
+    
+    // Tables with proper styling
     table: ({ children }) => (
-      <div className="w-full overflow-x-auto my-6 rounded-lg border border-gray-700/50 shadow-xl bg-gray-900/30">
+      <div className="w-full overflow-x-auto my-6 rounded-lg border border-gray-700/50 shadow-lg">
         <table className="min-w-full divide-y divide-gray-700/50">
           {children}
         </table>
       </div>
     ),
     thead: ({ children }) => (
-      <thead className="bg-gray-800/70">
-        {children}
-      </thead>
+      <thead className="bg-gray-800/70">{children}</thead>
     ),
     tbody: ({ children }) => (
-      <tbody className="divide-y divide-gray-700/50 bg-gray-900/20">
-        {children}
-      </tbody>
+      <tbody className="divide-y divide-gray-700/50 bg-gray-900/20">{children}</tbody>
     ),
     tr: ({ children }) => (
-      <tr className="transition-all duration-150 hover:bg-gray-800/40">
-        {children}
-      </tr>
+      <tr className="transition-all duration-150 hover:bg-gray-800/40">{children}</tr>
     ),
     th: ({ children }) => (
-      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider whitespace-nowrap bg-gray-800/50">
+      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider whitespace-nowrap">
         {children}
       </th>
     ),
     td: ({ children }) => (
-      <td className="px-6 py-4 text-sm text-gray-300 font-normal align-middle">
-        {children}
-      </td>
+      <td className="px-6 py-4 text-sm text-gray-300 align-middle">{children}</td>
     ),
+    
+    // Enhanced code blocks with syntax highlighting, language label, and copy button
     code: ({ node, inline, className, children, ...props }) => {
       const [isCopied, setIsCopied] = useState(false);
       const match = /language-(\w+)/.exec(className || '');
@@ -710,10 +678,10 @@ export default function ResponseColumn({ model, response, streaming, className, 
         };
 
         return (
-          <div className="relative group">
+          <div className="relative group my-4">
             {/* Language indicator */}
             {language && (
-              <div className="absolute top-0 left-0 bg-gray-800/90 text-gray-400 text-xs px-2 py-1 rounded-bl font-mono">
+              <div className="absolute top-0 left-0 bg-gray-800/90 text-gray-400 text-xs px-2 py-1 rounded-bl font-mono z-10">
                 {language}
               </div>
             )}
@@ -721,7 +689,7 @@ export default function ResponseColumn({ model, response, streaming, className, 
             {/* Copy button with success state */}
             <button
               onClick={handleCopy}
-              className={`absolute top-2 right-2 p-1.5 rounded text-xs font-medium transition-all duration-200 ${
+              className={`absolute top-2 right-2 p-1.5 rounded text-xs font-medium transition-all duration-200 z-10 ${
                 isCopied 
                   ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30' 
                   : 'bg-gray-700/50 hover:bg-gray-600/50 text-gray-300'
@@ -740,7 +708,7 @@ export default function ResponseColumn({ model, response, streaming, className, 
                     <path d="M7 3.5A1.5 1.5 0 018.5 2h3.879a1.5 1.5 0 011.06.44l3.122 3.12A1.5 1.5 0 0117 6.622V12.5a1.5 1.5 0 01-1.5 1.5h-1v-3.379a3 3 0 00-.879-2.121L10.5 5.379A3 3 0 008.379 4.5H7v-1z" />
                     <path d="M4.5 6A1.5 1.5 0 003 7.5v9A1.5 1.5 0 004.5 18h7a1.5 1.5 0 001.5-1.5v-5.879a1.5 1.5 0 00-.44-1.06L9.44 6.439A1.5 1.5 0 008.378 6H4.5z" />
                   </svg>
-                  <span>Copy</span>
+                  {/* <span>Copy</span> */}
                 </span>
               )}
             </button>
@@ -754,11 +722,13 @@ export default function ResponseColumn({ model, response, streaming, className, 
                 padding: '2.5rem 1rem 1rem 1rem',
                 backgroundColor: 'rgb(0, 0, 20)',
                 fontSize: '0.875rem',
-                lineHeight: '1.5'
+                lineHeight: '1.5',
+                border: 'none'
               }}
               codeTagProps={{
                 style: {
-                  fontFamily: 'JetBrains Mono, Fira Code, Menlo, Monaco, Consolas, monospace'
+                  fontFamily: 'JetBrains Mono, Fira Code, Menlo, Monaco, Consolas, monospace',
+                  backgroundColor: 'transparent'
                 }
               }}
             >
@@ -774,20 +744,35 @@ export default function ResponseColumn({ model, response, streaming, className, 
         </code>
       );
     },
-    // Add link component configuration
-    a: ({ node, children, href }) => {
-      return (
-        <a
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-500"
-        >
-          {children}
-        </a>
-      );
-    },
+    
+    // Links with proper styling
+    a: ({ node, children, href }) => (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-blue-400 hover:text-blue-300 underline underline-offset-2 decoration-blue-400/30 hover:decoration-blue-300/50 transition-colors"
+      >
+        {children}
+      </a>
+    ),
+    
+    // Horizontal rule with better styling
+    hr: () => (
+      <hr className="my-6 border-t border-gray-700/50" />
+    ),
+    
+    // Math rendering components
+    math: ({ value }) => <Math value={value} inline={false} />,
+    inlineMath: ({ value }) => <Math value={value} inline={true} />
   };
+
+  // Determine the current state
+  const isLoading = response?.loading === true;
+  const hasError = response?.error != null;
+  const hasText = (displayedText && displayedText.length > 0) || 
+                 (response?.text && response.text.length > 0);
+  const waitingForPrompt = !isLoading && !hasError && !hasText;
 
   // Add special styling for summary
   const columnClassName = `${className} ${isSummary ? 
@@ -802,6 +787,7 @@ export default function ResponseColumn({ model, response, streaming, className, 
           ? 'h-[56px]' 
           : 'h-full'
     } ${columnClassName}`}>
+      {/* Header with model info and controls */}
       <div className={`px-4 py-3 flex justify-between items-center border-b ${
         isSummary 
           ? 'border-purple-500/20 bg-gradient-to-r from-purple-900/20 via-gray-800/40 to-purple-900/20' 
@@ -840,8 +826,10 @@ export default function ResponseColumn({ model, response, streaming, className, 
             </div>
           )}
         </div>
+        
+        {/* Action buttons */}
         <div className="flex items-center space-x-2">
-          {/* Only show retry button if not summary */}
+          {/* Retry button */}
           {!isSummary && !isLoading && !streaming && (displayedText || response?.text || response?.error) && (
             <button
               onClick={handleRetry}
@@ -853,6 +841,8 @@ export default function ResponseColumn({ model, response, streaming, className, 
               </svg>
             </button>
           )}
+          
+          {/* Show/hide button */}
           {hasText && (
             <>
               <button
@@ -875,6 +865,8 @@ export default function ResponseColumn({ model, response, streaming, className, 
                   />
                 </svg>
               </button>
+              
+              {/* Expand/collapse button */}
               <button
                 onClick={toggleExpand}
                 className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all duration-200"
@@ -893,26 +885,36 @@ export default function ResponseColumn({ model, response, streaming, className, 
                   )}
                 </svg>
               </button>
+              
+              {/* Copy response button */}
               <button
                 onClick={copyToClipboard}
                 className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
                 title="Copy response"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" />
-                </svg>
+                {copiedText ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-green-500">
+                    <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                  </svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" />
+                  </svg>
+                )}
               </button>
             </>
           )}
         </div>
       </div>
+      
+      {/* Main content area */}
       <div 
         ref={contentRef}
         className={`overflow-auto flex-grow scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent transition-all duration-300 ease-in-out ${
           isCollapsed ? 'h-0 opacity-0 scale-95' : 'opacity-100 scale-100'
         }`}
         style={{ 
-          padding: isCollapsed ? '0' : '1rem',
+          padding: isCollapsed ? '0' : '1.25rem',
           minHeight: isCollapsed ? "0" : "200px", 
           maxHeight: isExpanded ? "calc(100vh - 140px)" : "600px",
           pointerEvents: isCollapsed ? 'none' : 'auto',
@@ -920,33 +922,85 @@ export default function ResponseColumn({ model, response, streaming, className, 
           transformOrigin: 'top'
         }}
       >
-        {(isLoading && !hasText) || (response?.isSlowModel && !hasText) ? (
-          renderLoading(response?.isSlowModel)
-        ) : hasError ? (
-          renderError()
-        ) : hasText ? (
-          <div >
+        {/* Loading state */}
+        {(isLoading && !hasText) && renderLoading()}
+        
+        {/* Error state */}
+        {hasError && renderError()}
+        
+        {/* Content state */}
+        {hasText && (
+          <div className="prose prose-invert max-w-none">
             <ReactMarkdown
               components={MarkdownComponents}
-              remarkPlugins={[[remarkGfm, { tablePipeAlign: true }], remarkMath]}
+              remarkPlugins={[remarkGfm, remarkMath]}
               rehypePlugins={[rehypeKatex]}
             >
-              {displayedText || response.text}
+              {processMathInText(displayedText || response.text)}
             </ReactMarkdown>
             {isActive && (
               <span className="typing-cursor">|</span>
             )}
           </div>
-        ) : waitingForPrompt ? (
+        )}
+        
+        {/* Waiting state */}
+        {waitingForPrompt && (
           <div className="text-gray-500 italic flex items-center justify-center h-full">
             Waiting for prompt...
           </div>
-        ) : null}
+        )}
       </div>
       
       {/* Add the KaTeX styling inside the component */}
       <style jsx global>{`
-        /* Make math expressions bold and larger */
+        /* Enhanced typography */
+        .prose {
+          color: #e5e7eb;
+          max-width: none;
+          line-height: 1.6;
+        }
+        
+        .prose p {
+          margin-top: 1.25em;
+          margin-bottom: 1.25em;
+        }
+        
+        .prose strong {
+          color: #fff;
+          font-weight: 600;
+        }
+        
+        .prose em {
+          color: #d1d5db;
+        }
+        
+        /* List styling */
+        .prose ul {
+          margin-top: 1.25em;
+          margin-bottom: 1.25em;
+          list-style-type: disc;
+          padding-left: 1.625em;
+        }
+        
+        .prose ol {
+          margin-top: 1.25em;
+          margin-bottom: 1.25em;
+          list-style-type: decimal;
+          padding-left: 1.625em;
+        }
+        
+        .prose li {
+          margin-top: 0.5em;
+          margin-bottom: 0.5em;
+          padding-left: 0.375em;
+        }
+        
+        .prose li::marker {
+          color: #9ca3af;
+        }
+        
+        /* KaTeX math styling */
         .katex {
           font-size: 1.15em !important;
           font-weight: 500 !important;
@@ -957,7 +1011,6 @@ export default function ResponseColumn({ model, response, streaming, className, 
           font-weight: 600 !important;
         }
         
-        /* Improve spacing for math display blocks */
         .katex-display {
           margin: 1.5em 0 !important;
           padding: 0.5em 0 !important;
@@ -970,7 +1023,7 @@ export default function ResponseColumn({ model, response, streaming, className, 
           border-bottom-width: 0.08em !important;
         }
         
-        /* Make boxed expressions stand out more */
+        /* Make boxed expressions stand out */
         .katex .boxed {
           border: 0.08em solid !important;
           border-radius: 0.1em !important;
@@ -978,60 +1031,41 @@ export default function ResponseColumn({ model, response, streaming, className, 
           border-color: #6c6 !important;
         }
 
-        /* Table-specific styles */
-        .markdown-table-wrapper {
-          margin: 1rem 0;
-          overflow-x: auto;
-          -webkit-overflow-scrolling: touch;
+        /* Code block scrollbars */
+        pre::-webkit-scrollbar {
+          height: 8px;
+          width: 8px;
         }
 
-        /* Improve table scrollbar appearance */
-        .markdown-table-wrapper::-webkit-scrollbar {
-          height: 6px;
+        pre::-webkit-scrollbar-track {
+          background: rgba(0, 0, 0, 0.2);
+          border-radius: 4px;
         }
 
-        .markdown-table-wrapper::-webkit-scrollbar-track {
-          background: rgba(0, 0, 0, 0.1);
+        pre::-webkit-scrollbar-thumb {
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 4px;
         }
 
-        .markdown-table-wrapper::-webkit-scrollbar-thumb {
+        pre::-webkit-scrollbar-thumb:hover {
           background: rgba(255, 255, 255, 0.2);
-          border-radius: 3px;
         }
-
-        .markdown-table-wrapper::-webkit-scrollbar-thumb:hover {
-          background: rgba(255, 255, 255, 0.3);
-        }
-
-        /* Table styles */
-        .markdown-body table {
-          border-spacing: 0;
-          border-collapse: collapse;
-          margin: 1em 0;
-          width: 100%;
-        }
-
-        .markdown-body table tr {
-          border-top: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .markdown-body table tr:nth-child(2n) {
-          background-color: rgba(255, 255, 255, 0.02);
-        }
-
-        .markdown-body table td,
-        .markdown-body table th {
-          padding: 12px 16px;
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          line-height: 1.4;
-        }
-
-        .markdown-body table th {
-          font-weight: 600;
-          background-color: rgba(255, 255, 255, 0.05);
-        }
-
-        /* Table wrapper scrollbar styles */
+        
+        /* Syntax highlighting colors */
+        .token.comment { color: #8b949e !important; font-style: italic; }
+        .token.string { color: #a5d6ff !important; }
+        .token.number { color: #f2cc60 !important; }
+        .token.builtin { color: #ff7b72 !important; }
+        .token.char { color: #9ecbff !important; }
+        .token.constant { color: #79c0ff !important; }
+        .token.function { color: #d2a8ff !important; }
+        .token.keyword { color: #ff7b72 !important; }
+        .token.operator { color: #79c0ff !important; }
+        .token.property { color: #79c0ff !important; }
+        .token.punctuation { color: #c9d1d9 !important; }
+        .token.variable { color: #ffa657 !important; }
+        
+        /* Improve table scrollbar */
         .overflow-x-auto::-webkit-scrollbar {
           height: 8px;
         }
@@ -1049,142 +1083,21 @@ export default function ResponseColumn({ model, response, streaming, className, 
         .overflow-x-auto::-webkit-scrollbar-thumb:hover {
           background: rgba(255, 255, 255, 0.2);
         }
-
-        /* Reset default table styles */
-        table {
-          border-spacing: 0;
-          border-collapse: separate;
-          width: 100%;
+        
+        /* Typing cursor animation */
+        .typing-cursor {
+          display: inline-block;
+          width: 2px;
+          height: 1.2em;
+          background-color: currentColor;
+          margin-left: 2px;
+          animation: blink 1s step-end infinite;
+          vertical-align: text-bottom;
         }
 
-        /* Ensure tables don't overflow their containers */
-        .overflow-x-auto {
-          max-width: 100%;
-          margin: 1rem 0;
-          border-radius: 0.5rem;
-        }
-
-        /* Basic table structure */
-        table td,
-        table th {
-          min-width: 100px; /* Prevent cells from becoming too narrow */
-        }
-
-        /* Preserve whitespace in code blocks within tables */
-        table code {
-          white-space: pre-wrap;
-        }
-
-        /* Enhanced table styles */
-        .markdown-body table {
-          border-spacing: 0;
-          border-collapse: separate;
-          border-radius: 0.5rem;
-          margin: 1.5em 0;
-          width: 100%;
-          overflow: hidden;
-          background: rgba(17, 24, 39, 0.3);
-          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        }
-
-        .markdown-body thead {
-          position: relative;
-        }
-
-        .markdown-body thead:after {
-          content: '';
-          position: absolute;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          height: 1px;
-          background: linear-gradient(90deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.2) 50%, rgba(255,255,255,0.1) 100%);
-        }
-
-        .markdown-body th {
-          font-weight: 600;
-          letter-spacing: 0.05em;
-          background: rgba(31, 41, 55, 0.5);
-        }
-
-        .markdown-body td {
-          background: transparent;
-          line-height: 1.6;
-          vertical-align: middle;
-        }
-
-        .markdown-body tr:last-child td:first-child {
-          border-bottom-left-radius: 0.5rem;
-        }
-
-        .markdown-body tr:last-child td:last-child {
-          border-bottom-right-radius: 0.5rem;
-        }
-
-        .markdown-body th:first-child {
-          border-top-left-radius: 0.5rem;
-        }
-
-        .markdown-body th:last-child {
-          border-top-right-radius: 0.5rem;
-        }
-
-        /* Improve table hover effects */
-        .markdown-body tr:hover td {
-          background: rgba(55, 65, 81, 0.3);
-        }
-
-        /* Add subtle transitions */
-        .markdown-body td, .markdown-body th {
-          transition: all 150ms ease-in-out;
-        }
-
-        /* Improve text readability in tables */
-        .markdown-body td, .markdown-body th {
-          text-shadow: 0 1px 2px rgba(0,0,0,0.1);
-        }
-
-        /* Code block enhancements */
-        .syntax-highlighter {
-          font-feature-settings: "liga" 0;
-          text-rendering: optimizeLegibility;
-          -webkit-font-smoothing: antialiased;
-          border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        /* Syntax highlighting tweaks */
-        .token.comment,
-        .token.prolog,
-        .token.doctype,
-        .token.cdata {
-          font-style: italic;
-        }
-
-        .token.function,
-        .token.class-name {
-          color: #61afef;
-        }
-
-        .token.keyword {
-          color: #c678dd;
-        }
-
-        .token.string {
-          color: #98c379;
-        }
-
-        .token.number {
-          color: #d19a66;
-        }
-
-        /* Line number styling */
-        .syntax-highlighter .linenumber {
-          min-width: 2.5em;
-          padding-right: 1em;
-          text-align: right;
-          color: rgba(255, 255, 255, 0.2);
-          -webkit-user-select: none;
-          user-select: none;
+        @keyframes blink {
+          from, to { opacity: 0; }
+          50% { opacity: 1; }
         }
       `}</style>
     </div>
