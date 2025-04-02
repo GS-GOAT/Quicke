@@ -492,7 +492,15 @@ export default function Home() {
     setResponses({});
     setIsProcessing(false);
     setCurrentPromptId(null);
-    setShowContinueButton(true); // Now this will work
+    setShowContinueButton(true);
+    
+    // Reset the animation state
+    setHasInteracted(false);
+    
+    // Restart the starfield animation
+    if (starfieldRef.current) {
+      starfieldRef.current.startAnimation();
+    }
   };
 
   // Add summary generation function
@@ -1137,6 +1145,26 @@ export default function Home() {
     </div>
   );
 
+  // Add effect to save selected models to localStorage
+  useEffect(() => {
+    localStorage.setItem('selectedModels', JSON.stringify(selectedModels));
+  }, [selectedModels]);
+
+  // Add effect to load selected models from localStorage on initial load
+  useEffect(() => {
+    const savedModels = localStorage.getItem('selectedModels');
+    if (savedModels) {
+      try {
+        const parsedModels = JSON.parse(savedModels);
+        if (Array.isArray(parsedModels) && parsedModels.length > 0) {
+          setSelectedModels(parsedModels);
+        }
+      } catch (e) {
+        console.error("Error loading saved models:", e);
+      }
+    }
+  }, []);
+
   return (
     <div className="flex flex-col h-screen relative">
       <StarfieldBackground ref={starfieldRef} />
@@ -1256,6 +1284,36 @@ export default function Home() {
 
               {/* Right Actions */}
               <div className="flex items-center space-x-4">
+                {/* Add layout toggle buttons outside of dropdown menu */}
+                <div className="flex items-center space-x-2 mr-2 px-2 py-1 rounded-lg bg-gray-800/30">
+                  <button
+                    onClick={() => setResponseLayout('grid')}
+                    className={`flex items-center p-1.5 rounded-lg text-sm transition-colors ${
+                      responseLayout === 'grid'
+                        ? 'bg-primary-900/40 text-primary-400'
+                        : 'text-gray-400 hover:bg-gray-700/50 hover:text-gray-300'
+                    }`}
+                    title="Grid Layout"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                      <path d="M2 4.25A2.25 2.25 0 014.25 2h2.5A2.25 2.25 0 019 4.25v2.5A2.25 2.25 0 016.75 9h-2.5A2.25 2.25 0 012 6.75v-2.5zM2 13.25A2.25 2.25 0 014.25 11h2.5A2.25 2.25 0 019 13.25v2.5A2.25 2.25 0 016.75 18h-2.5A2.25 2.25 0 012 15.75v-2.5zM11 4.25A2.25 2.25 0 0113.25 2h2.5A2.25 2.25 0 0118 4.25v2.5A2.25 2.25 0 0115.75 9h-2.5A2.25 2.25 0 0111 6.75v-2.5zM11 13.25A2.25 2.25 0 0113.25 11h2.5A2.25 2.25 0 0118 13.25v2.5A2.25 2.25 0 0115.75 18h-2.5A2.25 2.25 0 0111 15.75v-2.5z" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => setResponseLayout('stack')}
+                    className={`flex items-center p-1.5 rounded-lg text-sm transition-colors ${
+                      responseLayout === 'stack'
+                        ? 'bg-primary-900/40 text-primary-400'
+                        : 'text-gray-400 hover:bg-gray-700/50 hover:text-gray-300'
+                    }`}
+                    title="Stack Layout"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                      <path d="M2 4.25A2.25 2.25 0 014.25 2h11.5A2.25 2.25 0 0118 4.25v2.5A2.25 2.25 0 0115.75 9h-11.5A2.25 2.25 0 012 6.75v-2.5zM2 13.25A2.25 2.25 0 014.25 11h11.5A2.25 2.25 0 0118 13.25v2.5A2.25 2.25 0 0115.75 18h-11.5A2.25 2.25 0 012 15.75v-2.5z" />
+                    </svg>
+                  </button>
+                </div>
+
                 {session?.user ? (
                   <div className="relative group">
                     <button className="flex items-center space-x-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-300 hover:bg-gray-700 transition-all duration-200">
@@ -1294,39 +1352,6 @@ export default function Home() {
                       </button>
                       
                       <div className="border-t border-gray-700/30 mt-2 pt-2">
-                        <div className="px-4 py-2">
-                          <label className="text-sm text-gray-700 dark:text-gray-300 mb-2 block">
-                            Response Layout
-                          </label>
-                          <div className="flex items-center space-x-4">
-                            <button
-                              onClick={() => setResponseLayout('grid')}
-                              className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm ${
-                                responseLayout === 'grid'
-                                  ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400'
-                                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-                              }`}
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-                                <path d="M2 4.25A2.25 2.25 0 014.25 2h2.5A2.25 2.25 0 019 4.25v2.5A2.25 2.25 0 016.75 9h-2.5A2.25 2.25 0 012 6.75v-2.5zM2 13.25A2.25 2.25 0 014.25 11h2.5A2.25 2.25 0 019 13.25v2.5A2.25 2.25 0 016.75 18h-2.5A2.25 2.25 0 012 15.75v-2.5zM11 4.25A2.25 2.25 0 0113.25 2h2.5A2.25 2.25 0 0118 4.25v2.5A2.25 2.25 0 0115.75 9h-2.5A2.25 2.25 0 0111 6.75v-2.5zM11 13.25A2.25 2.25 0 0113.25 11h2.5A2.25 2.25 0 0118 13.25v2.5A2.25 2.25 0 0115.75 18h-2.5A2.25 2.25 0 0111 15.75v-2.5z" />
-                              </svg>
-                              <span>Grid</span>
-                            </button>
-                            <button
-                              onClick={() => setResponseLayout('stack')}
-                              className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm ${
-                                responseLayout === 'stack'
-                                  ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400'
-                                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-                              }`}
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-                                <path d="M2 4.25A2.25 2.25 0 014.25 2h11.5A2.25 2.25 0 0118 4.25v2.5A2.25 2.25 0 0115.75 9h-11.5A2.25 2.25 0 012 6.75v-2.5zM2 13.25A2.25 2.25 0 014.25 11h11.5A2.25 2.25 0 0118 13.25v2.5A2.25 2.25 0 0115.75 18h-11.5A2.25 2.25 0 012 15.75v-2.5z" />
-                              </svg>
-                              <span>Stack</span>
-                            </button>
-                          </div>
-                        </div>
                         <button 
                           onClick={() => signOut()}
                           className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"

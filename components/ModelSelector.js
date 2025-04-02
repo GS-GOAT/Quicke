@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 
 export default function ModelSelector({ selectedModels, setSelectedModels }) {
   const [activeCategory, setActiveCategory] = useState('all');
+  const [isAddingCustomModel, setIsAddingCustomModel] = useState(false);
+  const [customModel, setCustomModel] = useState({ id: '', name: '', provider: '', description: '' });
+  const [error, setError] = useState('');
 
   const modelCategories = {
     Google: [
@@ -302,7 +305,6 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
     return storedModels ? JSON.parse(storedModels) : [];
   });
   
-  const [isAddingCustomModel, setIsAddingCustomModel] = useState(false);
   const [newCustomModel, setNewCustomModel] = useState({
     name: '',
     apiEndpoint: '',
@@ -314,6 +316,16 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
   useEffect(() => {
     localStorage.setItem('customLLMs', JSON.stringify(customModels));
   }, [customModels]);
+
+  const handleDeselectAll = () => {
+    setSelectedModels([]);
+  };
+
+  const allModels = Object.values(modelCategories).flat();
+
+  const filteredModels = activeCategory === 'all' 
+    ? allModels 
+    : modelCategories[activeCategory] || [];
 
   const toggleModel = (modelId) => {
     if (selectedModels.includes(modelId)) {
@@ -371,12 +383,6 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
     setSelectedModels(selectedModels.filter(id => id !== modelId));
   };
 
-  const allModels = Object.values(modelCategories).flat();
-
-  const filteredModels = activeCategory === 'all' 
-    ? allModels 
-    : modelCategories[activeCategory] || [];
-
   return (
     <div className="overflow-hidden model-selector-scrollbar">
       <div 
@@ -401,39 +407,57 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
           WebkitBackdropFilter: 'blur(12px)',
         }}
       >
-        <div className="flex space-x-2 mb-4 overflow-x-auto pb-2 scrollbar-thin">
-          <button
-            onClick={() => setActiveCategory('all')}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-              activeCategory === 'all'
-                ? 'bg-primary-900/50 text-primary-300 border border-primary-700/50'
-                : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50'
-            }`}
-            style={{
-              backdropFilter: activeCategory === 'all' ? 'blur(4px)' : 'none',
-              WebkitBackdropFilter: activeCategory === 'all' ? 'blur(4px)' : 'none',
-            }}
-          >
-            All Models
-          </button>
-          {Object.keys(modelCategories).map(category => (
-            <button
-              key={category}
-              onClick={() => setActiveCategory(category)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium capitalize whitespace-nowrap transition-all duration-150 ${
-                activeCategory === category
-                  ? 'bg-primary-900/50 text-primary-300 border border-primary-700/50'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50'
-              }`}
-              style={{
-                backdropFilter: activeCategory === category ? 'blur(4px)' : 'none',
-                WebkitBackdropFilter: activeCategory === category ? 'blur(4px)' : 'none',
-                transition: 'background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease',
-              }}
-            >
-              {category}
-            </button>
-          ))}
+        <div className="relative bg-gray-800/40 backdrop-blur-md rounded-lg p-4 space-y-4">
+          <div className="flex flex-wrap gap-2 items-center justify-between">
+            <div className="flex flex-wrap gap-2 items-center">
+              <button
+                onClick={() => setActiveCategory('all')}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium capitalize whitespace-nowrap transition-all duration-150 ${
+                  activeCategory === 'all'
+                    ? 'bg-primary-900/50 text-primary-300 border border-primary-700/50'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50'
+                }`}
+                style={{
+                  backdropFilter: activeCategory === 'all' ? 'blur(4px)' : 'none',
+                  WebkitBackdropFilter: activeCategory === 'all' ? 'blur(4px)' : 'none',
+                  transition: 'background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease',
+                }}
+              >
+                All Models
+              </button>
+              
+              <button
+                onClick={handleDeselectAll}
+                className="px-3 py-1.5 rounded-lg text-sm font-medium text-red-400 hover:text-red-300 hover:bg-red-900/20 border border-red-800/30 whitespace-nowrap transition-all duration-150"
+                disabled={selectedModels.length === 0}
+                style={{
+                  opacity: selectedModels.length === 0 ? 0.5 : 1,
+                  cursor: selectedModels.length === 0 ? 'not-allowed' : 'pointer'
+                }}
+              >
+                Deselect All
+              </button>
+            </div>
+          
+            {Object.keys(modelCategories).map(category => (
+              <button
+                key={category}
+                onClick={() => setActiveCategory(category)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium capitalize whitespace-nowrap transition-all duration-150 ${
+                  activeCategory === category
+                    ? 'bg-primary-900/50 text-primary-300 border border-primary-700/50'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50'
+                }`}
+                style={{
+                  backdropFilter: activeCategory === category ? 'blur(4px)' : 'none',
+                  WebkitBackdropFilter: activeCategory === category ? 'blur(4px)' : 'none',
+                  transition: 'background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease',
+                }}
+              >
+                {category}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">

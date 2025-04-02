@@ -97,6 +97,15 @@ class Universe {
     this.targetSpeed = 0;
   }
 
+  // Add start animation method
+  startAnimation() {
+    this.isActive = true;
+    this.targetSpeed = 2;
+    
+    // Re-initialize star positions to create a fresh field
+    this.initStarLayers();
+  }
+
   destroy() {
     this.isActive = false;
     window.removeEventListener('resize', this.handleResize);
@@ -161,6 +170,11 @@ const StarfieldBackground = forwardRef((props, ref) => {
     stopAnimation: () => {
       if (universeRef.current) {
         universeRef.current.stopAnimation();
+      }
+    },
+    startAnimation: () => {
+      if (universeRef.current) {
+        universeRef.current.startAnimation();
       }
     }
   }));
