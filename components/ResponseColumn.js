@@ -273,12 +273,12 @@ export default function ResponseColumn({ model, response, streaming, className, 
 
   // Timer display component
   const renderTimer = (time) => (
-    <div className="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700/50 ml-2 border border-gray-200 dark:border-gray-600">
+    <div className="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-700/50 ml-2 border border-gray-600">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" 
-        className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400 mr-1">
+        className="w-3.5 h-3.5 text-gray-400 mr-1">
         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .27.144.518.378.651l3.5 2a.75.75 0 00.744-1.302L11 9.677V5z" clipRule="evenodd" />
       </svg>
-      <span className="text-xs font-medium text-gray-600 dark:text-gray-300 tabular-nums">
+      <span className="text-xs font-medium text-gray-300 tabular-nums">
         {time || '—'}s
       </span>
     </div>
@@ -678,10 +678,10 @@ export default function ResponseColumn({ model, response, streaming, className, 
         };
 
         return (
-          <div className="relative group my-4">
+          <div className="relative my-4 overflow-hidden" style={{ backgroundColor: 'rgb(0, 0, 20)', borderRadius: '0.5rem' }}>
             {/* Language indicator */}
             {language && (
-              <div className="absolute top-0 left-0 bg-gray-800/90 text-gray-400 text-xs px-2 py-1 rounded-bl font-mono z-10">
+              <div className="absolute top-0 left-0 bg-gray-800/70 text-gray-400 text-xs px-2 py-1 font-mono z-10">
                 {language}
               </div>
             )}
@@ -708,7 +708,6 @@ export default function ResponseColumn({ model, response, streaming, className, 
                     <path d="M7 3.5A1.5 1.5 0 018.5 2h3.879a1.5 1.5 0 011.06.44l3.122 3.12A1.5 1.5 0 0117 6.622V12.5a1.5 1.5 0 01-1.5 1.5h-1v-3.379a3 3 0 00-.879-2.121L10.5 5.379A3 3 0 008.379 4.5H7v-1z" />
                     <path d="M4.5 6A1.5 1.5 0 003 7.5v9A1.5 1.5 0 004.5 18h7a1.5 1.5 0 001.5-1.5v-5.879a1.5 1.5 0 00-.44-1.06L9.44 6.439A1.5 1.5 0 008.378 6H4.5z" />
                   </svg>
-                  {/* <span>Copy</span> */}
                 </span>
               )}
             </button>
@@ -718,12 +717,13 @@ export default function ResponseColumn({ model, response, streaming, className, 
               style={oneDark}
               customStyle={{
                 margin: 0,
-                borderRadius: '0.5rem',
                 padding: '2.5rem 1rem 1rem 1rem',
                 backgroundColor: 'rgb(0, 0, 20)',
                 fontSize: '0.875rem',
                 lineHeight: '1.5',
-                border: 'none'
+                border: 'none',
+                borderRadius: '0.5rem',
+                boxShadow: 'none'
               }}
               codeTagProps={{
                 style: {
@@ -833,7 +833,7 @@ export default function ResponseColumn({ model, response, streaming, className, 
           {!isSummary && !isLoading && !streaming && (displayedText || response?.text || response?.error) && (
             <button
               onClick={handleRetry}
-              className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all duration-200"
+              className="p-1.5 text-gray-400 hover:text-primary-500 hover:bg-gray-800 rounded-lg transition-all duration-200"
               title="Retry with this model"
             >
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
@@ -847,7 +847,7 @@ export default function ResponseColumn({ model, response, streaming, className, 
             <>
               <button
                 onClick={toggleCollapse}
-                className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all duration-200"
+                className="p-1.5 text-gray-400 hover:text-primary-500 hover:bg-gray-800 rounded-lg transition-all duration-200"
                 title={isCollapsed ? "Show response" : "Hide response"}
               >
                 <svg 
@@ -869,7 +869,7 @@ export default function ResponseColumn({ model, response, streaming, className, 
               {/* Expand/collapse button */}
               <button
                 onClick={toggleExpand}
-                className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all duration-200"
+                className="p-1.5 text-gray-400 hover:text-primary-500 hover:bg-gray-800 rounded-lg transition-all duration-200"
                 title={isExpanded ? "Exit fullscreen" : "Enter fullscreen"}
               >
                 <svg 
@@ -889,7 +889,7 @@ export default function ResponseColumn({ model, response, streaming, className, 
               {/* Copy response button */}
               <button
                 onClick={copyToClipboard}
-                className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                className="p-1.5 text-gray-400 hover:text-primary-500 hover:bg-gray-800 rounded-lg transition-colors"
                 title="Copy response"
               >
                 {copiedText ? (

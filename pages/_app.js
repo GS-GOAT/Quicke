@@ -22,18 +22,13 @@ function MyApp({ Component, pageProps }) {
         <meta name="description" content="Get responses from multiple LLMs side by side" />
         <title>Quicke - The AI ChatHub</title>
         
-        {/* Script to check dark mode preference before page renders to prevent flash */}
-        <Script id="dark-mode-check" strategy="beforeInteractive">
+        {/* Always use dark mode - light mode removed */}
+        <Script id="dark-mode-enforcer" strategy="beforeInteractive">
           {`
             (function() {
-              const isDark = localStorage.getItem('darkMode') === 'true' || 
-                (localStorage.getItem('darkMode') === null && 
-                window.matchMedia('(prefers-color-scheme: dark)').matches);
-              if (isDark) {
-                document.documentElement.classList.add('dark');
-              } else {
-                document.documentElement.classList.remove('dark');
-              }
+              document.documentElement.classList.add('dark');
+              document.documentElement.style.backgroundColor = '#111111';
+              document.documentElement.style.colorScheme = 'dark';
             })();
           `}
         </Script>

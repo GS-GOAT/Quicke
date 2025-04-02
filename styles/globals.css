@@ -8,7 +8,7 @@ body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen,
     Ubuntu, Cantarell, Fira Sans, Droid Sans, Helvetica Neue, sans-serif;
-  @apply antialiased text-gray-900 dark:text-gray-100;
+  @apply antialiased text-gray-100;
   @apply overflow-hidden;
   height: 100vh;
   /* Prevent elastic scroll on iOS */
@@ -21,23 +21,14 @@ html {
 }
 
 a {
-  color: #0066cc;
+  color: #66b3ff;
   text-decoration: none;
   transition: color 0.2s ease;
 }
 
 a:hover {
-  color: #0052a3;
-  text-decoration: none;
-}
-
-/* Dark mode link styles */
-.dark a {
-  color: #66b3ff;
-}
-
-.dark a:hover {
   color: #99ccff;
+  text-decoration: none;
 }
 
 * {
@@ -165,10 +156,6 @@ a:hover {
 /* Custom scrollbar for modern browsers */
 .scrollbar-thin {
   scrollbar-width: thin;
-  scrollbar-color: rgba(203, 213, 225, 0.5) transparent;
-}
-
-.dark .scrollbar-thin {
   scrollbar-color: rgba(51, 65, 85, 0.5) transparent;
 }
 
@@ -182,12 +169,8 @@ a:hover {
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background-color: rgba(203, 213, 225, 0.5);
-  border-radius: 20px;
-}
-
-.dark .scrollbar-thin::-webkit-scrollbar-thumb {
   background-color: rgba(51, 65, 85, 0.5);
+  border-radius: 20px;
 }
 
 /* Enhanced scrollbar styles */
@@ -213,34 +196,34 @@ a:hover {
   background-color: rgba(75, 85, 99, 0.5) !important;
 }
 
-/* Dark theme scrollbar styles */
-.dark *::-webkit-scrollbar {
+/* Scrollbar styles */
+*::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
-.dark *::-webkit-scrollbar-track {
+*::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.dark *::-webkit-scrollbar-thumb {
+*::-webkit-scrollbar-thumb {
   background-color: rgba(75, 85, 99, 0.5);
   border-radius: 3px;
 }
 
-.dark *::-webkit-scrollbar-thumb:hover {
+*::-webkit-scrollbar-thumb:hover {
   background-color: rgba(75, 85, 99, 0.7);
 }
 
 /* For Firefox */
-.dark * {
+* {
   scrollbar-width: thin;
   scrollbar-color: rgba(75, 85, 99, 0.5) transparent;
 }
 
-/* Prose styling (with dark mode support) */
+/* Prose styling */
 .prose {
-  @apply text-gray-800 dark:text-gray-200;
+  @apply text-gray-200;
 }
 
 .prose p {
@@ -248,7 +231,7 @@ a:hover {
 }
 
 .prose h1, .prose h2, .prose h3, .prose h4 {
-  @apply font-semibold my-4 text-gray-900 dark:text-white;
+  @apply font-semibold my-4 text-white;
 }
 
 .prose h1 {
@@ -276,11 +259,11 @@ a:hover {
 }
 
 .prose code {
-  @apply bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded text-sm font-mono text-gray-800 dark:text-gray-200;
+  @apply bg-gray-800 px-1 py-0.5 rounded text-sm font-mono text-gray-200;
 }
 
 .prose pre {
-  @apply bg-gray-100 dark:bg-gray-800 p-3 rounded-lg my-4 overflow-auto;
+  @apply bg-gray-800 p-3 rounded-lg my-4 overflow-auto;
 }
 
 .prose pre code {
@@ -288,7 +271,7 @@ a:hover {
 }
 
 .prose blockquote {
-  @apply border-l-4 border-gray-300 dark:border-gray-700 pl-4 italic my-4 text-gray-700 dark:text-gray-300;
+  @apply border-l-4 border-gray-700 pl-4 italic my-4 text-gray-300;
 }
 
 /* Add a smooth transition for all color changes */
@@ -345,7 +328,7 @@ a:hover {
 }
 
 .katex {
-  @apply text-gray-900 dark:text-gray-100;
+  @apply text-gray-100;
 }
 
 .katex-display > .katex {
@@ -378,7 +361,7 @@ a:hover {
 
 .separator-shine::before {
   content: '';
-  @apply absolute inset-0 bg-gradient-to-r from-transparent via-gray-300 dark:via-gray-600 to-transparent opacity-50;
+  @apply absolute inset-0 bg-gradient-to-r from-transparent via-gray-600 to-transparent opacity-50;
   animation: separator-shine 3s linear infinite;
 }
 
@@ -404,16 +387,9 @@ a:hover {
   );
 }
 
-/* Light mode response column styles */
+/* Response column styles */
 .light-response-column {
-  background: linear-gradient(to bottom right, #ffffff, #f8fafc);
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-}
-
-/* Dark mode response column styles */
-.dark .light-response-column {
-  background: #1e1e1e;  /* Lighter dark background for columns */
+  background: #1e1e1e;  /* Darker background for columns */
   border: 1px solid rgba(75, 85, 99, 0.3);
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1);
 }
@@ -512,32 +488,14 @@ a:hover {
   left: 0;
   background: linear-gradient(
     to right,
-    rgb(249, 250, 251) 0%,
-    rgba(249, 250, 251, 0.6) 40%,
-    rgba(249, 250, 251, 0) 100%
-  );
-}
-
-.suggestion-carousel-container::after {
-  right: 0;
-  background: linear-gradient(
-    to left,
-    rgb(249, 250, 251) 0%,
-    rgba(249, 250, 251, 0.6) 40%,
-    rgba(249, 250, 251, 0) 100%
-  );
-}
-
-.dark .suggestion-carousel-container::before {
-  background: linear-gradient(
-    to right,
     rgb(17, 17, 17) 0%,
     rgba(17, 17, 17, 0.6) 40%,
     rgba(17, 17, 17, 0) 100%
   );
 }
 
-.dark .suggestion-carousel-container::after {
+.suggestion-carousel-container::after {
+  right: 0;
   background: linear-gradient(
     to left,
     rgb(17, 17, 17) 0%,
@@ -552,7 +510,7 @@ a:hover {
 }
 
 .auth-card {
-  @apply w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden border border-gray-200 dark:border-gray-700;
+  @apply w-full max-w-md bg-gray-800 rounded-2xl shadow-xl overflow-hidden border border-gray-700;
 }
 
 .auth-header {
@@ -560,7 +518,7 @@ a:hover {
 }
 
 .auth-input {
-  @apply appearance-none relative block w-full px-4 py-3 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent sm:text-sm bg-white dark:bg-gray-700 transition-all duration-200;
+  @apply appearance-none relative block w-full px-4 py-3 border border-gray-600 placeholder-gray-400 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent sm:text-sm bg-gray-700 transition-all duration-200;
 }
 
 /* Backdrop blur when model selector is open */
@@ -579,7 +537,7 @@ a:hover {
 }
 
 .prompt-input-hover:hover {
-  @apply bg-gray-50 dark:bg-gray-800/50;
+  @apply bg-gray-800/50;
   box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.1);
 }
 
@@ -637,17 +595,6 @@ a:hover {
   display: inline-flex;
   align-items: center;
 }
-
-/* Add a small dot animation as well
-.thinking-pulse::after {
-  content: '';
-  width: 3px;
-  height: 3px;
-  background-color: currentColor;
-  border-radius: 50%;   
-  margin-left: 4px;
-  animation: dotPulse 1.5s ease-in-out infinite;
-} */
 
 @keyframes dotPulse {
   0% { transform: scale(0.5); opacity: 0.4; }
@@ -723,8 +670,7 @@ a:hover {
   background: rgba(73, 77, 100, 0.5) !important;
 }
 
-/* Dark mode adjustments */
-.dark .code-block-container {
+.code-block-container {
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
 }
 
@@ -739,13 +685,6 @@ main {
 footer {
   @apply sticky bottom-0 z-10;
   /* Ensure footer stays above content */
-  background: linear-gradient(to top,
-    rgba(255, 255, 255, 1) 0%,
-    rgba(255, 255, 255, 0.9) 100%
-  );
-}
-
-.dark footer {
   background: linear-gradient(to top,
     rgba(17, 17, 17, 1) 0%,
     rgba(17, 17, 17, 0.9) 100%
@@ -868,8 +807,8 @@ footer {
   100% { transform: translateY(-50%); }
 }
 
-/* Enhanced glassmorphism for dark theme */
-.dark .glass-effect {
+/* Enhanced glassmorphism */
+.glass-effect {
   background: rgba(17, 24, 39, 0.7);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -928,11 +867,6 @@ footer {
 
 /* Add styles for the model selector */
 .model-selector-container {
-  background: rgba(255, 255, 255, 0.98);
-  backdrop-filter: none; /* Remove blur from container itself */
-}
-
-.dark .model-selector-container {
   background: rgba(17, 24, 39, 0.98);
 }
 
@@ -946,16 +880,6 @@ footer {
 .prompt-glass {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  background: linear-gradient(
-    to bottom,
-    rgba(255, 255, 255, 0.05),
-    rgba(255, 255, 255, 0.1)
-  );
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-}
-
-.dark .prompt-glass {
   background: linear-gradient(
     to bottom,
     rgba(17, 17, 17, 0.3),

@@ -3,7 +3,6 @@ import Head from 'next/head';
 import ModelSelector from '../components/ModelSelector';
 import PromptInput from '../components/PromptInput';
 import ResponseColumn from '../components/ResponseColumn';
-import ThemeToggle from '../components/ThemeToggle';
 import ApiKeyManager from '../components/ApiKeyManager';
 import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
@@ -1257,10 +1256,9 @@ export default function Home() {
 
               {/* Right Actions */}
               <div className="flex items-center space-x-4">
-                <ThemeToggle />
                 {session?.user ? (
                   <div className="relative group">
-                    <button className="flex items-center space-x-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200">
+                    <button className="flex items-center space-x-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-300 hover:bg-gray-700 transition-all duration-200">
                       <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#e6dfd3] via-[#f5efe7] to-[#d4cbbe] flex items-center justify-center text-gray-800 font-medium shadow-sm"
                         style={{
                           boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.5), inset 0 -2px 4px rgba(0,0,0,0.05)'
