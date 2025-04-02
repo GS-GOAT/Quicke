@@ -32,7 +32,7 @@ export default function Home() {
   const [visibleSuggestions, setVisibleSuggestions] = useState([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
-  const [responseLayout, setResponseLayout] = useLocalStorage('responseLayout', 'grid'); // Add layout state
+  const [responseLayout, setResponseLayout] = useLocalStorage('responseLayout', 'grid');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [threads, setThreads] = useState([]);
   const [activeThreadId, setActiveThreadId] = useState(null);
@@ -1041,12 +1041,9 @@ export default function Home() {
       // This would normally call an API endpoint to retry the model
       // For now, we'll simulate it by re-submitting the prompt for this model only
       
-      // Get custom models configuration
-      const customModels = JSON.parse(localStorage.getItem('customLLMs') || '[]');
-      
       // Create a new EventSource
       const newEventSource = new EventSource(
-        `/api/stream?prompt=${encodeURIComponent(conversation.prompt)}&models=${encodeURIComponent(modelId)}&customModels=${encodeURIComponent(JSON.stringify(customModels))}`
+        `/api/stream?prompt=${encodeURIComponent(conversation.prompt)}&models=${encodeURIComponent(modelId)}`
       );
       
       newEventSource.onmessage = (event) => {
@@ -1145,25 +1142,20 @@ export default function Home() {
     </div>
   );
 
-  // Add effect to save selected models to localStorage
+  // Ensure the layout toggle works correctly on initial load
   useEffect(() => {
-    localStorage.setItem('selectedModels', JSON.stringify(selectedModels));
-  }, [selectedModels]);
-
-  // Add effect to load selected models from localStorage on initial load
-  useEffect(() => {
-    const savedModels = localStorage.getItem('selectedModels');
-    if (savedModels) {
-      try {
-        const parsedModels = JSON.parse(savedModels);
-        if (Array.isArray(parsedModels) && parsedModels.length > 0) {
-          setSelectedModels(parsedModels);
-        }
-      } catch (e) {
-        console.error("Error loading saved models:", e);
+    // Force a re-render of the toggle buttons when the component mounts
+    const layoutButtons = document.querySelectorAll('.layout-toggle-button');
+    layoutButtons.forEach(button => {
+      button.classList.remove('bg-primary-900/40', 'text-gray-400');
+      if ((button.dataset.layout === 'grid' && responseLayout === 'grid') || 
+          (button.dataset.layout === 'stack' && responseLayout === 'stack')) {
+        button.classList.add('bg-primary-900/40', 'text-primary-400');
+      } else {
+        button.classList.add('text-gray-400');
       }
-    }
-  }, []);
+    });
+  }, [responseLayout]);
 
   return (
     <div className="flex flex-col h-screen relative">
@@ -1288,7 +1280,8 @@ export default function Home() {
                 <div className="flex items-center space-x-2 mr-2 px-2 py-1 rounded-lg bg-gray-800/30">
                   <button
                     onClick={() => setResponseLayout('grid')}
-                    className={`flex items-center p-1.5 rounded-lg text-sm transition-colors ${
+                    data-layout="grid"
+                    className={`layout-toggle-button flex items-center p-1.5 rounded-lg text-sm transition-colors ${
                       responseLayout === 'grid'
                         ? 'bg-primary-900/40 text-primary-400'
                         : 'text-gray-400 hover:bg-gray-700/50 hover:text-gray-300'
@@ -1301,7 +1294,8 @@ export default function Home() {
                   </button>
                   <button
                     onClick={() => setResponseLayout('stack')}
-                    className={`flex items-center p-1.5 rounded-lg text-sm transition-colors ${
+                    data-layout="stack"
+                    className={`layout-toggle-button flex items-center p-1.5 rounded-lg text-sm transition-colors ${
                       responseLayout === 'stack'
                         ? 'bg-primary-900/40 text-primary-400'
                         : 'text-gray-400 hover:bg-gray-700/50 hover:text-gray-300'
@@ -1421,31 +1415,13 @@ export default function Home() {
           </div>
         </header>
 
-        {/* Model Selector Dropdown */}
-        {showModelSelector && (
-          <>
-            {/* Add backdrop div with blur effect */}
-            <div 
-              className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40"
-              onClick={() => setShowModelSelector(false)}
-            />
-            
-            {/* Update model selector container */}
-            <div
-              ref={modelSelectorRef}
-              className="fixed top-16 left-1/2 -translate-x-1/2 w-[calc(100vw-2rem)] max-w-3xl rounded-xl bg-white/95 dark:bg-gray-900/95 shadow-2xl ring-1 ring-black/5 dark:ring-white/5 z-50 transition-all duration-200 ease-out transform"
-              style={{
-                maxHeight: 'calc(100vh - 200px)',
-                overflowY: 'auto'
-              }}
-            >
-              <ModelSelector 
-                selectedModels={selectedModels} 
-                setSelectedModels={setSelectedModels} 
-              />
-            </div>
-          </>
-        )}
+        {/* Model Selector */}
+        <ModelSelector 
+          isOpen={showModelSelector}
+          setIsOpen={setShowModelSelector}
+          selectedModels={selectedModels} 
+          setSelectedModels={setSelectedModels} 
+        />
 
         <ApiKeyManager 
           isOpen={showApiKeyManager} 

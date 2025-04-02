@@ -82,7 +82,7 @@ export default function PromptInput({
   const handleFileInputClick = () => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = 'application/pdf,image/jpeg,image/jpg,image/png,image/webp';
+    input.accept = 'application/pdf,image/jpeg,image/jpg,image/png,image/webp,text/plain,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation';
     input.onchange = (e) => handleFileChange(e);
     input.click();
   };
@@ -94,13 +94,16 @@ export default function PromptInput({
     const acceptedTypes = [
       'application/pdf', 
       'image/jpeg', 
-      'image/jpg', // Add explicit support for image/jpg
+      'image/jpg',
       'image/png', 
-      'image/webp'
+      'image/webp',
+      'text/plain',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation'
     ];
   
     if (!acceptedTypes.includes(file.type)) {
-      alert('Only PDF and image files are allowed');
+      alert('Only PDF, text, PowerPoint, and image files are allowed');
       return;
     }
   
@@ -126,6 +129,15 @@ export default function PromptInput({
       const data = await response.json();
       if (data.success) {
         handleUploadComplete(data.file);
+        
+        // Set appropriate prompt message based on file type
+        if (data.file.isPdf) {
+          setPrompt("I've uploaded a PDF document. Please analyze its contents.");
+        } else if (data.file.isText) {
+          setPrompt("I've uploaded a text file. Please analyze its contents.");
+        } else if (data.file.isPpt) {
+          setPrompt("I've uploaded a PowerPoint presentation. Please analyze its contents.");
+        }
       } else {
         throw new Error(data.error || 'Upload failed');
       }
@@ -187,9 +199,29 @@ export default function PromptInput({
               <div className="flex items-center space-x-2">
                 <div className="flex items-center flex-1 min-w-0">
                   <div className="flex items-center space-x-2 px-2 py-1 bg-gray-100/80 dark:bg-gray-800/50 rounded-lg border border-gray-200/50 dark:border-gray-700/50">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-red-500" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
-                    </svg>
+                    {/* Display different icons based on file type */}
+                    {(uploadedFile || persistentFile).type?.startsWith('image/') && (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                    {(uploadedFile || persistentFile).type === 'application/pdf' && (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                    {(uploadedFile || persistentFile).type === 'text/plain' && (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm3 1h6v4H7V5zm8 8v2h1v1H4v-1h1v-2H4v-1h16v1h-1z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                    {((uploadedFile || persistentFile).type === 'application/vnd.ms-powerpoint' || 
+                      (uploadedFile || persistentFile).type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') && (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-orange-500" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                    
                     <span className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate max-w-[200px]">
                       {(uploadedFile || persistentFile).name}
                     </span>
@@ -208,7 +240,7 @@ export default function PromptInput({
                   className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors group"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400 group-hover:text-gray-600 dark:text-gray-500 dark:group-hover:text-gray-300" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 011.414 1.414L11.414 10l4.293 4.293a1 1 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 01-1.414-1.414L8.586 10 4.293 5.707a1 1 010-1.414z" clipRule="evenodd" />
+                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 010 1.414-1.414 0l-4.293-4.293-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                   </svg>
                 </button>
               </div>
@@ -284,7 +316,7 @@ export default function PromptInput({
       <input
         type="file"
         className="hidden"
-        accept="application/pdf,image/jpeg,image/jpg,image/png,image/webp"
+        accept="application/pdf,image/jpeg,image/jpg,image/png,image/webp,text/plain,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
         onChange={handleFileChange}
         ref={fileInputRef}
       />

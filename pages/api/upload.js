@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "./auth/[...nextauth]";
 import prisma from '../../lib/prisma';
 import { extractTextFromPDF } from '../../utils/pdfProcessor';
+import { extractTextFromTextFile } from '../../utils/textProcessor';
+import { extractTextFromPPT } from '../../utils/pptProcessor';
 import { processImage } from '../../utils/imageProcessor';
 import fs from 'fs';
 
@@ -17,13 +19,12 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  let session;
   try {
-    session = await getServerSession(req, res, authOptions);
-    if (!session) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
+    // Get session - with improved error handling
+    const session = await getServerSession(req, res, authOptions);
+    
+    // Continue processing the form regardless of session status
+    // We'll check for session within the form handler
     const form = new IncomingForm({
       keepExtensions: true,
       maxFileSize: 10 * 1024 * 1024, // 10MB limit
@@ -38,6 +39,13 @@ export default async function handler(req, res) {
         }
 
         try {
+          // Check for session after parsing the form
+          if (!session || !session.user) {
+            console.error('Unauthorized upload attempt');
+            res.status(401).json({ error: 'You must be logged in to upload files' });
+            return resolve();
+          }
+
           const file = files.file?.[0];
           if (!file) {
             res.status(400).json({ error: 'No file uploaded' });
@@ -46,23 +54,37 @@ export default async function handler(req, res) {
 
           const isImage = file.mimetype.startsWith('image/');
           const isPdf = file.mimetype === 'application/pdf';
+          const isText = file.mimetype === 'text/plain';
+          const isPpt = file.mimetype === 'application/vnd.ms-powerpoint' || 
+                         file.mimetype === 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 
-          if (!isImage && !isPdf) {
+          if (!isImage && !isPdf && !isText && !isPpt) {
             res.status(400).json({ 
-              error: 'Invalid file type. Only images and PDFs are supported.' 
+              error: 'Invalid file type. Only images, PDFs, text files, and PowerPoint files are supported.' 
             });
             return resolve();
           }
 
           // Process file content based on type
           let content;
+          let fileType = '';
           try {
             if (isImage) {
               const base64Content = await processImage(file.filepath);
               content = base64Content; // Store base64 string directly
+              fileType = 'image';
             } else if (isPdf) {
-              const pdfText = await extractTextFromPDF(file.filepath);
-              content = typeof pdfText === 'string' ? pdfText : JSON.stringify(pdfText);
+              const pdfData = await extractTextFromPDF(file.filepath);
+              content = typeof pdfData.text === 'string' ? pdfData.text : JSON.stringify(pdfData.text);
+              fileType = 'pdf';
+            } else if (isText) {
+              const textData = await extractTextFromTextFile(file.filepath);
+              content = textData.text;
+              fileType = 'text';
+            } else if (isPpt) {
+              const pptData = await extractTextFromPPT(file.filepath);
+              content = pptData.text;
+              fileType = 'ppt';
             }
 
             if (!content) {
@@ -84,6 +106,7 @@ export default async function handler(req, res) {
               content: content || '',
               threadId: fields.threadId?.[0] || null,
               conversationId: fields.conversationId?.[0] || null,
+              documentType: fileType, // Add document type field
             }
           });
 
@@ -104,7 +127,10 @@ export default async function handler(req, res) {
               name: file.originalFilename,
               content: isImage ? content : undefined, // Only send back image content
               isImage,
-              isPdf 
+              isPdf,
+              isText,
+              isPpt,
+              documentType: fileType
             }
           });
         } catch (error) {

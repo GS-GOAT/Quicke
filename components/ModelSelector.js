@@ -1,10 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { Dialog, Transition } from '@headlessui/react';
+import { Fragment } from 'react';
 
-export default function ModelSelector({ selectedModels, setSelectedModels }) {
+export default function ModelSelector({ isOpen, setIsOpen, models, selectedModels, setSelectedModels }) {
   const [activeCategory, setActiveCategory] = useState('all');
-  const [isAddingCustomModel, setIsAddingCustomModel] = useState(false);
-  const [customModel, setCustomModel] = useState({ id: '', name: '', provider: '', description: '' });
-  const [error, setError] = useState('');
 
   const modelCategories = {
     Google: [
@@ -300,23 +299,6 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
     ]
   };
 
-  const [customModels, setCustomModels] = useState(() => {
-    const storedModels = localStorage.getItem('customLLMs');
-    return storedModels ? JSON.parse(storedModels) : [];
-  });
-  
-  const [newCustomModel, setNewCustomModel] = useState({
-    name: '',
-    apiEndpoint: '',
-    apiKeyName: 'Authorization',
-    apiKeyValue: '',
-    modelType: 'custom'
-  });
-
-  useEffect(() => {
-    localStorage.setItem('customLLMs', JSON.stringify(customModels));
-  }, [customModels]);
-
   const handleDeselectAll = () => {
     setSelectedModels([]);
   };
@@ -335,262 +317,138 @@ export default function ModelSelector({ selectedModels, setSelectedModels }) {
     }
   };
 
-  const handleInputChange = (e) => {
-    setNewCustomModel({ ...newCustomModel, [e.target.name]: e.target.value });
-  };
-
-  const addCustomModel = () => {
-    if (!newCustomModel.name || !newCustomModel.apiEndpoint || !newCustomModel.apiKeyValue) {
-      alert('Please fill in all custom model fields.');
-      return;
-    }
-
-    // Validate endpoint URL
-    try {
-      new URL(newCustomModel.apiEndpoint);
-    } catch (e) {
-      alert('Please enter a valid API endpoint URL');
-      return;
-    }
-
-    const modelId = `custom-${newCustomModel.name.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}`;
-    const customModel = {
-      ...newCustomModel,
-      id: modelId,
-      type: 'custom',
-      color: 'from-gray-400 to-gray-600',
-      icon: '🔌'
-    };
-
-    // Store custom model config
-    const updatedCustomModels = [...customModels, customModel];
-    setCustomModels(updatedCustomModels);
-    localStorage.setItem('customLLMs', JSON.stringify(updatedCustomModels));
-
-    setSelectedModels([...selectedModels, modelId]);
-    setNewCustomModel({
-      name: '',
-      apiEndpoint: '',
-      apiKeyName: 'Authorization',
-      apiKeyValue: '',
-      modelType: 'custom'
-    });
-    setIsAddingCustomModel(false);
-  };
-
-  const removeCustomModel = (modelId) => {
-    setCustomModels(customModels.filter(model => model.id !== modelId));
-    setSelectedModels(selectedModels.filter(id => id !== modelId));
-  };
-
   return (
-    <div className="overflow-hidden model-selector-scrollbar">
-      <div 
-        className="px-5 py-4 border-b border-gray-700/30"
-        style={{
-          backgroundColor: 'rgba(28, 28, 32, 0.85)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-        }}
-      >
-        <h3 className="text-lg font-semibold text-gray-200">Select Models</h3>
-        <p className="text-sm text-gray-400 mt-1">
-          Select models to be prompted
-        </p>
-      </div>
-      
-      <div 
-        className="p-5"
-        style={{
-          backgroundColor: 'rgba(24, 24, 28, 0.75)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-        }}
-      >
-        <div className="relative bg-gray-800/40 backdrop-blur-md rounded-lg p-4 space-y-4">
-          <div className="flex flex-wrap gap-2 items-center justify-between">
-            <div className="flex flex-wrap gap-2 items-center">
-              <button
-                onClick={() => setActiveCategory('all')}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium capitalize whitespace-nowrap transition-all duration-150 ${
-                  activeCategory === 'all'
-                    ? 'bg-primary-900/50 text-primary-300 border border-primary-700/50'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50'
-                }`}
-                style={{
-                  backdropFilter: activeCategory === 'all' ? 'blur(4px)' : 'none',
-                  WebkitBackdropFilter: activeCategory === 'all' ? 'blur(4px)' : 'none',
-                  transition: 'background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease',
-                }}
-              >
-                All Models
-              </button>
-              
-              <button
-                onClick={handleDeselectAll}
-                className="px-3 py-1.5 rounded-lg text-sm font-medium text-red-400 hover:text-red-300 hover:bg-red-900/20 border border-red-800/30 whitespace-nowrap transition-all duration-150"
-                disabled={selectedModels.length === 0}
-                style={{
-                  opacity: selectedModels.length === 0 ? 0.5 : 1,
-                  cursor: selectedModels.length === 0 ? 'not-allowed' : 'pointer'
-                }}
-              >
-                Deselect All
-              </button>
-            </div>
-          
-            {Object.keys(modelCategories).map(category => (
-              <button
-                key={category}
-                onClick={() => setActiveCategory(category)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium capitalize whitespace-nowrap transition-all duration-150 ${
-                  activeCategory === category
-                    ? 'bg-primary-900/50 text-primary-300 border border-primary-700/50'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50'
-                }`}
-                style={{
-                  backdropFilter: activeCategory === category ? 'blur(4px)' : 'none',
-                  WebkitBackdropFilter: activeCategory === category ? 'blur(4px)' : 'none',
-                  transition: 'background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease',
-                }}
-              >
-                {category}
-              </button>
-            ))}
+    <Transition show={isOpen} as={Fragment}>
+      <Dialog onClose={() => setIsOpen(false)} className="relative z-50">
+        <Transition.Child
+          as={Fragment}
+          enter="ease-out duration-300"
+          enterFrom="opacity-0"
+          enterTo="opacity-100"
+          leave="ease-in duration-200"
+          leaveFrom="opacity-100"
+          leaveTo="opacity-0"
+        >
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-md" aria-hidden="true" />
+        </Transition.Child>
+
+        <div className="fixed inset-0 overflow-y-auto">
+          <div className="flex min-h-full items-center justify-center p-4">
+            <Transition.Child
+              as={Fragment}
+              enter="ease-out duration-300"
+              enterFrom="opacity-0 scale-95"
+              enterTo="opacity-100 scale-100"
+              leave="ease-in duration-200"
+              leaveFrom="opacity-100 scale-100"
+              leaveTo="opacity-0 scale-95"
+            >
+              <Dialog.Panel className="w-full max-w-4xl max-h-[90vh] transform overflow-hidden rounded-xl bg-gray-950 p-6 shadow-xl transition-all">
+                <div className="flex justify-between items-center mb-4">
+                  <Dialog.Title className="text-xl font-semibold text-white">
+                    Select Models 
+                    <span className="ml-2 px-2 py-1 bg-primary-600/20 text-primary-400 rounded-lg text-sm">
+                      {selectedModels.length} selected
+                    </span>
+                  </Dialog.Title>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={handleDeselectAll}
+                      className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm transition-colors"
+                    >
+                      Deselect All
+                    </button>
+                    <button
+                      onClick={() => setIsOpen(false)}
+                      className="p-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-6 overflow-y-auto max-h-[calc(90vh-120px)] pr-2">
+                  {Object.keys(modelCategories).map(category => (
+                    <div key={category} className="space-y-2">
+                      <h3 className="text-lg font-medium text-gray-300">{category}</h3>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 gap-3">
+                        {modelCategories[category].map(model => (
+                          <div 
+                            key={model.id}
+                            onClick={() => toggleModel(model.id)}
+                            className={`relative group cursor-pointer border border-gray-700 rounded-lg p-3 transition-all ${
+                              selectedModels.includes(model.id) 
+                                ? 'bg-primary-900/40 border-primary-700 shadow-lg shadow-primary-900/20' 
+                                : 'bg-gray-800/50 hover:bg-gray-800 hover:shadow-lg'
+                            }`}
+                          >
+                            <div className="flex items-start space-x-3">
+                              <div className={`flex-shrink-0 w-8 h-8 rounded-md flex items-center justify-center bg-gradient-to-br ${model.color || 'from-gray-500 to-gray-700'}`}>
+                                <span className="text-white text-sm">{model.icon || '🤖'}</span>
+                              </div>
+                              
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-start justify-between">
+                                  <h4 className="font-medium text-sm text-white mb-1 truncate pr-6">{model.name}</h4>
+                                  {selectedModels.includes(model.id) && (
+                                    <div className="absolute top-2 right-2 text-primary-400">
+                                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+                                      </svg>
+                                    </div>
+                                  )}
+                                </div>
+                                
+                                <div className="flex items-center flex-wrap gap-2 mt-1">
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-xs font-medium bg-gray-700 text-gray-300">
+                                    {model.provider}
+                                  </span>
+                                  
+                                  {model.badge && (
+                                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-xs font-medium ${
+                                      model.badge === 'Free' 
+                                        ? 'bg-green-900/30 text-green-400 border border-green-800/30' 
+                                        : 'bg-purple-900/30 text-purple-400 border border-purple-800/30'
+                                    }`}>
+                                      {model.badge}
+                                    </span>
+                                  )}
+                                </div>
+                                
+                                <div className="flex items-center text-xs text-gray-400 space-x-2 mt-2">
+                                  {model.contextSize && (
+                                    <span className="flex items-center">
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                      </svg>
+                                      {model.contextSize}K
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {model.description && (
+                              <div className="mt-2 text-xs text-gray-400 line-clamp-1 group-hover:text-gray-300 transition-colors">
+                                {model.description}
+                                <div className="absolute invisible group-hover:visible z-10 w-64 p-2 mt-2 text-xs bg-gray-800 border border-gray-700 rounded-md shadow-xl text-gray-300 top-full left-0">
+                                  {model.description}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Dialog.Panel>
+            </Transition.Child>
           </div>
         </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-          {filteredModels.map(model => (
-            <div 
-              key={model.id}
-              onClick={() => toggleModel(model.id)}
-              className={`p-3 rounded-lg border transition-all duration-150 ${
-                selectedModels.includes(model.id)
-                  ? 'border-primary-700/50 bg-primary-900/30'
-                  : 'border-gray-700/30 bg-gray-800/30 hover:bg-gray-700/30'
-              }`}
-              style={{
-                backdropFilter: 'blur(8px)',
-                WebkitBackdropFilter: 'blur(8px)',
-                transition: 'background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease',
-                transform: selectedModels.includes(model.id) ? 'scale(1.02)' : 'scale(1)',
-              }}
-            >
-              <div className="relative p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div className={`p-2 rounded-lg bg-gradient-to-br ${model.color} text-white shadow-sm`}>
-                    {model.icon}
-                  </div>
-                  
-                  {selectedModels.includes(model.id) && (
-                    <div className="flex items-center">
-                      <span className="text-xs font-medium text-primary-600 dark:text-primary-400 mr-2">Selected</span>
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-primary-600 dark:text-primary-400">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                  )}
-                </div>
-                
-                <div>
-                  <h4 className="font-medium text-gray-900 dark:text-white mb-1">{model.name}</h4>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
-                      {model.provider}
-                    </span>
-                    {model.badge && (
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-                        model.badge === 'Free' 
-                          ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                          : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
-                      }`}>
-                        {model.badge}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">{model.description}</p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-6">
-          {!isAddingCustomModel ? (
-            <button
-              onClick={() => setIsAddingCustomModel(true)}
-              className="w-full px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors duration-200 flex items-center justify-center space-x-2"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-                <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
-              </svg>
-              <span>Add Custom Model</span>
-            </button>
-          ) : (
-            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4">
-              <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-4">Add New Custom Model</h4>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="model-name" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Model Name</label>
-                  <input type="text" name="name" id="model-name" 
-                    className="w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm" 
-                    value={newCustomModel.name} onChange={handleInputChange} 
-                    placeholder="e.g., Grok" 
-                  />
-                </div>
-                <div>
-                  <label htmlFor="api-endpoint" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">API Endpoint</label>
-                  <input type="url" name="apiEndpoint" id="api-endpoint" 
-                    className="w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm" 
-                    value={newCustomModel.apiEndpoint} onChange={handleInputChange} 
-                    placeholder="https://api.example.com/v1/chat" 
-                  />
-                </div>
-                <div>
-                  <label htmlFor="api-key-name" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">API Key Header</label>
-                  <input type="text" name="apiKeyName" id="api-key-name" 
-                    className="w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm" 
-                    value={newCustomModel.apiKeyName} onChange={handleInputChange} 
-                    placeholder="Authorization" 
-                  />
-                </div>
-                <div>
-                  <label htmlFor="api-key-value" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">API Key</label>
-                  <input type="password" name="apiKeyValue" id="api-key-value" 
-                    className="w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm" 
-                    value={newCustomModel.apiKeyValue} onChange={handleInputChange} 
-                    placeholder="Your API Key" 
-                  />
-                </div>
-              </div>
-              <div className="mt-4 flex justify-end space-x-2">
-                <button
-                  onClick={() => setIsAddingCustomModel(false)}
-                  className="px-3 py-1.5 rounded-lg text-sm font-medium bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 border border-gray-300 dark:border-gray-600 transition-colors duration-200"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={addCustomModel}
-                  className="px-3 py-1.5 rounded-lg text-sm font-medium bg-primary-500 text-white hover:bg-primary-600 transition-colors duration-200"
-                >
-                  Add Model
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-      
-      <style jsx>{`
-        @supports (backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px)) {
-          div[style*="backdrop-filter"] {
-            backdrop-filter: blur(12px) !important;
-            -webkit-backdrop-filter: blur(12px) !important;
-          }
-        }
-      `}</style>
-    </div>
+      </Dialog>
+    </Transition>
   );
 }

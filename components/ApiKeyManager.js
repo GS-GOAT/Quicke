@@ -304,28 +304,24 @@ export default function ApiKeyManager({ isOpen, onClose }) {
   return (
     <div className="fixed inset-0 z-50">
       <div 
-        className="absolute inset-0 bg-black/30 backdrop-blur-sm" 
+        className="absolute inset-0 bg-black/50 backdrop-blur-md" 
         onClick={handleClose} 
       />
       
       <div className="fixed inset-0 flex items-center justify-center p-4">
-        <div className="bg-transparent rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-hidden"
+        <div className="bg-gray-950 rounded-lg shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden border border-gray-800"
           style={{
-            backgroundColor: 'rgba(28, 28, 32, 0.75)',
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            borderRight: '1px solid rgba(75, 75, 80, 0.2)',
-            boxShadow: '0 0 20px rgba(0, 0, 0, 0.4)'
+            boxShadow: '0 0 30px rgba(0, 0, 0, 0.6), 0 0 10px rgba(99, 102, 241, 0.1)'
           }}>
           
           {/* Header */}
-          <div className="px-6 py-4 border-b border-gray-700/30"
-            style={{
-              backgroundColor: 'rgba(24, 24, 28, 0.6)',
-            }}>
+          <div className="px-6 py-4 border-b border-gray-800 bg-gray-900">
             <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold text-gray-100">API Keys</h2>
-              <button onClick={handleClose} className="text-gray-400 hover:text-gray-200 transition-colors">
+              <h2 className="text-xl font-semibold text-white">API Keys</h2>
+              <button 
+                onClick={handleClose} 
+                className="text-gray-400 hover:text-gray-200 transition-colors p-1 rounded-md hover:bg-gray-800"
+              >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                 </svg>
@@ -337,18 +333,22 @@ export default function ApiKeyManager({ isOpen, onClose }) {
           </div>
 
           {/* Content area */}
-          <div className="overflow-y-auto p-6" style={{ maxHeight: 'calc(80vh - 180px)' }}>
+          <div className="overflow-y-auto p-6 bg-gray-950" style={{ maxHeight: 'calc(80vh - 180px)' }}>
             <div className="space-y-6">
               {/* Update input styles */}
               <style jsx>{`
                 input {
-                  background: rgba(35, 35, 38, 0.5) !important;
-                  border-color: rgba(75, 75, 80, 0.3) !important;
-                  color: rgba(220, 220, 225, 0.9) !important;
+                  background-color: rgba(17, 17, 27, 0.8) !important;
+                  border-color: rgba(55, 65, 81, 0.5) !important;
+                  color: rgba(255, 255, 255, 0.9) !important;
+                  font-family: 'Consolas', 'JetBrains Mono', monospace !important;
                 }
                 input:focus {
-                  box-shadow: 0 0 0 2px rgba(125, 125, 255, 0.3) !important;
-                  border-color: rgba(125, 125, 255, 0.5) !important;
+                  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.4) !important;
+                  border-color: rgba(99, 102, 241, 0.6) !important;
+                }
+                input::placeholder {
+                  color: rgba(156, 163, 175, 0.5) !important;
                 }
               `}</style>
               {renderKeyInput('openai', 'OpenAI API Key', 'sk-...', 'https://platform.openai.com/api-keys')}
@@ -360,10 +360,10 @@ export default function ApiKeyManager({ isOpen, onClose }) {
 
             {/* Status message */}
             {saveStatus && (
-              <div className={`mt-4 p-3 rounded-lg text-sm ${
+              <div className={`mt-4 p-3 rounded-md text-sm ${
                 saveStatus.includes('Error') 
-                  ? 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-300' 
-                  : 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-300'
+                  ? 'bg-red-900/30 text-red-400 border border-red-900/50' 
+                  : 'bg-green-900/30 text-green-400 border border-green-900/50'
               }`}>
                 {saveStatus}
               </div>
@@ -371,29 +371,22 @@ export default function ApiKeyManager({ isOpen, onClose }) {
           </div>
 
           {/* Footer */}
-          <div className="px-6 py-4 border-t border-gray-700/30"
-            style={{
-              backgroundColor: 'rgba(24, 24, 28, 0.6)',
-            }}>
+          <div className="px-6 py-4 border-t border-gray-800 bg-gray-900">
             <div className="flex justify-end space-x-3">
               <button
                 type="button"
-                className="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-800/50 border border-gray-700/50 rounded-lg hover:bg-gray-700/50 transition-colors"
+                className="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-800 border border-gray-700 rounded-md hover:bg-gray-700 transition-colors"
                 onClick={handleClose}
               >
                 Cancel
               </button>
               <button
                 type="button"
-                className={`px-4 py-2 text-sm font-medium text-white border border-transparent rounded-lg transition-colors ${
+                className={`px-4 py-2 text-sm font-medium text-white border border-transparent rounded-md transition-colors ${
                   hasModifications 
-                    ? 'bg-primary-600/90 hover:bg-primary-700/90'
-                    : 'bg-green-600/90 hover:bg-green-700/90'
+                    ? 'bg-primary-600 hover:bg-primary-700'
+                    : 'bg-green-600 hover:bg-green-700'
                 }`}
-                style={{
-                  backdropFilter: 'blur(8px)',
-                  WebkitBackdropFilter: 'blur(8px)'
-                }}
                 onClick={saveApiKeys}
               >
                 {hasModifications ? 'Save Changes' : 'Done'}

@@ -83,4 +83,5 @@ model UploadedFile {
   conversations  Conversation[] @relation("ConversationFiles")
   associatedWith Conversation[] @relation("AssociatedFile")
   conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  documentType   String?       // Add this field to track the document type (pdf, text, ppt, image)
 }

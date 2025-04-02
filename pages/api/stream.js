@@ -146,8 +146,8 @@ const verifyModelApiKeys = (modelArray, providerMap, userApiKeys) => {
   });
 };
 
-// Update getPDFContext to work with database content
-async function getPDFContext(userId, fileId) {
+// Update getFileContext to support multiple file types
+async function getFileContext(userId, fileId) {
   if (!fileId) return null;
   
   try {
@@ -158,12 +158,65 @@ async function getPDFContext(userId, fileId) {
       }
     });
     
-    // Return the stored content
-    return file?.content ;
+    if (!file) {
+      return null;
+    }
+    
+    // Return appropriate context based on file type
+    const documentType = file.documentType || getDocumentTypeFromMimetype(file.fileType);
+    
+    switch (documentType) {
+      case 'pdf':
+        return {
+          content: file.content,
+          type: 'pdf',
+          fileName: file.fileName,
+          fileType: file.fileType
+        };
+      case 'text':
+        return {
+          content: file.content,
+          type: 'text',
+          fileName: file.fileName,
+          fileType: file.fileType
+        };
+      case 'ppt':
+        return {
+          content: file.content,
+          type: 'ppt',
+          fileName: file.fileName,
+          fileType: file.fileType
+        };
+      case 'image':
+        return {
+          content: file.content,
+          type: 'image',
+          fileName: file.fileName,
+          fileType: file.fileType,
+          isImage: true
+        };
+      default:
+        return null;
+    }
   } catch (error) {
-    console.error('Error getting PDF context:', error);
+    console.error('Error getting file context:', error);
     return null;
   }
+}
+
+// Helper function to determine document type from mimetype
+function getDocumentTypeFromMimetype(mimetype) {
+  if (mimetype === 'application/pdf') {
+    return 'pdf';
+  } else if (mimetype === 'text/plain') {
+    return 'text';
+  } else if (mimetype === 'application/vnd.ms-powerpoint' || 
+             mimetype === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') {
+    return 'ppt';
+  } else if (mimetype.startsWith('image/')) {
+    return 'image';
+  }
+  return null;
 }
 
 // Update sendEvent helper function with safety checks
@@ -338,30 +391,26 @@ Format your response as a clear, concise analysis.`;
   // Get file content if fileId is provided
   if (fileId) {
     try {
-      const file = await prisma.uploadedFile.findFirst({
-        where: {
-          id: fileId,
-          userId: session.user.id
-        }
-      });
-
-      if (file) {
-        fileData = {
-          fileId: file.id,
-          fileType: file.fileType,
-          content: file.content,
-          isPdf: file.fileType === 'application/pdf',
-          isImage: file.fileType.startsWith('image/')
-        };
-
-        // For PDFs, enhance prompt with content
-        if (fileData.isPdf) {
-          enhancedPrompt = `The following is content from a PDF document:\n\n${file.content}\n\n${prompt}`;
+      const userId = session?.user?.id;
+      if (userId) {
+        // Use the updated getFileContext function for any document type
+        const fileContext = await getFileContext(userId, fileId);
+        if (fileContext) {
+          fileData = {
+            ...fileContext,
+            isFile: true
+          };
         }
       }
     } catch (error) {
-      console.error('Error getting file data:', error);
+      console.error('Error retrieving file context:', error);
     }
+  }
+
+  // Update file handling in prompt enhancement
+  if (fileData && fileData.isFile) {
+    // Use the formatPromptWithContext function
+    enhancedPrompt = formatPromptWithContext(prompt, fileData);
   }
 
   // Get context for this request if useContext flag is set
@@ -1527,15 +1576,23 @@ const verifyApiKey = (modelId, providerMap, userApiKeys) => {
   return provider && userApiKeys[provider] ? true : false;
 };
 
-function formatPromptWithContext(prompt, context) {
-  if (!context || context.length === 0) {
-    return prompt;
+// Update the formatPromptWithContext function to handle different file types
+function formatPromptWithContext(prompt, fileData) {
+  if (!fileData) return prompt;
+
+  let enhancedPrompt = prompt;
+  
+  switch (fileData.type) {
+    case 'pdf':
+      enhancedPrompt = `The following is content from a PDF document titled "${fileData.fileName}":\n\n${fileData.content}\n\n${prompt}`;
+      break;
+    case 'text':
+      enhancedPrompt = `The following is content from a text file titled "${fileData.fileName}":\n\n${fileData.content}\n\n${prompt}`;
+      break;
+    case 'ppt':
+      enhancedPrompt = `The following is content from a PowerPoint presentation titled "${fileData.fileName}":\n\n${fileData.content}\n\n${prompt}`;
+      break;
   }
-
-  // Format context messages into a conversation string
-  const contextString = context
-    .map(msg => `${msg.role}: ${msg.content}`)
-    .join('\n');
-
-  return `Previous conversation:\n${contextString}\n\nCurrent message:\n${prompt}`;
+  
+  return enhancedPrompt;
 }
