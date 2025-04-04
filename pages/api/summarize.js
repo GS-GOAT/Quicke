@@ -45,16 +45,15 @@ export default async function handler(req, res) {
       .map(([model, response]) => `${model}:\n${response.text}\n`)
       .join('\n---\n');
 
-    const prompt = `Compare these AI responses and provide a concise synthesis highlighting key similarities and differences:
+    const prompt = `Take these AI responses and provide a concise overall best answer :
 
 ${formattedResponses}
 
-Format your analysis as:
+Format your answer as:
 - Common Points: Key agreements between responses
 - Differences: Notable variations in approaches
-- Synthesis: Brief overall assessment
-
-Keep the analysis clear and concise.`;
+- Conclusion: Take all response into account and provide the best overall answer to the prompt
+`;
 
     const result = await model.generateContent(prompt);
     const response = await result.response;
