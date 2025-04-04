@@ -70,31 +70,35 @@ class ErrorService {
   unregisterStream(modelId) {
     console.log(`[${modelId}] Unregistering stream`);
     
-    const timer = this.modelTimers.get(modelId);
-    if (timer) {
-      clearTimeout(timer);
-      this.modelTimers.delete(modelId);
-    }
-    
-    const stream = this.activeStreams.get(modelId);
-    if (stream && typeof stream.cleanup === 'function') {
-      try {
-        stream.cleanup();
-      } catch (error) {
-        console.error(`[${modelId}] Error during cleanup:`, error);
+    // Add a small delay to ensure any pending events are processed
+    setTimeout(() => {
+      const timer = this.modelTimers.get(modelId);
+      if (timer) {
+        clearTimeout(timer);
+        this.modelTimers.delete(modelId);
       }
-    }
-    
-    this.activeStreams.delete(modelId);
+      
+      const stream = this.activeStreams.get(modelId);
+      if (stream && typeof stream.cleanup === 'function') {
+        try {
+          stream.cleanup();
+        } catch (error) {
+          console.error(`[${modelId}] Error during cleanup:`, error);
+        }
+      }
+      
+      this.activeStreams.delete(modelId);
+    }, 200); // Small delay to prevent race conditions
   }
 
   // Get user-friendly error message
   getErrorMessage(errorType, modelId, provider = '') {
-    const modelName = provider || modelId;
+    // Use just the model ID rather than the provider name
+    const modelName = modelId || 'Unknown model';
     
     switch (errorType) {
       case ERROR_TYPES.API_KEY_MISSING:
-        return `Please add your ${modelName} API key in settings to use this model`;
+        return `Please add your ${provider} API key in settings to use ${modelName} [ADD_KEY]`;
       
       case ERROR_TYPES.MODEL_UNAVAILABLE:
         return `${modelName} is currently unavailable. Please try again later.`;
@@ -115,7 +119,7 @@ class ErrorService {
         return `Network error while connecting to ${modelName}. Please check your internet connection.`;
       
       case ERROR_TYPES.INSUFFICIENT_BALANCE:
-        return `${provider} account has insufficient credits. Please add more credits to continue.`;
+        return `${modelName}: Insufficient credits. Please add more credits to continue.`;
 
       case ERROR_TYPES.INSUFFICIENT_QUOTA:
         return `${modelName} quota exceeded. Please check your billing details and add more credits.`;
@@ -174,7 +178,7 @@ class ErrorService {
     }
     
     // Handle OpenAI specific errors
-    if (errorType === 'insufficient_quota' || message.includes('exceeded your current quota')) {
+    if (error.type === 'insufficient_quota' || message.includes('exceeded your current quota')) {
       return ERROR_TYPES.INSUFFICIENT_QUOTA;
     }
 
@@ -222,10 +226,14 @@ class ErrorService {
       }
       
       if (messageLower.includes('rate limit') || 
-          messageLower.includes('quota') ||
           messageLower.includes('too many requests') ||
           messageLower.includes('free-models-per-day')) {
         return ERROR_TYPES.RATE_LIMIT;
+      }
+      
+      if (messageLower.includes('quota') || 
+          messageLower.includes('exceeded your current quota')) {
+        return ERROR_TYPES.INSUFFICIENT_QUOTA;
       }
       
       if (messageLower.includes('network') || 

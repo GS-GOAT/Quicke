@@ -48,7 +48,7 @@ export default function ModelSelector({ isOpen, setIsOpen, models, selectedModel
         badge: 'Free',
       }
     ],
-    openrouter: [
+    OpenRouter: [
         // {
         //   id: 'gpt-4o-mini-or',
         //   name: 'GPT-4o Mini',

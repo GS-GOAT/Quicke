@@ -1,3 +1,37 @@
+const providerMap = {
+  'gpt-4.5-preview': 'openai',
+  'gpt-4o': 'openai',
+  'gpt-4o-mini': 'openai',
+  'o1': 'openai',
+  'o3-mini': 'openai',
+  'o1-mini': 'openai',
+  'gpt-4o-mini-or': 'openrouter', // Add this line
+  // Google
+  'gemini-flash': 'google',
+  'gemini-pro': 'google',
+  'gemini-thinking': 'google',
+  'gemini-2.5-pro': 'google', // Add new model
+  // Official DeepSeek models
+  'deepseek-chat': 'deepseek',
+  'deepseek-coder': 'deepseek',
+  'deepseek-reasoner': 'deepseek',
+  // Map of OpenRouter models r
+  'deepseek-distill': 'openrouter',
+  'deepseek-v3-openrouter': 'openrouter',
+  'mistral-7b': 'openrouter',
+  'llama2-70b': 'openrouter',
+  'phi3': 'openrouter',
+  'qwen-32b': 'openrouter',
+  'openchat': 'openrouter',
+  'nemotron-70b': 'openrouter',
+  'mistral-small-3': 'openrouter',
+  'mistral-small-31': 'openrouter',
+  'mistral-nemo': 'openrouter',
+  'deepseek-v3-0324': 'openrouter',
+  // Anthropic
+  'claude-3-7': 'anthropic',
+  'claude-3-5': 'anthropic',
+};
 const getLLMProvider = (modelId, providerMap) => {
   if (providerMap[modelId]) {
     return providerMap[modelId].charAt(0).toUpperCase() + providerMap[modelId].slice(1);
@@ -29,7 +63,8 @@ const FALLBACK_ERROR_TYPES = {
   EMPTY_RESPONSE: 'EMPTY_RESPONSE',
   RATE_LIMIT: 'RATE_LIMIT',
   NETWORK_ERROR: 'NETWORK_ERROR',
-  UNKNOWN_ERROR: 'UNKNOWN_ERROR'
+  UNKNOWN_ERROR: 'UNKNOWN_ERROR',
+  INSUFFICIENT_QUOTA: 'INSUFFICIENT_QUOTA'
 };
 
 // Use the imported values with a fallback if needed
@@ -70,9 +105,14 @@ const createCompletionManager = (totalModels, sendEvent, res) => {
       }
     }
     
-    if (completedResponses === totalModels) {
-      safelyEndResponse();
-    }
+    // Add a small delay before checking if all models are completed
+    // This allows any pending messages to be processed first
+    setTimeout(() => {
+      if (completedResponses === totalModels) {
+        console.log('All model streams processed, sending allComplete event');
+        safelyEndResponse();
+      }
+    }, 1000); // 1 second delay to ensure all messages are sent
   };
 
   // Increase safety timeout duration
@@ -100,10 +140,9 @@ const createErrorHandler = (completionManager, sendEvent) => {
     try {
       console.log(`[${modelId}] Sending error event: ${errorType}`);
       
-      const provider = getLLMProvider(modelId, providerMap);
       const retryCount = errorService?.getRetryCount?.(modelId) || 0;
-      const errorMessage = errorService?.getErrorMessage?.(errorType, modelId, provider) 
-        || `Error with ${provider}: ${errorType}`;
+      const errorMessage = errorService?.getErrorMessage?.(errorType, modelId) 
+        || `Error with ${modelId}: ${errorType}`;
       
       sendEvent({
         model: modelId,
@@ -220,23 +259,21 @@ function getDocumentTypeFromMimetype(mimetype) {
 }
 
 // Update sendEvent helper function with safety checks
-const createSafeEventSender = (res) => (data) => {
-  if (res.writableEnded) {
-    console.log('[SSE Stream] Attempted write after stream ended:', 
-      JSON.stringify(data).substring(0, 100) + '...');
-    return;
-  }
+const createSafeEventSender = (res) => {
+  return (data) => {
+    if (res.writableEnded) {
+      console.warn(`[SSE Stream] Attempted write after stream ended: ${JSON.stringify(data).substring(0, 60)}...`);
+      return;
+    }
 
-  try {
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
-    if (res.flush && !res.writableEnded) {
-      res.flush();
+    try {
+      const event = `data: ${JSON.stringify(data)}\n\n`;
+      res.write(event);
+      res.flush?.(); // Flush if available
+    } catch (e) {
+      console.error('[SSE Stream] Error sending event:', e);
     }
-  } catch (error) {
-    if (error.code !== 'ERR_STREAM_WRITE_AFTER_END') {
-      console.error('[SSE Stream] Error writing event:', error);
-    }
-  }
+  };
 };
 
 export default async function handler(req, res) {
@@ -495,41 +532,6 @@ Format your response as a clear, concise analysis.`;
   }
 
   // Define providerMap at the top level to ensure it's in scope everywhere
-  const providerMap = {
-    'gpt-4.5-preview': 'openai',
-    'gpt-4o': 'openai',
-    'gpt-4o-mini': 'openai',
-    'o1': 'openai',
-    'o3-mini': 'openai',
-    'o1-mini': 'openai',
-    'gpt-4o-mini-or': 'openrouter', // Add this line
-    // Google
-    'gemini-flash': 'google',
-    'gemini-pro': 'google',
-    'gemini-thinking': 'google',
-    'gemini-2.5-pro': 'google', // Add new model
-    // Official DeepSeek models
-    'deepseek-chat': 'deepseek',
-    'deepseek-coder': 'deepseek',
-    'deepseek-reasoner': 'deepseek',
-    // Map of OpenRouter models r
-    'deepseek-distill': 'openrouter',
-    'deepseek-v3-openrouter': 'openrouter',
-    'mistral-7b': 'openrouter',
-    'llama2-70b': 'openrouter',
-    'phi3': 'openrouter',
-    'qwen-32b': 'openrouter',
-    'openchat': 'openrouter',
-    'nemotron-70b': 'openrouter',
-    'mistral-small-3': 'openrouter',
-    'mistral-nemo': 'openrouter',
-    'mistral-small-31': 'openrouter', // Add new model
-    'deepseek-v3-0324': 'openrouter', // Add new model
-    // 'olympiccoder': 'openrouter'
-    // Anthropic
-    'claude-3-7': 'anthropic',
-    'claude-3-5': 'anthropic',
-  };
 
   // Add model version mapping
   const openAIModels = {
@@ -1071,7 +1073,7 @@ async function handleModelStream(options) {
     let chunkCounter = 0;
     const MAX_CHUNKS = 5000; // Reasonable maximum for most responses
 
-    // Process the stream
+    // Process the stream with a safety counter
     try {
       for await (const chunk of stream) {
         const content = processChunk(chunk);
@@ -1086,7 +1088,7 @@ async function handleModelStream(options) {
           });
         }
         
-        // Safety counter to prevent infinite loops
+        // Safety counter
         chunkCounter++;
         if (chunkCounter > MAX_CHUNKS) {
           console.warn(`[${modelId}] Safety limit of ${MAX_CHUNKS} chunks reached, forcing completion`);
@@ -1098,6 +1100,27 @@ async function handleModelStream(options) {
     } catch (streamError) {
       // If we get an error during streaming, log it but still try to send the text we received
       console.error(`Stream processing error (${modelId}):`, streamError);
+      
+      // Classify the stream error
+      let errorType = ERROR_TYPES.UNKNOWN_ERROR;
+      if (streamError.message && streamError.message.includes('exceeded your current quota')) {
+        errorType = ERROR_TYPES.INSUFFICIENT_QUOTA;
+      } else if (streamError.status === 429 || (streamError.message && streamError.message.includes('Too Many Requests'))) {
+        errorType = ERROR_TYPES.RATE_LIMIT;
+      }
+      
+      // Send proper error event
+      await sendStreamEvent({
+        modelId,
+        error: streamError.message,
+        errorType,
+        loading: false,
+        streaming: false,
+        done: true,
+        sendEvent
+      });
+      
+      // Don't re-throw the stream error, just mark it as done
       isStreamDone = true;
     }
 
@@ -1117,11 +1140,11 @@ async function handleModelStream(options) {
     const errorType = error.message === 'TIMEOUT' ? ERROR_TYPES.TIMEOUT :
                      error.message.includes('API key') ? ERROR_TYPES.API_KEY_MISSING :
                      error.message === 'Empty response received' ? ERROR_TYPES.EMPTY_RESPONSE :
-                     ERROR_TYPES.UNKNOWN_ERROR;
+                     errorService?.classifyError(error) || ERROR_TYPES.UNKNOWN_ERROR;
     
     await sendStreamEvent({
       modelId,
-      error: error.message || 'Unknown error',
+      error: error.message,
       errorType,
       loading: false,
       streaming: false,
@@ -1129,7 +1152,8 @@ async function handleModelStream(options) {
       sendEvent
     });
     
-    throw error;
+    // Return empty string instead of throwing to isolate errors
+    return '';
   } finally {
     streamHandler.cleanup();
   }
@@ -1277,7 +1301,27 @@ async function handleGeminiStream(modelId, messages, sendEvent, genAI, geminiMod
       streamComplete = true;
     } catch (streamError) {
       console.error(`Gemini stream processing error (${modelId}):`, streamError);
-      streamComplete = true; // Mark as complete even on error
+      
+      // Classify the error properly
+      let errorType = ERROR_TYPES.UNKNOWN_ERROR;
+      if (streamError.message && streamError.message.includes('exceeded your current quota')) {
+        errorType = ERROR_TYPES.INSUFFICIENT_QUOTA;
+      } else if (streamError.status === 429 || (streamError.message && streamError.message.includes('Too Many Requests'))) {
+        errorType = ERROR_TYPES.RATE_LIMIT;
+      }
+      
+      // Send proper error event
+      await sendEvent({
+        model: modelId,
+        error: streamError.message,
+        errorType,
+        streaming: false,
+        loading: false,
+        done: true
+      });
+      
+      // Return early but don't throw to prevent affecting other models
+      return text || '';
     }
     
     // Stream completed successfully
@@ -1302,13 +1346,13 @@ async function handleGeminiStream(modelId, messages, sendEvent, genAI, geminiMod
     // Make sure to send a final error event
     await sendEvent({
       model: modelId,
-      error: `Model error: ${error.message}`,
+      error: error.message,
       streaming: false,
       loading: false,
       done: true // Add explicit done flag
     });
     
-    throw error;
+    // Removed the throw error line
   }
 }
 

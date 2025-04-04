@@ -469,13 +469,6 @@ export default function ResponseColumn({ model, response, streaming, className, 
       }
     };
 
-    const getErrorMessage = () => {
-      if (response.retryCount > 0) {
-        return `${response.error} (Retry ${response.retryCount}/${response.maxRetries || 2})`;
-      }
-      return response.error;
-    };
-
     const getErrorIcon = () => {
       switch (errorType) {
         case 'API_KEY_MISSING':
@@ -500,6 +493,21 @@ export default function ResponseColumn({ model, response, streaming, className, 
       }
     };
 
+    const getErrorMessage = () => {
+      let errorMsg = response.error;
+      
+      // Remove [ADD_KEY] marker from the message but flag that we need a button
+      const needsKeyButton = errorMsg && errorMsg.includes('[ADD_KEY]');
+      if (needsKeyButton) {
+        errorMsg = errorMsg.replace('[ADD_KEY]', '');
+      }
+      
+      if (response.retryCount > 0) {
+        return `${errorMsg} (Retry ${response.retryCount}/${response.maxRetries || 2})`;
+      }
+      return errorMsg;
+    };
+
     const errorTextClass = () => {
       switch (errorType) {
         case 'API_KEY_MISSING': return 'text-yellow-400';
@@ -519,7 +527,7 @@ export default function ResponseColumn({ model, response, streaming, className, 
           <div>
             <p className={`font-medium ${errorTextClass()}`}>{getErrorTitle()}</p>
             <p className="mt-1 text-sm text-gray-300">{getErrorMessage()}</p>
-            {errorType === 'API_KEY_MISSING' && (
+            {(errorType === 'API_KEY_MISSING' || response.error?.includes('[ADD_KEY]')) && (
               <button 
                 onClick={handleApiKeyWarning}
                 className="mt-2 text-xs text-yellow-500 hover:text-yellow-400 font-medium flex items-center"
@@ -704,9 +712,8 @@ export default function ResponseColumn({ model, response, streaming, className, 
                 </span>
               ) : (
                 <span className="flex items-center gap-1">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                    <path d="M7 3.5A1.5 1.5 0 018.5 2h3.879a1.5 1.5 0 011.06.44l3.122 3.12A1.5 1.5 0 0117 6.622V12.5a1.5 1.5 0 01-1.5 1.5h-1v-3.379a3 3 0 00-.879-2.121L10.5 5.379A3 3 0 008.379 4.5H7v-1z" />
-                    <path d="M4.5 6A1.5 1.5 0 003 7.5v9A1.5 1.5 0 004.5 18h7a1.5 1.5 0 001.5-1.5v-5.879a1.5 1.5 0 00-.44-1.06L9.44 6.439A1.5 1.5 0 008.378 6H4.5z" />
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" />
                   </svg>
                 </span>
               )}
@@ -881,7 +888,7 @@ export default function ResponseColumn({ model, response, streaming, className, 
                   {isExpanded ? (
                     <path d="M3 3h4v4H3V3zM13 3h4v4h-4V3zM3 13h4v4H3v-4zM13 13h4v4h-4v-4z"/>
                   ) : (
-                    <path fillRule="evenodd" d="M3.25 3.25a.5.5 0 0 1 .5-.5h4a.5.5 0 0 1 .5.5v.5h-4v4h-.5a.5.5 0 0 1-.5-.5v-4Zm9 0a.5.5 0 0 1 .5-.5h4a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-.5.5h-.5v-4h-4v-.5Zm-9 9a.5.5 0 0 1 .5-.5h.5v4h4v.5a.5.5 0 0 1-.5.5h-4a.5.5 0 0 1-.5-.5v-4Zm9-.5a.5.5 0 0 0-.5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 0-.5-.5h-4Z" />
+                    <path fillRule="evenodd" d="M3.25 3.25a.5.5 0 0 1 .5-.5h4a.5.5 0 0 1 .5.5v.5h-4v4h-.5a.5.5 0 0 1-.5-.5v-4Zm9 0a.5.5 0 0 1 .5-.5h4a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-.5.5h-.5v-4h-4v-.5Zm-9 9a.5.5 0 0 0-.5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 0-.5-.5h-4Z" />
                   )}
                 </svg>
               </button>
