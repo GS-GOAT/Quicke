@@ -1375,6 +1375,7 @@ async function handleOpenRouterStream(modelId, messages, sendEvent, openRouter, 
       try {
         return await openRouter.chat.completions.create({
           model: openRouterModels[modelId]?.id || modelId,
+          order: ["Chutes","Targon"],
           messages: messages,
           stream: true,
           temperature: 0.7,
@@ -1396,6 +1397,7 @@ async function handleOpenRouterStream(modelId, messages, sendEvent, openRouter, 
           // Retry the stream creation
           return await openRouter.chat.completions.create({
             model: openRouterModels[modelId]?.id || modelId,
+            order: ["Chutes","Targon"],
             messages: messages,
             stream: true,
             temperature: 0.7,
