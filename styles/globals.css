@@ -1,3 +1,18 @@
+/* Dark mode defaults */
+:root {
+  color-scheme: dark;
+}
+
+html {
+  background-color: #111111;
+  color: #f3f4f6; /* text-gray-100 equivalent */
+}
+
+body {
+  background-color: #111111;
+  color-scheme: dark;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

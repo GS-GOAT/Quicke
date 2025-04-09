@@ -32,6 +32,7 @@ export default async function handler(req, res) {
     const genAI = new GoogleGenerativeAI(apiKey.encryptedKey);
     const model = genAI.getGenerativeModel({ 
       model: 'gemini-2.0-flash',
+      tools: [{ 'google_search': {} }],
       generationConfig: {
         temperature: 0.7,
         topK: 40,

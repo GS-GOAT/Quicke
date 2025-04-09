@@ -6,6 +6,11 @@ import { useEffect } from 'react';
 
 function MyApp({ Component, pageProps }) {
   useEffect(() => {
+    // Force dark mode
+    document.documentElement.classList.add('dark');
+    document.documentElement.style.backgroundColor = '#111111';
+    document.documentElement.style.colorScheme = 'dark';
+    
     // Add global API key manager toggle
     window.__apiKeyManagerToggle = (show) => {
       window.dispatchEvent(new CustomEvent('toggleApiKeyManager', { 
