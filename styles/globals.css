@@ -24,11 +24,6 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen,
     Ubuntu, Cantarell, Fira Sans, Droid Sans, Helvetica Neue, sans-serif;
   @apply antialiased text-gray-100;
-  @apply overflow-hidden;
-  height: 100vh;
-  /* Prevent elastic scroll on iOS */
-  position: fixed;
-  width: 100%;
 }
 
 html {

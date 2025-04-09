@@ -1158,7 +1158,7 @@ export default function Home() {
   }, [responseLayout]);
 
   return (
-    <div className="flex flex-col h-screen relative">
+    <div className="relative z-[2] flex flex-col min-h-screen">
       <StarfieldBackground ref={starfieldRef} />
       
       {/* Add a dark overlay that fades out when hasInteracted is true */}
@@ -1277,7 +1277,7 @@ export default function Home() {
               {/* Right Actions */}
               <div className="flex items-center space-x-4">
                 {/* Add layout toggle buttons outside of dropdown menu */}
-                <div className="flex items-center space-x-2 mr-2 px-2 py-1 rounded-lg bg-gray-800/30">
+                <div className="hidden md:flex items-center space-x-2 mr-2 px-2 py-1 rounded-lg bg-gray-800/30">
                   <button
                     onClick={() => setResponseLayout('grid')}
                     data-layout="grid"
@@ -1439,7 +1439,7 @@ export default function Home() {
           </div>
         )}
         
-        <main className="flex-grow overflow-auto px-2 sm:px-4 py-2 mobile-scrollbar">
+        <main className="flex-grow px-2 sm:px-4 py-2">
           <div className="max-w-5xl mx-auto">
             {history.length === 0 ? (
               <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
