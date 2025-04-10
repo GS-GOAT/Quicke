@@ -49,17 +49,6 @@ export default function ModelSelector({ isOpen, setIsOpen, models, selectedModel
       }
     ],
     OpenRouter: [
-        // {
-        //   id: 'gpt-4o-mini-or',
-        //   name: 'GPT-4o Mini',
-        //   description: 'GPT-4 Mini optimized model via OpenRouter',
-        //   provider: 'OpenRouter',
-        //   color: 'from-blue-400 to-blue-600',
-        //   badge: 'Paid',
-        //   context: '8K',
-        //   icon: '⚡',
-        //   highlighted: true
-        // },
         {
           id: 'deepseek-v3-0324',
           name: 'DeepSeek V3 Latest',
@@ -129,7 +118,6 @@ export default function ModelSelector({ isOpen, setIsOpen, models, selectedModel
           color: 'from-purple-400 to-purple-600',
           badge: 'Free',
           icon: '🏆',
-          // highlighted: true
         },
         {
           id: 'qwen-32b',
@@ -343,7 +331,7 @@ export default function ModelSelector({ isOpen, setIsOpen, models, selectedModel
               leaveFrom="opacity-100 scale-100"
               leaveTo="opacity-0 scale-95"
             >
-              <Dialog.Panel className="w-full max-w-4xl max-h-[90vh] transform overflow-hidden rounded-xl bg-gray-950 p-6 shadow-xl transition-all">
+              <Dialog.Panel className="w-full max-w-4xl max-h-[85vh] transform overflow-hidden rounded-xl bg-gray-950 p-4 sm:p-6 shadow-xl transition-all">
                 <div className="flex justify-between items-center mb-4">
                   <Dialog.Title className="text-xl font-semibold text-white">
                     Select Models 
@@ -369,45 +357,45 @@ export default function ModelSelector({ isOpen, setIsOpen, models, selectedModel
                   </div>
                 </div>
 
-                <div className="space-y-6 overflow-y-auto max-h-[calc(90vh-120px)] pr-2">
+                <div className="space-y-4 sm:space-y-6 overflow-y-auto max-h-[calc(85vh-120px)] pr-2">
                   {Object.keys(modelCategories).map(category => (
                     <div key={category} className="space-y-2">
-                      <h3 className="text-lg font-medium text-gray-300">{category}</h3>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 gap-3">
+                      <h3 className="text-lg font-medium text-gray-300 px-1">{category}</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3">
                         {modelCategories[category].map(model => (
                           <div 
                             key={model.id}
                             onClick={() => toggleModel(model.id)}
-                            className={`relative group cursor-pointer border border-gray-700 rounded-lg p-3 transition-all ${
+                            className={`relative group cursor-pointer border border-gray-700 rounded-lg p-2 sm:p-3 transition-all ${
                               selectedModels.includes(model.id) 
                                 ? 'bg-primary-900/40 border-primary-700 shadow-lg shadow-primary-900/20' 
                                 : 'bg-gray-800/50 hover:bg-gray-800 hover:shadow-lg'
                             }`}
                           >
-                            <div className="flex items-start space-x-3">
-                              <div className={`flex-shrink-0 w-8 h-8 rounded-md flex items-center justify-center bg-gradient-to-br ${model.color || 'from-gray-500 to-gray-700'}`}>
-                                <span className="text-white text-sm">{model.icon || '🤖'}</span>
+                            <div className="flex items-start space-x-2 sm:space-x-3">
+                              <div className={`flex-shrink-0 w-6 h-6 sm:w-8 sm:h-8 rounded-md flex items-center justify-center bg-gradient-to-br ${model.color || 'from-gray-500 to-gray-700'}`}>
+                                <span className="text-white text-xs sm:text-sm">{model.icon || '🤖'}</span>
                               </div>
                               
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-start justify-between">
-                                  <h4 className="font-medium text-sm text-white mb-1 truncate pr-6">{model.name}</h4>
+                                  <h4 className="font-medium text-xs sm:text-sm text-white mb-1 truncate pr-6">{model.name}</h4>
                                   {selectedModels.includes(model.id) && (
                                     <div className="absolute top-2 right-2 text-primary-400">
-                                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 sm:w-4 sm:h-4">
                                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
                                       </svg>
                                     </div>
                                   )}
                                 </div>
                                 
-                                <div className="flex items-center flex-wrap gap-2 mt-1">
-                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-xs font-medium bg-gray-700 text-gray-300">
+                                <div className="flex items-center flex-wrap gap-1 sm:gap-2 mt-1">
+                                  <span className="inline-flex items-center px-1 py-0.5 rounded text-[10px] sm:text-xs font-medium bg-gray-700 text-gray-300">
                                     {model.provider}
                                   </span>
                                   
                                   {model.badge && (
-                                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-xs font-medium ${
+                                    <span className={`inline-flex items-center px-1 py-0.5 rounded text-[10px] sm:text-xs font-medium ${
                                       model.badge === 'Free' 
                                         ? 'bg-green-900/30 text-green-400 border border-green-800/30' 
                                         : 'bg-purple-900/30 text-purple-400 border border-purple-800/30'
@@ -417,27 +405,16 @@ export default function ModelSelector({ isOpen, setIsOpen, models, selectedModel
                                   )}
                                 </div>
                                 
-                                <div className="flex items-center text-xs text-gray-400 space-x-2 mt-2">
-                                  {model.contextSize && (
-                                    <span className="flex items-center">
-                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                      </svg>
-                                      {model.contextSize}K
-                                    </span>
-                                  )}
-                                </div>
+                                {model.description && (
+                                  <div className="mt-1 sm:mt-2 text-[10px] sm:text-xs text-gray-400 line-clamp-2 sm:line-clamp-1 group-hover:text-gray-300 transition-colors">
+                                    {model.description}
+                                    <div className="absolute invisible group-hover:visible z-10 w-64 p-2 mt-2 text-xs bg-gray-800 border border-gray-700 rounded-md shadow-xl text-gray-300 top-full left-0">
+                                      {model.description}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </div>
-                            
-                            {model.description && (
-                              <div className="mt-2 text-xs text-gray-400 line-clamp-1 group-hover:text-gray-300 transition-colors">
-                                {model.description}
-                                <div className="absolute invisible group-hover:visible z-10 w-64 p-2 mt-2 text-xs bg-gray-800 border border-gray-700 rounded-md shadow-xl text-gray-300 top-full left-0">
-                                  {model.description}
-                                </div>
-                              </div>
-                            )}
                           </div>
                         ))}
                       </div>

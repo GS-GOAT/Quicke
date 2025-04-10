@@ -1178,23 +1178,21 @@ export default function Home() {
         </Head>
 
         <header className="relative z-10 bg-white/80 dark:bg-darksurface/80 backdrop-blur-sm shadow-sm border-b border-gray-200 dark:border-gray-800 safe-area-top">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6">
-            <div className="flex items-center justify-between h-16">
+          <div className="max-w-7xl mx-auto px-2 sm:px-6">
+            <div className="flex items-center justify-between h-[52px] sm:h-16">
               {/* Logo & Brand */}
-              <div className="flex items-center space-x-3">
-                {/* Add Hamburger Menu */}
+              <div className="flex items-center space-x-2 sm:space-x-3">
                 <button 
-                  className="p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 group relative"
+                  className="p-1.5 sm:p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 group relative"
                   aria-label="Thread menu"
                   onMouseEnter={() => setSidebarOpen(true)}
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
                   </svg>
                 </button>
                 
-                {/* Updated Quicke text with improved animation */}
-                <h1 className="text-2xl font-bold quicke-text">
+                <h1 className="text-xl sm:text-2xl font-bold quicke-text">
                   Quicke
                 </h1>
                 
@@ -1259,15 +1257,15 @@ export default function Home() {
               </div>
 
               {/* Center - Model Selector */}
-              <div className="flex-1 flex justify-center">
+              <div className="flex-1 flex justify-center px-1 sm:px-4">
                 <button 
                   ref={modelButtonRef}
-                  onClick={handleModelButtonClick} // Replace onMouseEnter
-                  className="group px-4 py-2 rounded-lg bg-white hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 text-sm font-medium transition-all duration-200 border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md"
+                  onClick={handleModelButtonClick}
+                  className="group px-2 sm:px-4 py-1 sm:py-2 rounded-lg bg-white hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 text-xs sm:text-sm font-medium transition-all duration-200 border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md"
                 >
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-1 sm:space-x-2">
                     <span>{selectedModels.length} Model{selectedModels.length !== 1 ? 's' : ''}</span>
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-gray-400 group-hover:text-primary-500 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 group-hover:text-primary-500 transition-colors">
                       <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
                     </svg>
                   </div>
@@ -1439,7 +1437,7 @@ export default function Home() {
           </div>
         )}
         
-        <main className="flex-grow px-2 sm:px-4 py-2">
+        <main className="flex-grow px-2 sm:px-4 py-2 pb-[120px] sm:pb-2">
           <div className="max-w-5xl mx-auto">
             {history.length === 0 ? (
               <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
@@ -1469,7 +1467,7 @@ export default function Home() {
           </div>
         </main>
         
-        <footer className="px-2 sm:px-4 py-2 sm:py-4 bg-transparent relative z-[2] safe-area-bottom">
+        <footer className="px-2 sm:px-4 py-2 sm:py-4 bg-transparent relative sm:relative z-[40] safe-area-bottom">
           <div className="relative max-w-4xl mx-auto">
             {/* Add glass effect container for prompt */}
             <div className="relative rounded-2xl backdrop-blur-md bg-white/10 dark:bg-gray-900/20 border border-gray-200/20 dark:border-gray-700/20 shadow-lg overflow-hidden">

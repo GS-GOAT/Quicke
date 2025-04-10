@@ -973,6 +973,20 @@ footer {
   }
 }
 
+/* Add mobile-specific prompt bar styles */
+@media (max-width: 640px) {
+  footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(17, 17, 17, 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    z-index: 40;
+  }
+}
+
 /* Add safe area insets support */
 .safe-area-bottom {
   padding-bottom: env(safe-area-inset-bottom, 1rem);
