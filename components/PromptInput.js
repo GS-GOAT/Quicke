@@ -41,10 +41,6 @@ export default function PromptInput({
       
       const data = await response.json();
       setPdfContext(data.text || '');
-      
-      if (!prompt.trim()) {
-        setPrompt("I've uploaded a PDF document. Please analyze its contents.");
-      }
     } catch (err) {
       console.error('Error extracting PDF:', err);
       alert('Error processing PDF. Please try again.');
@@ -57,9 +53,6 @@ export default function PromptInput({
 
   const handleTextExtracted = (text) => {
     setPdfContext(text);
-    if (!prompt.trim()) {
-      setPrompt("I've uploaded a PDF document. Please analyze its contents.");
-    }
   };
 
   const handleSubmit = () => {
@@ -131,13 +124,18 @@ export default function PromptInput({
         handleUploadComplete(data.file);
         
         // Set appropriate prompt message based on file type
+        let promptMessage = '';
         if (data.file.isPdf) {
-          setPrompt("I've uploaded a PDF document. Please analyze its contents.");
+          promptMessage = "I've uploaded a PDF document. Please analyze its content and provide a summary.";
         } else if (data.file.isText) {
-          setPrompt("I've uploaded a text file. Please analyze its contents.");
+          promptMessage = "I've uploaded a text file. Please analyze its content and help me understand the main points.";
         } else if (data.file.isPpt) {
-          setPrompt("I've uploaded a PowerPoint presentation. Please analyze its contents.");
+          promptMessage = "I've uploaded a PowerPoint presentation. Please help me understand its structure and key messages.";
+        } else if (data.file.type?.startsWith('image/')) {
+          promptMessage = "I've uploaded an image. Please analyze what's shown in this image.";
         }
+        
+        setPrompt(promptMessage);
       } else {
         throw new Error(data.error || 'Upload failed');
       }
@@ -240,7 +238,7 @@ export default function PromptInput({
                   className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors group"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400 group-hover:text-gray-600 dark:text-gray-500 dark:group-hover:text-gray-300" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 010 1.414-1.414 0l-4.293-4.293-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 011.414 1.414L11.414 10l4.293 4.293a1 1 010 1.414-1.414 0l-4.293-4.293-4.293 4.293a1 1 01-1.414-1.414L8.586 10 4.293 5.707a1 1 010-1.414z" clipRule="evenodd" />
                   </svg>
                 </button>
               </div>
