@@ -1492,7 +1492,20 @@ async function handleCustomModelStream(modelId, prompt, sendEvent, customModels)
     // Race between fetch and timeout
     const response = await Promise.race([fetchPromise, timeoutPromise]);
 
+    // Add OpenRouter specific checks
+    if (response.headers.get('x-ratelimit-remaining') === '0') {
+      throw new Error('OpenRouter rate limit exceeded [ADD_KEY]');
+    }
+    
+    if (response.headers.get('x-credit-remaining') === '0') {
+      throw new Error('OpenRouter credits depleted [ADD_KEY]');
+    }
+
     if (!response.ok) {
+      // Add specific OpenRouter error handling
+      if (response.status === 429) {
+        throw new Error('OpenRouter rate limit exceeded [ADD_KEY]');
+      }
       throw new Error(`Custom model API error: ${response.status} ${response.statusText}`);
     }
 
@@ -1578,7 +1591,7 @@ async function handleCustomModelStream(modelId, prompt, sendEvent, customModels)
       duration: ((Date.now() - errorService.activeStreams.get(modelId)?.startTime || 0) / 1000).toFixed(1)
     };
   } catch (error) {
-    console.error(`[${modelId}] Custom model error:`, error);
+    console.error(`[OpenRouter] Error for model ${modelId}:`, error);
     errorService.unregisterStream(modelId);
     
     // Classify the error

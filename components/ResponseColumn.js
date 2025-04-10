@@ -774,12 +774,19 @@ export default function ResponseColumn({ model, response, streaming, className, 
     inlineMath: ({ value }) => <Math value={value} inline={true} />
   };
 
+  const isValidResponse = (response) => {
+    if (!response || !response.text) return false;
+    const text = response.text.trim();
+    return text !== '' && !text.includes('Waiting for prompt');
+  };
+
   // Determine the current state
   const isLoading = response?.loading === true;
   const hasError = response?.error != null;
   const hasText = (displayedText && displayedText.length > 0) || 
                  (response?.text && response.text.length > 0);
-  const waitingForPrompt = !isLoading && !hasError && !hasText;
+  const waitingForPrompt = !hasError && !hasText && !isLoading && 
+    (!response?.text || response.text.includes('Waiting for prompt'));
 
   // Add special styling for summary
   const columnClassName = `${className} ${isSummary ? 

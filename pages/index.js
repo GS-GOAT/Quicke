@@ -406,8 +406,13 @@ export default function Home() {
         console.log('Processing completion, checking for summary');
         
         const validResponses = Object.entries(completedResponses)
-          .filter(([_, response]) => !response.error);
-          
+          .filter(([_, response]) => {
+            const text = response?.text?.trim() || '';
+            return !response.error && 
+                   text !== '' && 
+                   !text.includes('Waiting for prompt');
+          });
+              
         console.log(`Found ${validResponses.length} valid responses for summarization`);
         
         try {
@@ -442,6 +447,8 @@ export default function Home() {
               setActiveThreadId(saveData.threadId);
               fetchThreads();
             }
+          } else {
+            console.log('No valid responses to save');
           }
         } catch (error) {
           console.error('Error saving conversation:', error);
