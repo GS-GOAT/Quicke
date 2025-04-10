@@ -167,6 +167,76 @@ export default function ModelSelector({ isOpen, setIsOpen, models, selectedModel
           badge: 'Free',
           color: 'from-green-400 to-green-600',
           icon: '💬'
+        },
+        {
+          id: 'nvidia/llama-3.1-nemotron-nano-8b-v1:free',
+          name: 'Nemotron Nano 8B',
+          provider: 'OpenRouter',
+          description: 'Efficient 8B parameter model for general tasks',
+          context: '32K',
+          badge: 'Free',
+          color: 'from-green-400 to-green-600',
+          icon: '⚡'
+        },
+        {
+          id: 'nvidia/llama-3.3-nemotron-super-49b-v1:free',
+          name: 'Nemotron Super 49B',
+          provider: 'OpenRouter',
+          description: 'Powerful 49B parameter model with enhanced capabilities',
+          context: '32K',
+          badge: 'Free',
+          color: 'from-blue-400 to-blue-600',
+          icon: '🚀'
+        },
+        {
+          id: 'nvidia/llama-3.1-nemotron-ultra-253b-v1:free',
+          name: 'Nemotron Ultra 253B',
+          provider: 'OpenRouter',
+          description: 'Ultra-large 253B parameter model for complex tasks',
+          context: '32K',
+          badge: 'Free',
+          color: 'from-purple-400 to-purple-600',
+          icon: '🌠'
+        },
+        {
+          id: 'meta-llama/llama-3.2-11b-vision-instruct:free',
+          name: 'Llama 3.2 Vision',
+          provider: 'OpenRouter',
+          description: 'Vision-language model for multimodal tasks',
+          context: '32K',
+          badge: 'Free',
+          color: 'from-indigo-400 to-indigo-600',
+          icon: '👁️'
+        },
+        {
+          id: 'meta-llama/llama-3.1-8b-instruct:free',
+          name: 'Llama 3.1 8B',
+          provider: 'OpenRouter',
+          description: 'Efficient instruction-following model',
+          context: '32K',
+          badge: 'Free',
+          color: 'from-cyan-400 to-cyan-600',
+          icon: '🦙'
+        },
+        {
+          id: 'deepseek/deepseek-r1:free',
+          name: 'DeepSeek R1',
+          provider: 'OpenRouter',
+          description: 'Advanced reasoning and analysis model',
+          context: '32K',
+          badge: 'Free',
+          color: 'from-violet-400 to-violet-600',
+          icon: '🤔'
+        },
+        {
+          id: 'deepseek/deepseek-r1-zero:free',
+          name: 'DeepSeek R1 Zero',
+          provider: 'OpenRouter',
+          description: 'Optimized version of R1 for faster responses',
+          context: '32K',
+          badge: 'Free',
+          color: 'from-rose-400 to-rose-600',
+          icon: '⚡'
         }
     ],
     OpenAI: [

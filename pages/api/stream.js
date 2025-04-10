@@ -15,7 +15,7 @@ const providerMap = {
   'deepseek-chat': 'deepseek',
   'deepseek-coder': 'deepseek',
   'deepseek-reasoner': 'deepseek',
-  // Map of OpenRouter models r
+  // Map of OpenRouter models 
   'deepseek-distill': 'openrouter',
   'deepseek-v3-openrouter': 'openrouter',
   'mistral-7b': 'openrouter',
@@ -28,6 +28,13 @@ const providerMap = {
   'mistral-small-31': 'openrouter',
   'mistral-nemo': 'openrouter',
   'deepseek-v3-0324': 'openrouter',
+  'nvidia/llama-3.1-nemotron-nano-8b-v1:free': 'openrouter',
+  'nvidia/llama-3.3-nemotron-super-49b-v1:free': 'openrouter',
+  'nvidia/llama-3.1-nemotron-ultra-253b-v1:free': 'openrouter',
+  'deepseek/deepseek-r1:free': 'openrouter',
+  'deepseek/deepseek-r1-zero:free': 'openrouter',
+  'meta-llama/llama-3.2-11b-vision-instruct:free': 'openrouter',
+  'meta-llama/llama-3.1-8b-instruct:free': 'openrouter',
   // Anthropic
   'claude-3-7': 'anthropic',
   'claude-3-5': 'anthropic',
@@ -141,8 +148,10 @@ const createErrorHandler = (completionManager, sendEvent) => {
       console.log(`[${modelId}] Sending error event: ${errorType}`);
       
       const retryCount = errorService?.getRetryCount?.(modelId) || 0;
-      const errorMessage = errorService?.getErrorMessage?.(errorType, modelId) 
-        || `Error with ${modelId}: ${errorType}`;
+      // Use display name or fallback to ID
+      const modelName = modelDisplayNames[modelId] || openRouterModels[modelId]?.name || modelId;
+      const errorMessage = errorService?.getErrorMessage?.(errorType, modelName) 
+        || `Error with ${modelName}: ${errorType}`;
       
       sendEvent({
         model: modelId,
@@ -628,10 +637,6 @@ Format your response as a clear, concise analysis.`;
 
   // Map of OpenRouter model IDs and their display names
   const openRouterModels = {
-    'gpt-4o-mini-or': {  // Add this entry
-      id: 'openai/gpt-4o-mini:free',
-      name: 'GPT-4O Mini'
-    },
     'mistral-7b': {
       id: 'mistralai/mistral-7b-instruct:free',
       name: 'Mistral 7B Instruct'
@@ -680,10 +685,35 @@ Format your response as a clear, concise analysis.`;
       id: 'deepseek/deepseek-chat-v3-0324:free',
       name: 'DeepSeek V3 0324'
     },
-    // 'olympiccoder': {
-    //   id: 'open-r1/olympiccoder-7b:free',
-    //   name: 'OlympicCoder 7B'
-    // }
+    // NVIDIA Models
+    'nvidia/llama-3.1-nemotron-nano-8b-v1:free': {
+      id: 'nvidia/llama-3.1-nemotron-nano-8b-v1:free',
+      name: 'Nemotron Nano 8B'
+    },
+    'nvidia/llama-3.3-nemotron-super-49b-v1:free': {
+      id: 'nvidia/llama-3.3-nemotron-super-49b-v1:free',
+      name: 'Nemotron Super 49B'
+    },
+    'nvidia/llama-3.1-nemotron-ultra-253b-v1:free': {
+      id: 'nvidia/llama-3.1-nemotron-ultra-253b-v1:free',
+      name: 'Nemotron Ultra 253B'
+    },
+    'meta-llama/llama-3.2-11b-vision-instruct:free': {
+      id: 'meta-llama/llama-3.2-11b-vision-instruct:free',
+      name: 'Llama 3.2 Vision'
+    },
+    'meta-llama/llama-3.1-8b-instruct:free': {
+      id: 'meta-llama/llama-3.1-8b-instruct:free',
+      name: 'Llama 3.1 8B'
+    },
+    'deepseek/deepseek-r1:free': {
+      id: 'deepseek/deepseek-r1:free',
+      name: 'DeepSeek R1'
+    },
+    'deepseek/deepseek-r1-zero:free': {
+      id: 'deepseek/deepseek-r1-zero:free',
+      name: 'DeepSeek R1 Zero'
+    }
   };
 
   // Update geminiModels with debug logging

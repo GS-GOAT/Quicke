@@ -46,6 +46,16 @@ const modelDisplayNames = {
   'claude-3-7': 'Claude 3.7 Sonnet',
   'claude-3-5': 'Claude 3.5 Sonnet',
   'summary': 'Summarizer',  // Add summary model display name
+  // NVIDIA Models
+  'nvidia/llama-3.1-nemotron-nano-8b-v1:free': 'Nemotron Nano 8B',
+  'nvidia/llama-3.3-nemotron-super-49b-v1:free': 'Nemotron Super 49B',
+  'nvidia/llama-3.1-nemotron-ultra-253b-v1:free': 'Nemotron Ultra 253B',
+  // DeepSeek Models
+  'deepseek/deepseek-r1:free': 'DeepSeek R1',
+  'deepseek/deepseek-r1-zero:free': 'DeepSeek R1 Zero',
+  // Meta Models
+  'meta-llama/llama-3.2-11b-vision-instruct:free': 'Llama 3.2 Vision',
+  'meta-llama/llama-3.1-8b-instruct:free': 'Llama 3.1 8B',
 };
 
 // Add provider map
@@ -79,6 +89,16 @@ const providerMap = {
   'claude-3-7': 'Anthropic',
   'claude-3-5': 'Anthropic',
   'summary': 'System',  // Add summary provider
+  // NVIDIA Models
+  'nvidia/llama-3.1-nemotron-nano-8b-v1:free': 'OpenRouter',
+  'nvidia/llama-3.3-nemotron-super-49b-v1:free': 'OpenRouter',
+  'nvidia/llama-3.1-nemotron-ultra-253b-v1:free': 'OpenRouter',
+  // DeepSeek Models
+  'deepseek/deepseek-r1:free': 'OpenRouter',
+  'deepseek/deepseek-r1-zero:free': 'OpenRouter', // Fix missing quote
+  // Meta Models
+  'meta-llama/llama-3.2-11b-vision-instruct:free': 'OpenRouter',
+  'meta-llama/llama-3.1-8b-instruct:free': 'OpenRouter',
 };
 
 // Update display provider function
@@ -844,7 +864,7 @@ export default function ResponseColumn({ model, response, streaming, className, 
         {/* Action buttons */}
         <div className="flex items-center space-x-2">
           {/* Retry button */}
-          {!isSummary && !isLoading && !streaming && (displayedText || response?.text || response?.error) && (
+          {!isSummary && !isLoading && !streaming && (displayedText || response?.text || response?.error || waitingForPrompt) && (
             <button
               onClick={handleRetry}
               className="p-1.5 text-gray-400 hover:text-primary-500 hover:bg-gray-800 rounded-lg transition-all duration-200"
