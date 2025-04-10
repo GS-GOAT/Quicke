@@ -3,6 +3,7 @@ import Head from 'next/head';
 import Script from 'next/script';
 import { SessionProvider } from 'next-auth/react';
 import { useEffect } from 'react';
+import { Analytics } from "@vercel/analytics/react";
 
 function MyApp({ Component, pageProps }) {
   useEffect(() => {
@@ -39,6 +40,7 @@ function MyApp({ Component, pageProps }) {
         </Script>
       </Head>
       <Component {...pageProps} />
+      <Analytics />
     </SessionProvider>
   );
 }
