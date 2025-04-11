@@ -46,14 +46,14 @@ export default async function handler(req, res) {
       .map(([model, response]) => `${model}:\n${response.text}\n`)
       .join('\n---\n');
 
-    const prompt = `Take these AI responses and provide a concise overall best answer :
+    const prompt = `Take these AI responses and provide a overall best answer with proper formatting and markdown :
 
 ${formattedResponses}
 
 Format your answer as:
 - Common Points: Key agreements between responses
 - Differences: Notable variations in approaches
-- Conclusion: Take all response into account and provide the best overall answer to the prompt
+- Final Answer: Take all response into account and provide the best final answer to the prompt nicely formatted for clarity and readability
 `;
 
     const result = await model.generateContent(prompt);

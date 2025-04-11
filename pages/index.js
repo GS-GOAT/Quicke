@@ -353,7 +353,9 @@ export default function Home() {
       responses: initialResponses,
       activeModels: [...selectedModels],
       timestamp: new Date(),
-      isHistorical: false
+      isHistorical: false,
+      fileId: fileId,
+      fileName: contextData?.fileName || null 
     }]);
     
     setPrompt('');
@@ -658,6 +660,60 @@ export default function Home() {
       {/* Historical conversations first */}
       {history.filter(entry => entry.isHistorical).map((entry) => (
         <div key={entry.id} className="space-y-6">
+          {/* File attachment display - POSITIONED ABOVE MESSAGE */}
+          {entry.fileId && (
+            <div className="flex justify-end mb-2">
+              <div className="bg-gray-50 dark:bg-gray-800 px-3 py-3 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm max-w-[280px]">
+                <div className="flex items-center">
+                  {/* Display appropriate icon based on file type or extension */}
+                  {entry.fileName?.toLowerCase().endsWith('.pdf') && (
+                    <div className="mr-3">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                  )}
+                  {entry.fileName?.toLowerCase().match(/\.(jpe?g|png|gif|webp)$/) && (
+                    <div className="mr-3">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                  )}
+                  {entry.fileName?.toLowerCase().endsWith('.txt') && (
+                    <div className="mr-3">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm3 1h6v4H7V5zm8 8v2h1v1H4v-1h1v-2H4v-1h16v1h-1z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                  )}
+                  {entry.fileName?.toLowerCase().match(/\.(ppt|pptx)$/) && (
+                    <div className="mr-3">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-orange-500" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                  )}
+                  {!entry.fileName?.toLowerCase().match(/\.(pdf|jpe?g|png|gif|webp|txt|ppt|pptx)$/) && (
+                    <div className="mr-3">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 012 0v4a1 1 0 102 0V7a3 3 0 00-3-3z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                  )}
+                  <div className="flex-1 overflow-hidden">
+                    <p 
+                      className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate w-full"
+                      title={entry.fileName || "Attached Document"} // Show full filename on hover
+                    >
+                      {entry.fileName || "Attached Document"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          
           <div className="flex justify-end">
             <div className="bg-primary-100 dark:bg-primary-900/30 p-4 rounded-2xl rounded-tr-none shadow-sm max-w-[80%] border border-primary-200 dark:border-primary-800/30">
               <p className="text-gray-800 dark:text-gray-200">{entry.prompt}</p>
@@ -761,6 +817,60 @@ export default function Home() {
       {/* New conversations last */}
       {history.filter(entry => !entry.isHistorical).map((entry) => (
         <div key={entry.id} className="space-y-6">
+          {/* File attachment display - POSITIONED ABOVE MESSAGE */}
+          {entry.fileId && (
+            <div className="flex justify-end mb-2">
+              <div className="bg-gray-50 dark:bg-gray-800 px-3 py-3 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm max-w-[280px]">
+                <div className="flex items-center">
+                  {/* Display appropriate icon based on file type or extension */}
+                  {entry.fileName?.toLowerCase().endsWith('.pdf') && (
+                    <div className="mr-3">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                  )}
+                  {entry.fileName?.toLowerCase().match(/\.(jpe?g|png|gif|webp)$/) && (
+                    <div className="mr-3">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                  )}
+                  {entry.fileName?.toLowerCase().endsWith('.txt') && (
+                    <div className="mr-3">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm3 1h6v4H7V5zm8 8v2h1v1H4v-1h1v-2H4v-1h16v1h-1z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                  )}
+                  {entry.fileName?.toLowerCase().match(/\.(ppt|pptx)$/) && (
+                    <div className="mr-3">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-orange-500" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                  )}
+                  {!entry.fileName?.toLowerCase().match(/\.(pdf|jpe?g|png|gif|webp|txt|ppt|pptx)$/) && (
+                    <div className="mr-3">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 012 0v4a1 1 0 102 0V7a3 3 0 00-3-3z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                  )}
+                  <div className="flex-1 overflow-hidden">
+                    <p 
+                      className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate w-full"
+                      title={entry.fileName || "Attached Document"} // Show full filename on hover
+                    >
+                      {entry.fileName || "Attached Document"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          
           <div className="flex justify-end">
             <div className="bg-primary-100 dark:bg-primary-900/30 p-4 rounded-2xl rounded-tr-none shadow-sm max-w-[80%] border border-primary-200 dark:border-primary-800/30">
               <p className="text-gray-800 dark:text-gray-200">{entry.prompt}</p>
@@ -982,6 +1092,9 @@ export default function Home() {
     setHistory([]);
     setActiveThreadId(null);
     setSidebarOpen(false);
+    
+    // Dispatch a custom event to clear any persistent file references
+    window.dispatchEvent(new Event('clearFileReferences'));
   };
 
   // Function to handle thread selection
@@ -998,6 +1111,9 @@ export default function Home() {
       setHistory(data.conversations);
       setActiveThreadId(threadId);
       setSidebarOpen(false);
+      
+      // Dispatch a custom event to clear any persistent file references
+      window.dispatchEvent(new Event('clearFileReferences'));
       
       // Add smooth scrolling to bottom
       setTimeout(() => {
@@ -1163,6 +1279,27 @@ export default function Home() {
       }
     });
   }, [responseLayout]);
+
+  // Add a function to stop streaming
+  const handleStopStreaming = () => {
+    // Cancel any ongoing streaming for all models
+    setResponses(prevResponses => {
+      const updatedResponses = { ...prevResponses };
+      
+      // Mark all streaming responses as completed
+      Object.keys(updatedResponses).forEach(model => {
+        if (updatedResponses[model]?.streaming) {
+          updatedResponses[model] = {
+            ...updatedResponses[model],
+            streaming: false,
+            text: updatedResponses[model].text + " [stopped]"
+          };
+        }
+      });
+      
+      return updatedResponses;
+    });
+  };
 
   return (
     <div className="relative z-[2] flex flex-col min-h-screen">
