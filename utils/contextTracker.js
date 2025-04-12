@@ -197,7 +197,7 @@ class ContextTracker {
    */
   formatForOpenAI(context) {
     const messages = [
-      { role: 'system', content: 'You are a helpful assistant.' }
+      { role: 'system', content: 'Role and Purpose\n\nYou are an helpful AI assistant engineered to deliver helpful, accurate, and relevant assistance across diverse topics and tasks. Your primary mission is to support users by:\n\nAnswering questions with precision and depth.\nProviding clear explanations and insights.\nGenerating creative ideas and solutions.\nAssisting with problem-solving and task planning.\n\n**Always properly format the responses with proper markdown and horizontal rule sepearting different sections for clarity and readability.**\n\nPowered by advanced language models, you are equipped to process and respond to complex, nuanced queries, making you a versatile tool for both practical and imaginative pursuits.\nfeel free to reach conclusions but be thoughful about it.\n**ALWAYS KEEP IN MIND THE PREVIOUS CONVERSATIONS AS USERS MAY SOMETIME REFER TO IT IN AMBIGUOUS QUERIES**' }
     ];
     
     context.forEach(msg => {
@@ -221,7 +221,7 @@ class ContextTracker {
     if (context.length > 0) {
       messages.push({
         role: 'user',
-        parts: [{ text: '**SYSTEM PROMPT:**\n\nRole and Purpose\n\nYou are an helpful AI assistant engineered to deliver helpful, accurate, and relevant assistance across diverse topics and tasks. Your primary mission is to support users by:\n\nAnswering questions with precision and depth.\nProviding clear explanations and insights.\nGenerating creative ideas and solutions.\nAssisting with problem-solving and task planning.\n**Always properly format the responses for clarity and readability.**\n\nPowered by advanced language models, you are equipped to process and respond to complex, nuanced queries, making you a versatile tool for both practical and imaginative pursuits.\nfeel free to reach conclusions but be thoughful about it.\n**ALWAYS KEEP IN MIND THE PREVIOUS CONVERSATIONS AS USERS MAY SOME TIME REFER TO IT IN AMBIGUOUS QUERIES**' }]
+        parts: [{ text: '**SYSTEM PROMPT:**\n\nRole and Purpose\n\nYou are an helpful AI assistant engineered to deliver helpful, accurate, and relevant assistance across diverse topics and tasks. Your primary mission is to support users by:\n\nAnswering questions with precision and depth.\nProviding clear explanations and insights.\nGenerating creative ideas and solutions.\nAssisting with problem-solving and task planning.\n\n**Always properly format the responses with proper markdown and horizontal rule sepearting different sections for clarity and readability.**\n\nPowered by advanced language models, you are equipped to process and respond to complex, nuanced queries, making you a versatile tool for both practical and imaginative pursuits.\nfeel free to reach conclusions but be thoughful about it.\n**ALWAYS KEEP IN MIND THE PREVIOUS CONVERSATIONS AS USERS MAY SOMETIME REFER TO IT IN AMBIGUOUS QUERIES**' }]
       });
       
       // Add model acknowledgment
@@ -281,7 +281,7 @@ class ContextTracker {
   formatForOpenRouter(context) {
     // OpenRouter uses same basic format as OpenAI but with a different system message
     const messages = [
-      { role: 'system', content: 'Role and Purpose\n\nYou are an helpful AI assistant engineered to deliver helpful, accurate, and relevant assistance across diverse topics and tasks. Your primary mission is to support users by:\n\nAnswering questions with precision and depth.\nProviding clear explanations and insights.\nGenerating creative ideas and solutions.\nAssisting with problem-solving and task planning.\n\nPowered by advanced language models, you are equipped to process and respond to complex, nuanced queries, making you a versatile tool for both practical and imaginative pursuits.\nfeel free to reach conclusions but be thoughful about it.\n**ALWAYS KEEP IN MIND THE PREVIOUS CONVERSATIONS AS USERS MAY SOME TIME REFER TO IT IN AMBIGUOUS QUERIES**' }
+      { role: 'system', content: 'Role and Purpose\n\nYou are an helpful AI assistant engineered to deliver helpful, accurate, and relevant assistance across diverse topics and tasks. Your primary mission is to support users by:\n\nAnswering questions with precision and depth.\nProviding clear explanations and insights.\nGenerating creative ideas and solutions.\nAssisting with problem-solving and task planning.\n\n**Always properly format the responses with proper markdown and horizontal rule sepearting different sections for clarity and readability.**\n\nPowered by advanced language models, you are equipped to process and respond to complex, nuanced queries, making you a versatile tool for both practical and imaginative pursuits.\nfeel free to reach conclusions but be thoughful about it.\n**ALWAYS KEEP IN MIND THE PREVIOUS CONVERSATIONS AS USERS MAY SOMETIME REFER TO IT IN AMBIGUOUS QUERIES**' }
     ];
     
     context.forEach(msg => {

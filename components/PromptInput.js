@@ -29,7 +29,12 @@ export default function PromptInput({
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit();
+      
+      // Only trigger submit if we're not currently processing
+      // This prevents Enter from triggering the stop functionality
+      if (!isProcessing) {
+        handleSubmit();
+      }
     }
   };
 

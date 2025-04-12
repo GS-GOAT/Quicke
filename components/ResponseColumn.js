@@ -259,8 +259,8 @@ export default function ResponseColumn({ model, response, streaming, className, 
       }, 100);
     }
 
-    // Stop timer and save duration when response is complete
-    if (response?.done) {
+    // Stop timer and save duration when response is complete or manually stopped
+    if (response?.done || (!response?.loading && !streaming)) {
       const duration = ((Date.now() - (startTimeRef.current || Date.now())) / 1000).toFixed(1);
       setElapsedTime(duration);
       if (response && typeof response === 'object') {
@@ -279,7 +279,7 @@ export default function ResponseColumn({ model, response, streaming, className, 
         timerRef.current = null;
       }
     };
-  }, [response?.loading, response?.done, response?.duration]);
+  }, [response?.loading, response?.done, streaming, response?.duration]);
 
   // Clean up timer when component unmounts
   useEffect(() => {

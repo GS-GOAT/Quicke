@@ -17,6 +17,14 @@ body {
 @tailwind components;
 @tailwind utilities;
 
+/* Add horizontal rule styling to make it white */
+hr {
+  border: none;
+  height: 1px;
+  background-color: rgba(255, 255, 255, 0.3);
+  margin: 20px 0;
+}
+
 html,
 body {
   padding: 0;

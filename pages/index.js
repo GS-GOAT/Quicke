@@ -1380,12 +1380,13 @@ export default function Home() {
       
       // Mark all streaming responses as completed
       Object.keys(updatedResponses).forEach(model => {
-        if (updatedResponses[model]?.streaming) {
+        if (updatedResponses[model]?.streaming || updatedResponses[model]?.loading) {
           updatedResponses[model] = {
             ...updatedResponses[model],
             streaming: false,
-            loading: false, // Ensure loading is set to false
-            text: updatedResponses[model].text + " [stopped]"
+            loading: false, // Ensure loading is set to false for all models, including OpenRouter models
+            text: updatedResponses[model].text ? updatedResponses[model].text + " [stopped]" : "[stopped]",
+            done: true // Explicitly mark as done to stop timers
           };
         }
       });
@@ -1400,12 +1401,13 @@ export default function Home() {
           const updatedResponses = { ...entry.responses };
           
           Object.keys(updatedResponses).forEach(model => {
-            if (updatedResponses[model]?.streaming) {
+            if (updatedResponses[model]?.streaming || updatedResponses[model]?.loading) {
               updatedResponses[model] = {
                 ...updatedResponses[model],
                 streaming: false,
                 loading: false, // Ensure loading is set to false
-                text: updatedResponses[model].text + " [stopped]"
+                text: updatedResponses[model].text ? updatedResponses[model].text + " [stopped]" : "[stopped]",
+                done: true // Explicitly mark as done to stop timers
               };
             }
           });

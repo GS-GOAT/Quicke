@@ -745,6 +745,8 @@ Format your response as a clear, concise analysis.`;
     const provider = providerMap[modelId];
     
     if (fileData.isImage) {
+      console.log(`Processing image for ${modelId} with provider ${provider}`);
+      
       if (provider === 'google') {
         return [{
           role: "user",
@@ -760,14 +762,26 @@ Format your response as a clear, concise analysis.`;
         }];
       }
       
-      // For other providers (OpenAI, Anthropic, etc)
+      // For other providers (OpenAI, Anthropic, OpenRouter, etc)
+      // Create a proper multimodal message with the image data
+      const imageUrl = `data:${fileData.fileType};base64,${fileData.content}`;
+      
+      // Log the message structure (without the actual image data)
+      console.log(`Creating multimodal message for ${modelId} with prompt: ${enhancedPrompt.substring(0, 50)}...`);
+      
       return [{
         role: "user",
         content: [
-          { type: "text", text: enhancedPrompt },
+          { 
+            type: "text", 
+            text: enhancedPrompt 
+          },
           {
             type: "image_url",
-            image_url: { url: `data:${fileData.fileType};base64,${fileData.content}` }
+            image_url: { 
+              url: imageUrl,
+              detail: provider === 'openrouter' ? 'high' : 'auto'  // Use high detail for OpenRouter
+            }
           }
         ]
       }];
@@ -1076,7 +1090,8 @@ async function handleModelStream(options) {
     sendEvent,
     client,
     generateStream,
-    processChunk
+    processChunk,
+    handleError // Add custom error handler option
   } = options;
 
   const streamHandler = createStreamHandler({
@@ -1131,7 +1146,25 @@ async function handleModelStream(options) {
       // If we get an error during streaming, log it but still try to send the text we received
       console.error(`Stream processing error (${modelId}):`, streamError);
       
-      // Classify the stream error
+      // Use custom error handler if provided
+      if (handleError) {
+        const customError = handleError(streamError);
+        if (customError) {
+          await sendStreamEvent({
+            modelId,
+            error: customError.errorMessage,
+            errorType: customError.errorType,
+            loading: false,
+            streaming: false,
+            done: true,
+            sendEvent
+          });
+          isStreamDone = true;
+          return text;
+        }
+      }
+      
+      // Default error handling if no custom handler or if custom handler returned null
       let errorType = ERROR_TYPES.UNKNOWN_ERROR;
       if (streamError.message && streamError.message.includes('exceeded your current quota')) {
         errorType = ERROR_TYPES.INSUFFICIENT_QUOTA;
@@ -1154,27 +1187,60 @@ async function handleModelStream(options) {
       isStreamDone = true;
     }
 
-    // Always send a completion event when the stream finishes
-    await sendStreamEvent({
-      modelId,
-      text: text,
-      loading: false,
-      streaming: false,
-      done: true,
-      sendEvent
-    });
+    // Only send completion event if we haven't encountered an error
+    if (isStreamDone && text) {
+      await sendStreamEvent({
+        modelId,
+        text: text,
+        loading: false,
+        streaming: false,
+        done: true,
+        sendEvent
+      });
+    }
 
     return text;
   } catch (error) {
     console.error(`Stream error (${modelId}):`, error);
-    const errorType = error.message === 'TIMEOUT' ? ERROR_TYPES.TIMEOUT :
-                     error.message.includes('API key') ? ERROR_TYPES.API_KEY_MISSING :
-                     error.message === 'Empty response received' ? ERROR_TYPES.EMPTY_RESPONSE :
-                     errorService?.classifyError(error) || ERROR_TYPES.UNKNOWN_ERROR;
+    
+    // Use custom error handler if provided
+    if (handleError) {
+      const customError = handleError(error);
+      if (customError) {
+        await sendStreamEvent({
+          modelId,
+          error: customError.errorMessage,
+          errorType: customError.errorType,
+          loading: false,
+          streaming: false,
+          done: true,
+          sendEvent
+        });
+        return '';
+      }
+    }
+    
+    // Default error handling if no custom handler or if custom handler returned null
+    let errorType = ERROR_TYPES.UNKNOWN_ERROR;
+    let errorMessage = error.message || 'Unknown error occurred';
+    
+    // Check for OpenRouter specific error status 402 (insufficient credits)
+    if (error.status === 402 || 
+        (error.error && error.error.code === 402) || 
+        (error.message && error.message.includes('Insufficient credits'))) {
+      errorType = ERROR_TYPES.INSUFFICIENT_BALANCE;
+      errorMessage = `Insufficient credits for model ${modelId}. Please add more credits.`;
+    } else {
+      // Handle other types of errors
+      errorType = error.message === 'TIMEOUT' ? ERROR_TYPES.TIMEOUT :
+                 error.message.includes('API key') ? ERROR_TYPES.API_KEY_MISSING :
+                 error.message === 'Empty response received' ? ERROR_TYPES.EMPTY_RESPONSE :
+                 errorService?.classifyError(error) || ERROR_TYPES.UNKNOWN_ERROR;
+    }
     
     await sendStreamEvent({
       modelId,
-      error: error.message,
+      error: errorMessage,
       errorType,
       loading: false,
       streaming: false,
@@ -1334,16 +1400,28 @@ async function handleGeminiStream(modelId, messages, sendEvent, genAI, geminiMod
       
       // Classify the error properly
       let errorType = ERROR_TYPES.UNKNOWN_ERROR;
-      if (streamError.message && streamError.message.includes('exceeded your current quota')) {
-        errorType = ERROR_TYPES.INSUFFICIENT_QUOTA;
-      } else if (streamError.status === 429 || (streamError.message && streamError.message.includes('Too Many Requests'))) {
+      let errorMessage = streamError.message;
+      
+      // Specific handling for quota/rate limit errors
+      if (streamError.status === 429) {
         errorType = ERROR_TYPES.RATE_LIMIT;
+        
+        // Check if it's a quota error
+        if (streamError.message && streamError.message.includes('exceeded your current quota') || 
+            (streamError.errorDetails && 
+             streamError.errorDetails.some(detail => detail['@type']?.includes('QuotaFailure')))) {
+          errorType = ERROR_TYPES.INSUFFICIENT_QUOTA;
+          errorMessage = `Google Gemini: You've exceeded your quota for ${modelId}. Please check your plan and billing details at https://ai.google.dev/gemini-api/docs/rate-limits`;
+        }
+      } else if (streamError.message && streamError.message.includes('quota')) {
+        errorType = ERROR_TYPES.INSUFFICIENT_QUOTA;
+        errorMessage = `Google Gemini: You've exceeded your quota for ${modelId}. Please check your plan and billing details at https://ai.google.dev/gemini-api/docs/rate-limits`;
       }
       
       // Send proper error event
       await sendEvent({
         model: modelId,
-        error: streamError.message,
+        error: errorMessage,
         errorType,
         streaming: false,
         loading: false,
@@ -1373,10 +1451,27 @@ async function handleGeminiStream(modelId, messages, sendEvent, genAI, geminiMod
     // Handle errors
     console.error(`Stream error (${modelId}):`, error);
     
+    // Classify error type for better user feedback
+    let errorType = ERROR_TYPES.UNKNOWN_ERROR;
+    let errorMessage = error.message;
+    
+    if (error.status === 429) {
+      errorType = ERROR_TYPES.RATE_LIMIT;
+      
+      // Check if it's a quota error
+      if (error.message && error.message.includes('exceeded your current quota') ||
+          (error.errorDetails && 
+           error.errorDetails.some(detail => detail['@type']?.includes('QuotaFailure')))) {
+        errorType = ERROR_TYPES.INSUFFICIENT_QUOTA;
+        errorMessage = `Google Gemini: You've exceeded your quota for ${modelId}. Please check your plan and billing details at https://ai.google.dev/gemini-api/docs/rate-limits`;
+      }
+    }
+    
     // Make sure to send a final error event
     await sendEvent({
       model: modelId,
-      error: error.message,
+      error: errorMessage,
+      errorType,
       streaming: false,
       loading: false,
       done: true // Add explicit done flag
@@ -1388,63 +1483,76 @@ async function handleGeminiStream(modelId, messages, sendEvent, genAI, geminiMod
 
 // Update OpenRouter handler to support context and handle premature closures
 async function handleOpenRouterStream(modelId, messages, sendEvent, openRouter, openRouterModels) {
-  console.log(`OpenRouter: Using model ${openRouterModels[modelId]?.id || modelId}`);
-
-  // Check if message contains an image
-  const hasImage = messages.some(msg => 
-    Array.isArray(msg.content) && 
-    msg.content.some(c => c.type === 'image_url')
-  );
-
+  // Check if messages is an array or a string
+  const formattedMessages = Array.isArray(messages) 
+    ? messages 
+    : [{ role: 'user', content: messages }];
+  
+  // Log the message length to help debug token issues
+  console.log(`OpenRouter: Using model ${modelId} with ${formattedMessages.length} messages`);
+  
+  // Check if model needs a special URL format for images
+  const modelInfo = openRouterModels[modelId];
+  
   return handleModelStream({
     modelId,
-    prompt: messages,
+    prompt: formattedMessages,
     sendEvent,
     client: openRouter,
-    generateStream: async () => {
-      try {
-        return await openRouter.chat.completions.create({
-          model: openRouterModels[modelId]?.id || modelId,
-          order: ["Chutes","Targon"],
-          messages: messages,
-          stream: true,
-          temperature: 0.7,
-          max_tokens: 8000,
-          // Add vision model parameters if image is present
-          ...(hasImage && {
-            vision_model: 'large', // Use high quality vision model
-            vision_config: {
-              detail: 'high'
-            }
-          })
-        });
-      } catch (error) {
-        // Check for premature closure
-        if (error.code === 'ERR_STREAM_PREMATURE_CLOSE') {
-          console.warn(`[${modelId}] Stream closed prematurely, attempting retry...`);
-          // Small delay before retry
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          // Retry the stream creation
-          return await openRouter.chat.completions.create({
-            model: openRouterModels[modelId]?.id || modelId,
-            order: ["Chutes","Targon"],
-            messages: messages,
-            stream: true,
-            temperature: 0.7,
-            max_tokens: 8000,
-            ...(hasImage && {
-              vision_model: 'large',
-              vision_config: {
-                detail: 'high'
-              }
-            })
-          });
-        }
-        throw error; // Re-throw other errors
-      }
+    generateStream: () => openRouter.chat.completions.create({
+      model: modelInfo?.id || modelId,
+      messages: formattedMessages,
+      stream: true,
+      transforms: ["middle-out"], // Add middle-out transform to help with large contexts
+    }),
+    processChunk: chunk => {
+      return chunk.choices && chunk.choices[0]?.delta?.content;
     },
-    processChunk: chunk => chunk.choices[0]?.delta?.content,
-    maxRetries: 2 // Allow up to 2 retries for premature closures
+    // Add specific error handler for OpenRouter
+    handleError: (error) => {
+      console.error(`OpenRouter error for ${modelId}:`, error);
+      
+      // Check specifically for free-models-per-day rate limit message
+      if (error.error && error.error.message && error.error.message.includes('free-models-per-day')) {
+        // Extract the credit amount if available
+        const creditMatch = error.error.message.match(/Add ([\d.]+) credits/);
+        const creditAmount = creditMatch ? creditMatch[1] : "additional";
+        
+        return {
+          errorType: ERROR_TYPES.RATE_LIMIT,
+          errorMessage: `OpenRouter: Rate limit exceeded for free tier for today . Either Add credits at openrouter.ai to continue using this model or wait till the quata resets.`
+        };
+      }
+      
+      // Handle insufficient credits
+      if (error.status === 402 || (error.error && error.error.code === 402)) {
+        return {
+          errorType: ERROR_TYPES.INSUFFICIENT_BALANCE,
+          errorMessage: `OpenRouter: Insufficient credits for ${modelId}. Please add more credits at openrouter.ai/settings/credits`
+        };
+      }
+      
+      // Handle token limit errors
+      if (error.error && error.error.message && 
+          (error.error.message.includes("maximum context length") || 
+           error.error.message.includes("token limit"))) {
+        return {
+          errorType: ERROR_TYPES.TOKEN_LIMIT_EXCEEDED,
+          errorMessage: `OpenRouter: Token limit exceeded for ${modelId}. Try with a smaller prompt or image.`
+        };
+      }
+      
+      // Handle generic rate limits
+      if (error.status === 429 || (error.error && error.error.code === 429)) {
+        return {
+          errorType: ERROR_TYPES.RATE_LIMIT,
+          errorMessage: `OpenRouter: Rate limit exceeded for ${modelId}. Please try again later.`
+        };
+      }
+      
+      // Default to unknown error
+      return null; // Return null to use default error handling
+    }
   });
 }
 
@@ -1682,7 +1790,9 @@ function formatPromptWithContext(prompt, fileData) {
       enhancedPrompt = `The following is content from a PowerPoint presentation titled "${fileData.fileName}":\n\n${fileData.content}\n\n${prompt}`;
       break;
     case 'image':
-      enhancedPrompt = `The following is content extracted from an image titled "${fileData.fileName}":\n\n${fileData.content}\n\n${prompt}`;
+      // For images, just use the original prompt without including the image data
+      // The image will be sent separately in the multimodal format
+      enhancedPrompt = prompt;
       break;
   }
   

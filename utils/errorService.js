@@ -13,7 +13,8 @@ export const ERROR_TYPES = {
   INVALID_FORMAT: 'INVALID_FORMAT',
   INVALID_PARAMETERS: 'INVALID_PARAMETERS',
   SERVER_ERROR: 'SERVER_ERROR',
-  SERVER_OVERLOADED: 'SERVER_OVERLOADED'
+  SERVER_OVERLOADED: 'SERVER_OVERLOADED',
+  TOKEN_LIMIT_EXCEEDED: 'TOKEN_LIMIT_EXCEEDED'  // Add new error type for token limit
 };
 
 // Timeout settings constants
@@ -135,6 +136,9 @@ class ErrorService {
       
       case ERROR_TYPES.SERVER_OVERLOADED:
         return `${modelName} is currently overloaded. Please try again in a few minutes.`;
+      
+      case ERROR_TYPES.TOKEN_LIMIT_EXCEEDED:
+        return `${modelName} token limit exceeded. Your request was too large. Try with a smaller image or shorter prompt.`;
         
       default:
         return `Error with ${modelName}: ${errorType}`;
@@ -167,12 +171,35 @@ class ErrorService {
                    (error.message || error.toString());
     const status = error.status || error.statusCode || error.code || 0;
     
+    // Check for token limit errors
+    if (error.error && error.error.message && 
+        (error.error.message.includes("maximum context length") || 
+         error.error.message.includes("token limit") ||
+         error.error.message.includes("too long"))) {
+      return ERROR_TYPES.TOKEN_LIMIT_EXCEEDED;
+    }
+    
     // OpenRouter specific error handling
     if (error.error && typeof error.error === 'object') {
       // Handle nested error objects from OpenRouter
       if (error.error.message && error.error.code) {
+        // Special check for free-models-per-day rate limit
+        if (error.error.message.includes('free-models-per-day')) {
+          return ERROR_TYPES.RATE_LIMIT;
+        }
+        
         if (error.error.code === 429 || error.error.message.includes('rate limit')) {
           return ERROR_TYPES.RATE_LIMIT;
+        }
+        
+        // Catch OpenRouter insufficient credits error (code 402)
+        if (error.error.code === 402 || error.error.message.includes('Insufficient credits')) {
+          return ERROR_TYPES.INSUFFICIENT_BALANCE;
+        }
+        
+        // Token limit errors in OpenRouter
+        if (error.error.code === 400 && error.error.message.includes('maximum context length')) {
+          return ERROR_TYPES.TOKEN_LIMIT_EXCEEDED;
         }
       }
     }
@@ -180,6 +207,20 @@ class ErrorService {
     // Handle OpenAI specific errors
     if (error.type === 'insufficient_quota' || message.includes('exceeded your current quota')) {
       return ERROR_TYPES.INSUFFICIENT_QUOTA;
+    }
+    
+    // Check for OpenRouter credit messages
+    if (message && message.toLowerCase().includes('insufficient credits')) {
+      return ERROR_TYPES.INSUFFICIENT_BALANCE;
+    }
+
+    // Check for rate limit message patterns
+    if (message && (
+      message.toLowerCase().includes('rate limit') ||
+      message.toLowerCase().includes('free-models-per-day') ||
+      message.toLowerCase().includes('too many requests')
+    )) {
+      return ERROR_TYPES.RATE_LIMIT;
     }
 
     // Handle DeepSeek specific errors by status code
@@ -189,7 +230,7 @@ class ErrorService {
       case 401:
         return ERROR_TYPES.API_KEY_MISSING;
       case 402:
-        return ERROR_TYPES.INSUFFICIENT_QUOTA;
+        return ERROR_TYPES.INSUFFICIENT_BALANCE;
       case 422:
         return ERROR_TYPES.INVALID_PARAMETERS;
       case 429:
