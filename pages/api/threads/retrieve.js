@@ -11,8 +11,11 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { id } = req.query;
+    const { id, skip } = req.query;
     if (!id) return res.status(400).json({ error: 'Thread ID is required' });
+
+    const skipCount = parseInt(skip) || 0;
+    const pageSize = 5;
 
     // Get thread with conversations
     const thread = await prisma.thread.findUnique({
@@ -25,6 +28,8 @@ export default async function handler(req, res) {
           orderBy: {
             createdAt: 'asc' // Ensure chronological order
           },
+          skip: skipCount,
+          take: pageSize + 1, // Take one extra to check if there are more
           include: {
             messages: {
               orderBy: {
@@ -46,8 +51,16 @@ export default async function handler(req, res) {
       data: { updatedAt: new Date() }
     });
 
+    // Check if there are more conversations
+    const hasMore = thread.conversations.length > pageSize;
+    
+    // Only process the conversations we want to return
+    const conversationsToProcess = hasMore 
+      ? thread.conversations.slice(0, pageSize) 
+      : thread.conversations;
+
     // Process conversations to match the expected format in the frontend
-    const processedConversations = thread.conversations.map(conv => {
+    const processedConversations = conversationsToProcess.map(conv => {
       const userMessage = conv.messages.find(msg => msg.role === 'user');
       
       const assistantMessages = conv.messages
@@ -101,7 +114,8 @@ export default async function handler(req, res) {
         createdAt: thread.createdAt,
         updatedAt: thread.updatedAt
       },
-      conversations: processedConversations
+      conversations: processedConversations,
+      hasMore
     });
   } catch (error) {
     console.error('Error retrieving thread:', error);

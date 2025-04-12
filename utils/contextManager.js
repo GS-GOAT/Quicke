@@ -17,7 +17,6 @@ export function formatContextForModel(messages) {
           model: parsed.model
         };
       } catch (e) {
-        console.error('Error parsing message content:', e);
         return null;
       }
     }
@@ -80,7 +79,6 @@ export async function getConversationContext(prisma, conversationId, threadId) {
 
     return formatContextForModel(messages.reverse()); // Maintain chronological order
   } catch (error) {
-    console.error('Error getting conversation context:', error);
     return [];
   }
 }

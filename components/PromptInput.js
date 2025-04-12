@@ -8,7 +8,8 @@ export default function PromptInput({
   isProcessing,
   preserveOnFocus = true,
   threadId,
-  onStopStreaming = () => {}
+  onStopStreaming = () => {},
+  selectedModels
 }) {
   const textareaRef = useRef(null);
   const [uploadedFile, setUploadedFile] = useState(null);
@@ -16,6 +17,7 @@ export default function PromptInput({
   const [isPdfProcessing, setIsPdfProcessing] = useState(false);
   const [persistentFile, setPersistentFile] = useState(null);
   const fileInputRef = useRef(null);
+  const [isDragging, setIsDragging] = useState(false);
   
   useEffect(() => {
     if (textareaRef.current) {
@@ -57,13 +59,17 @@ export default function PromptInput({
   };
 
   const handleSubmit = () => {
-    if (disabled || !prompt.trim()) return;
+    // If disabled (except when processing), don't proceed
+    if (disabled && !isProcessing) return;
     
     // If currently streaming, we need to stop it first
     if (isProcessing) {
       onStopStreaming();
       return;
     }
+    
+    // Check if prompt is valid before proceeding
+    if (!prompt || !prompt.trim()) return;
     
     if (uploadedFile?.fileType === 'application/pdf' && isPdfProcessing) {
       alert('Please wait for PDF processing to complete');
@@ -96,8 +102,70 @@ export default function PromptInput({
     input.click();
   };
 
-  const handleFileChange = async (e) => {
-    const file = e.target.files?.[0];
+  // Add a direct handler for the stop button to ensure it works
+  const handleStopClick = (e) => {
+    e.preventDefault(); // Prevent any default behavior
+    e.stopPropagation(); // Stop event propagation
+    onStopStreaming(); // Call the stop streaming function - removed debug log
+  };
+
+  // Setup global drag and drop handling
+  useEffect(() => {
+    // Setup document-wide drag and drop handlers
+    const handleDocDragEnter = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(true);
+    };
+
+    const handleDocDragOver = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(true);
+    };
+
+    const handleDocDragLeave = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Only set to false if we're leaving the document
+      if (!e.relatedTarget || e.relatedTarget.nodeName === 'HTML') {
+        setIsDragging(false);
+      }
+    };
+
+    const handleDocDrop = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
+      
+      // Only prevent uploads when actively processing a PDF
+      if (isPdfProcessing) return;
+      
+      const files = e.dataTransfer.files;
+      if (files && files.length > 0) {
+        const file = files[0]; // Only process the first file
+        processFile(file);
+      }
+    };
+
+    // Add document-level event listeners
+    document.addEventListener('dragenter', handleDocDragEnter);
+    document.addEventListener('dragover', handleDocDragOver);
+    document.addEventListener('dragleave', handleDocDragLeave);
+    document.addEventListener('drop', handleDocDrop);
+
+    // Cleanup listeners on unmount
+    return () => {
+      document.removeEventListener('dragenter', handleDocDragEnter);
+      document.removeEventListener('dragover', handleDocDragOver);
+      document.removeEventListener('dragleave', handleDocDragLeave);
+      document.removeEventListener('drop', handleDocDrop);
+    };
+  }, [disabled, isPdfProcessing]);
+
+  // Extract file processing to a separate function to reuse for both drag-drop and file input
+  const processFile = (file) => {
     if (!file) return;
 
     const acceptedTypes = [
@@ -123,48 +191,58 @@ export default function PromptInput({
   
     setIsPdfProcessing(true);
   
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      if (threadId) formData.append('threadId', threadId);
-  
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
-  
-      if (!response.ok) throw new Error('Upload failed');
-      
-      const data = await response.json();
-      if (data.success) {
-        handleUploadComplete(data.file);
-        
-        // Set appropriate prompt message based on file type
-        let promptMessage = '';
-        if (data.file.isPdf) {
-          promptMessage = "I've uploaded a PDF document. Please analyze its content and provide a summary.";
-        } else if (data.file.isText) {
-          promptMessage = "I've uploaded a text file. Please analyze its content and help me understand the main points.";
-        } else if (data.file.isPpt) {
-          promptMessage = "I've uploaded a PowerPoint presentation. Please help me understand its structure and key messages.";
-        } else if (data.file.type?.startsWith('image/')) {
-          promptMessage = "I've uploaded an image. Please analyze what's shown in this image.";
+    const formData = new FormData();
+    formData.append('file', file);
+    if (threadId) formData.append('threadId', threadId);
+
+    fetch('/api/upload', {
+      method: 'POST',
+      body: formData,
+    })
+      .then(response => {
+        if (!response.ok) throw new Error('Upload failed');
+        return response.json();
+      })
+      .then(data => {
+        if (data.success) {
+          handleUploadComplete(data.file);
+          
+          // Set appropriate prompt message based on file type
+          let promptMessage = '';
+          if (data.file.isPdf) {
+            promptMessage = "I've uploaded a PDF document. Please analyze its content and provide a summary.";
+          } else if (data.file.isText) {
+            promptMessage = "I've uploaded a text file. Please analyze its content and help me understand the main points.";
+          } else if (data.file.isPpt) {
+            promptMessage = "I've uploaded a PowerPoint presentation. Please help me understand its structure and key messages.";
+          } else if (data.file.type?.startsWith('image/')) {
+            promptMessage = "I've uploaded an image. Please analyze what's shown in this image.";
+          }
+          
+          setPrompt(promptMessage);
+        } else {
+          throw new Error(data.error || 'Upload failed');
         }
-        
-        setPrompt(promptMessage);
-      } else {
-        throw new Error(data.error || 'Upload failed');
-      }
-    } catch (err) {
-      console.error('Upload error:', err);
-      alert('Failed to upload file: ' + (err.message || 'Unknown error'));
-      setUploadedFile(null);
-      setPersistentFile(null);
-    } finally {
-      setIsPdfProcessing(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      })
+      .catch(err => {
+        console.error('Upload error:', err);
+        alert('Failed to upload file: ' + (err.message || 'Unknown error'));
+        setUploadedFile(null);
+        setPersistentFile(null);
+      })
+      .finally(() => {
+        setIsPdfProcessing(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      });
+  };
+
+  // Update the file change handler to use the new processFile function
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processFile(file);
     }
   };
 
@@ -270,17 +348,26 @@ export default function PromptInput({
         </div>
       )}
 
-      <div className={`relative rounded-xl shadow-sm transition-all duration-200
-        ${disabled 
-          ? 'opacity-50' 
-          : 'hover:shadow-md dark:hover:shadow-inner'}`}
+      {/* Global drop zone indicator */}
+      {isDragging && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border-2 border-dashed border-primary-500 shadow-xl">
+            <div className="text-center">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-primary-500 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+              </svg>
+              <p className="text-lg font-semibold text-primary-600 dark:text-primary-400">Drop files here</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div 
+        className="relative rounded-xl shadow-sm transition-all duration-200
+          hover:shadow-md dark:hover:shadow-inner"
       >
-        <div className={`relative border rounded-xl bg-white dark:bg-darksurface
-          transition-colors duration-200
-          ${disabled
-            ? 'border-gray-200 dark:border-gray-700'
-            : 'border-gray-200 dark:border-gray-700 hover:border-primary-500/50 dark:hover:border-primary-500/50'
-          }`}
+        <div className="relative border rounded-xl bg-white dark:bg-darksurface
+          transition-colors duration-200 border-gray-200 dark:border-gray-700 hover:border-primary-500/50 dark:hover:border-primary-500/50"
         >
           {/* Input area */}
           <div className="relative flex items-start">
@@ -288,13 +375,12 @@ export default function PromptInput({
               ref={textareaRef}
               className={`w-full py-4 px-4 pr-24 text-gray-900 dark:text-gray-100 
                 rounded-xl resize-none bg-transparent focus:outline-none min-h-[56px]
-                transition-opacity duration-200
-                ${disabled ? 'opacity-70' : ''}`}
+                transition-opacity duration-200`}
               placeholder={isProcessing ? "Type to compose a new message..." : "Send a message..."}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={handleKeyDown}
-              disabled={disabled}
+              disabled={false}
               style={{ maxHeight: '200px' }}
               onFocus={() => {
                 if (!preserveOnFocus) {
@@ -309,7 +395,7 @@ export default function PromptInput({
                 onClick={handleFileInputClick}
                 className="p-1.5 rounded-full transition-colors text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                 title="Upload PDF and Images"
-                disabled={disabled || isPdfProcessing}
+                disabled={isPdfProcessing}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -321,7 +407,6 @@ export default function PromptInput({
                   onClick={() => setPrompt('')}
                   className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
                   title="Clear input"
-                  disabled={disabled}
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -329,36 +414,41 @@ export default function PromptInput({
                 </button>
               )}
               
-              <button
-                onClick={handleSubmit}
-                disabled={disabled || (!prompt.trim() && !isProcessing) || isPdfProcessing}
-                className={`p-2 rounded-full transition-all duration-200 ${
-                  disabled || (!prompt.trim() && !isProcessing) || isPdfProcessing
-                    ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed bg-gray-100 dark:bg-gray-800' 
-                    : isProcessing 
-                      ? 'text-white bg-red-600 hover:bg-red-700 shadow-md hover:shadow-lg'
-                      : 'text-white bg-primary-600 hover:bg-primary-700 shadow-md hover:shadow-lg'
-                }`}
-                title={
-                  isPdfProcessing 
-                    ? "Processing PDF..." 
-                    : isProcessing 
-                      ? "Stop generating" 
-                      : "Send message"
-                }
-              >
-                {isPdfProcessing ? (
+              {/* Conditionally render different buttons based on state */}
+              {isPdfProcessing ? (
+                <button
+                  disabled
+                  className="p-2 rounded-full transition-all duration-200 text-gray-400 dark:text-gray-600 cursor-not-allowed bg-gray-100 dark:bg-gray-800"
+                  title="Processing PDF..."
+                >
                   <div className="animate-spin h-5 w-5 border-2 border-gray-500 border-t-transparent rounded-full" />
-                ) : isProcessing ? (
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </button>
+              ) : isProcessing ? (
+                <button
+                  onClick={handleStopClick}
+                  className="p-2 rounded-full transition-all duration-200 text-white bg-red-600 hover:bg-red-700 shadow-md hover:shadow-lg cursor-pointer"
+                  title="Stop generating"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                    <path fillRule="evenodd" d="M4.5 7.5a3 3 0 013-3h9a3 3 0 013 3v9a3 3 0 01-3 3h-9a3 3 0 01-3-3v-9z" clipRule="evenodd" />
                   </svg>
-                ) : (
+                </button>
+              ) : (
+                <button
+                  onClick={handleSubmit}
+                  disabled={!prompt.trim() || (selectedModels && selectedModels.length === 0)}
+                  className={`p-2 rounded-full transition-all duration-200 ${
+                    !prompt.trim() || (selectedModels && selectedModels.length === 0)
+                      ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed bg-gray-100 dark:bg-gray-800' 
+                      : 'text-white bg-primary-600 hover:bg-primary-700 shadow-md hover:shadow-lg'
+                  }`}
+                  title="Send message"
+                >
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
                   </svg>
-                )}
-              </button>
+                </button>
+              )}
             </div>
           </div>
         </div>

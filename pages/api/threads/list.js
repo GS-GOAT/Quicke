@@ -11,11 +11,11 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Find last 5 threads with conversation count & last message for preview
+    // Find last 10 threads with conversation count & last message for preview
     const threads = await prisma.thread.findMany({
       where: { userId: session.user.id },
       orderBy: { updatedAt: 'desc' },
-      take: 5, // Limit to 5 threads per user
+      take: 10, // Limit to 10 threads per user
       include: {
         conversations: {
           take: 1,

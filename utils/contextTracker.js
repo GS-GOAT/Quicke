@@ -27,7 +27,6 @@ class ContextTracker {
     
     // Update the context
     this.contextMap.set(key, context);
-    console.log(`Added user message to context for ${key}. Context size: ${context.length}`);
   }
 
   /**
@@ -58,7 +57,6 @@ class ContextTracker {
     
     // Update the context
     this.contextMap.set(key, context);
-    console.log(`Added model response to context for ${key}. Context size: ${context.length}`);
   }
 
   /**
@@ -164,7 +162,6 @@ class ContextTracker {
   formatContextForModel(threadId, conversationId, currentPrompt, modelType) {
     // Get the raw context
     const context = this.getContext(threadId, conversationId);
-    console.log(`formatContextForModel: got ${context.length} messages for ${threadId || conversationId}`);
     
     // If we have a current prompt, add it temporarily to the context
     let tempContext = [...context];
@@ -174,19 +171,6 @@ class ContextTracker {
         content: currentPrompt,
         timestamp: Date.now()
       });
-    }
-    
-    // Log context before formatting for debugging
-    if (tempContext.length > 0) {
-      console.log(`Context preview before formatting for ${modelType}:`);
-      tempContext.forEach((msg, i) => {
-        if (i < 5) { // Show up to 5 messages for debugging
-          console.log(`  [${i}] ${msg.role}: ${msg.content.substring(0, 30)}...`);
-        }
-      });
-      if (tempContext.length > 5) {
-        console.log(`  ... and ${tempContext.length - 5} more messages`);
-      }
     }
     
     // Format based on model type
@@ -205,7 +189,6 @@ class ContextTracker {
         formattedContext = this.formatForOpenAI(tempContext);
     }
     
-    console.log(`Formatted ${formattedContext.length} messages for ${modelType}`);
     return formattedContext;
   }
 
@@ -264,10 +247,7 @@ class ContextTracker {
           // If it has a text field, use that instead
           if (parsed.text) {
             content = parsed.text;
-            console.log(`Extracted text from JSON content: ${content.substring(0, 30)}...`);
           } else {
-            // Skip this message if we can't extract meaningful content
-            console.log(`Skipping likely JSON content in Gemini context: ${content.substring(0, 30)}...`);
             return;
           }
         } catch (e) {
@@ -284,7 +264,6 @@ class ContextTracker {
       });
     });
     
-    console.log(`Formatted ${messages.length} messages for Gemini`);
     return messages;
   }
 
@@ -322,7 +301,6 @@ class ContextTracker {
     const key = threadId || conversationId;
     if (key) {
       this.contextMap.delete(key);
-      console.log(`Cleared context for ${key}`);
     }
   }
 }

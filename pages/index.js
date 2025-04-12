@@ -313,29 +313,44 @@ export default function Home() {
   };
 
   const handleSubmit = async (contextData) => {
-    // Add authentication check
-    if (!session) {
-      const encodedPrompt = encodeURIComponent(prompt);
-      router.push(`/auth/signin?redirect=/?prompt=${encodedPrompt}`);
+    // Prevent multiple submissions in quick succession
+    if (loading) return;
+    
+    setLoading(true);
+    
+    if (isProcessing && eventSourceRef.current) {
+      // If already processing, handle it as a stop request
+      handleStopStreaming();
+      setLoading(false);
       return;
     }
     
-    const promptText = contextData?.prompt || prompt;
-    const fileId = contextData?.fileId || null;
-    if (!promptText.trim() || loading || isProcessing) return;
-    
-    setLoading(true);
+    // Tracking that we're processing a response
     setIsProcessing(true);
-
-    // Generate a unique conversation ID
+    
+    // Extract the prompt text and file ID from the context data
+    const promptText = contextData.prompt;
+    const fileId = contextData.fileId;
+    
+    // Ensure the prompt isn't empty before proceeding
+    if (!promptText || !promptText.trim()) {
+      setLoading(false);
+      return;
+    }
+    
+    setHasInteracted(true);
+    
+    if (starfieldRef.current) {
+      starfieldRef.current.stopAnimation();
+    }
+    
+    // Generate a unique ID for this conversation
     const conversationId = `conv-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     setCurrentPromptId(conversationId);
     
-    // Clear previous responses before starting new request
-    setResponses({});
+    // Create tracking object for completed responses
+    const completedResponses = {};
     
-    let completedResponses = {};
-
     // Initialize response objects for each selected model
     const initialResponses = {};
     selectedModels.forEach(model => {
@@ -405,7 +420,7 @@ export default function Home() {
       
       // Handle final completion after all models are done
       if (data.allComplete) {
-        console.log('Processing completion, checking for summary');
+        // Reduced logging
         
         const validResponses = Object.entries(completedResponses)
           .filter(([_, response]) => {
@@ -414,8 +429,6 @@ export default function Home() {
                    text !== '' && 
                    !text.includes('Waiting for prompt');
           });
-              
-        console.log(`Found ${validResponses.length} valid responses for summarization`);
         
         try {
           const validResponsesData = validResponses.reduce((acc, [model, response]) => {
@@ -449,18 +462,17 @@ export default function Home() {
               setActiveThreadId(saveData.threadId);
               fetchThreads();
             }
-          } else {
-            console.log('No valid responses to save');
           }
         } catch (error) {
           console.error('Error saving conversation:', error);
+        } finally {
+          // Always ensure states are reset, even if there's an error saving responses
+          newEventSource.close();
+          eventSourceRef.current = null;
+          setLoading(false); // Reset loading state
+          setIsProcessing(false); // Reset processing state
+          setCurrentPromptId(null);
         }
-
-        newEventSource.close();
-        eventSourceRef.current = null;
-        setLoading(false);
-        setIsProcessing(false);
-        setCurrentPromptId(null);
       }
     };
 
@@ -625,10 +637,55 @@ export default function Home() {
     </div>
   );
 
+  // Load more button handler
   const handleLoadMore = () => {
-    const nextPage = page + 1;
-    setPage(nextPage);
-    fetchConversations(nextPage);
+    if (hasMore) {
+      if (activeThreadId) {
+        // If in thread view, load more conversations from this thread
+        handleLoadMoreThreadConversations();
+      } else {
+        // Otherwise, load more from general history
+        const nextPage = Math.ceil(history.filter(entry => entry.isHistorical).length / 5) + 1;
+        fetchConversations(nextPage);
+      }
+    }
+  };
+  
+  // Function to load more conversations from the current thread
+  const handleLoadMoreThreadConversations = async () => {
+    try {
+      // Get current scroll position before loading more
+      const mainContent = document.querySelector('main');
+      const oldScrollHeight = mainContent?.scrollHeight || 0;
+      const oldScrollTop = mainContent?.scrollTop || 0;
+      
+      // Use the number of existing conversations to calculate the offset
+      const existingConversations = history.length;
+      const response = await fetch(`/api/threads/retrieve?id=${activeThreadId}&skip=${existingConversations}`);
+      
+      if (!response.ok) throw new Error('Failed to load more thread conversations');
+      
+      const data = await response.json();
+      
+      // Set hasMore based on whether we received any additional conversations
+      setHasMore(data.conversations.length > 0);
+      
+      // Add the new conversations to existing history
+      if (data.conversations.length > 0) {
+        setHistory(prev => [...prev, ...data.conversations]);
+        
+        // After state update, adjust scroll position to maintain view
+        setTimeout(() => {
+          if (mainContent) {
+            const newScrollHeight = mainContent.scrollHeight;
+            const heightDifference = newScrollHeight - oldScrollHeight;
+            mainContent.scrollTop = oldScrollTop + heightDifference;
+          }
+        }, 100);
+      }
+    } catch (error) {
+      console.error('Error loading more thread conversations:', error);
+    }
   };
 
   const getResponseLayoutClass = () => {
@@ -1079,15 +1136,42 @@ export default function Home() {
       if (!response.ok) throw new Error('Failed to fetch threads');
       
       const data = await response.json();
-      // Only keep the last 5 threads
-      setThreads(data.threads.slice(0, 5));
+      // Display up to 10 threads
+      setThreads(data.threads);
     } catch (error) {
       console.error('Error fetching threads:', error);
     }
   };
 
+  // Function to delete the oldest thread and its conversations
+  const deleteOldestThread = async () => {
+    try {
+      const response = await fetch('/api/threads/delete-oldest', {
+        method: 'DELETE'
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete oldest thread');
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error deleting oldest thread:', error);
+      return { success: false };
+    }
+  };
+
   // Function to handle new thread creation
-  const handleNewThread = () => {
+  const handleNewThread = async () => {
+    // If we already have 10 threads, delete the oldest one first
+    if (threads.length >= 10) {
+      const deleteResult = await deleteOldestThread();
+      if (!deleteResult.success) {
+        console.error('Failed to delete oldest thread before creating a new one');
+        // Continue anyway
+      }
+    }
+    
     // Clear the current conversation
     setHistory([]);
     setActiveThreadId(null);
@@ -1282,6 +1366,14 @@ export default function Home() {
 
   // Add a function to stop streaming
   const handleStopStreaming = () => {
+    console.log('Stopping stream');
+    
+    // Close the EventSource connection
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+    
     // Cancel any ongoing streaming for all models
     setResponses(prevResponses => {
       const updatedResponses = { ...prevResponses };
@@ -1292,6 +1384,7 @@ export default function Home() {
           updatedResponses[model] = {
             ...updatedResponses[model],
             streaming: false,
+            loading: false, // Ensure loading is set to false
             text: updatedResponses[model].text + " [stopped]"
           };
         }
@@ -1299,6 +1392,34 @@ export default function Home() {
       
       return updatedResponses;
     });
+
+    // Update the history entries as well
+    setHistory(prev => {
+      return prev.map(entry => {
+        if (entry.id === currentPromptId) {
+          const updatedResponses = { ...entry.responses };
+          
+          Object.keys(updatedResponses).forEach(model => {
+            if (updatedResponses[model]?.streaming) {
+              updatedResponses[model] = {
+                ...updatedResponses[model],
+                streaming: false,
+                loading: false, // Ensure loading is set to false
+                text: updatedResponses[model].text + " [stopped]"
+              };
+            }
+          });
+          
+          return { ...entry, responses: updatedResponses };
+        }
+        return entry;
+      });
+    });
+    
+    // Reset all states that might be disabling the prompt bar
+    setIsProcessing(false);
+    setLoading(false); // Critical: Reset the loading state to re-enable the prompt bar
+    setCurrentPromptId(null);
   };
 
   return (
@@ -1639,9 +1760,12 @@ export default function Home() {
                       handleSubmit(e);
                     }}
                     onClear={handleClear}
-                    disabled={loading || selectedModels.length === 0}  
+                    disabled={!isProcessing && (loading || selectedModels.length === 0)}  
                     isProcessing={isProcessing}
-                    preserveOnFocus={true} // Add this prop
+                    preserveOnFocus={true}
+                    onStopStreaming={handleStopStreaming}
+                    threadId={activeThreadId}
+                    selectedModels={selectedModels}
                   />
                 </div>
               </div>

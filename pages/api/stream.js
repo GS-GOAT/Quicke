@@ -1667,8 +1667,8 @@ const verifyApiKey = (modelId, providerMap, userApiKeys) => {
 
 // Update the formatPromptWithContext function to handle different file types
 function formatPromptWithContext(prompt, fileData) {
-  if (!fileData) return prompt;
-
+  if (!fileData || !fileData.content) return prompt;
+  
   let enhancedPrompt = prompt;
   
   switch (fileData.type) {
@@ -1680,6 +1680,9 @@ function formatPromptWithContext(prompt, fileData) {
       break;
     case 'ppt':
       enhancedPrompt = `The following is content from a PowerPoint presentation titled "${fileData.fileName}":\n\n${fileData.content}\n\n${prompt}`;
+      break;
+    case 'image':
+      enhancedPrompt = `The following is content extracted from an image titled "${fileData.fileName}":\n\n${fileData.content}\n\n${prompt}`;
       break;
   }
   
