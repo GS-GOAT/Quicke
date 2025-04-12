@@ -194,7 +194,42 @@ const verifyModelApiKeys = (modelArray, providerMap, userApiKeys) => {
   });
 };
 
-// Update getFileContext to support multiple file types
+// Update the getFileContext function to handle multiple files
+async function getMultipleFileContexts(userId, fileIds) {
+  if (!fileIds || fileIds.length === 0) return [];
+  
+  try {
+    const fileContexts = [];
+    
+    // Get all specified files
+    const files = await prisma.uploadedFile.findMany({
+      where: {
+        id: { in: fileIds },
+        userId
+      }
+    });
+
+    // Process each file
+    for (const file of files) {
+      const documentType = file.documentType || getDocumentTypeFromMimetype(file.fileType);
+      const fileContext = {
+        id: file.id,
+        fileName: file.fileName,
+        documentType,
+        content: file.content,
+        isFile: true
+      };
+      fileContexts.push(fileContext);
+    }
+    
+    return fileContexts;
+  } catch (error) {
+    console.error('Error fetching multiple file contexts:', error);
+    return [];
+  }
+}
+
+// Keep the original getFileContext function for backward compatibility
 async function getFileContext(userId, fileId) {
   if (!fileId) return null;
   
@@ -206,65 +241,71 @@ async function getFileContext(userId, fileId) {
       }
     });
     
-    if (!file) {
-      return null;
-    }
+    if (!file) return null;
     
-    // Return appropriate context based on file type
     const documentType = file.documentType || getDocumentTypeFromMimetype(file.fileType);
     
-    switch (documentType) {
-      case 'pdf':
-        return {
-          content: file.content,
-          type: 'pdf',
-          fileName: file.fileName,
-          fileType: file.fileType
-        };
-      case 'text':
-        return {
-          content: file.content,
-          type: 'text',
-          fileName: file.fileName,
-          fileType: file.fileType
-        };
-      case 'ppt':
-        return {
-          content: file.content,
-          type: 'ppt',
-          fileName: file.fileName,
-          fileType: file.fileType
-        };
-      case 'image':
-        return {
-          content: file.content,
-          type: 'image',
-          fileName: file.fileName,
-          fileType: file.fileType,
-          isImage: true
-        };
-      default:
-        return null;
-    }
+    return {
+      id: file.id,
+      fileName: file.fileName,
+      documentType,
+      content: file.content
+    };
   } catch (error) {
-    console.error('Error getting file context:', error);
+    console.error('Error fetching file context:', error);
     return null;
   }
 }
 
-// Helper function to determine document type from mimetype
-function getDocumentTypeFromMimetype(mimetype) {
-  if (mimetype === 'application/pdf') {
-    return 'pdf';
-  } else if (mimetype === 'text/plain') {
-    return 'text';
-  } else if (mimetype === 'application/vnd.ms-powerpoint' || 
-             mimetype === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') {
-    return 'ppt';
-  } else if (mimetype.startsWith('image/')) {
-    return 'image';
+// Update the formatPromptWithContext function to handle multiple files
+function formatPromptWithMultipleContexts(prompt, fileContexts) {
+  if (!fileContexts || fileContexts.length === 0) return prompt;
+  
+  // Start with the original prompt
+  let enhancedPrompt = prompt;
+  
+  // Add a header section for multiple files
+  if (fileContexts.length > 1) {
+    enhancedPrompt = `I've uploaded ${fileContexts.length} files for you to analyze. Here are their details:\n\n`;
+    
+    // List all files with their types
+    fileContexts.forEach((file, index) => {
+      enhancedPrompt += `File ${index + 1}: "${file.fileName}" (${file.documentType})\n`;
+    });
+    
+    enhancedPrompt += `\nHere is my question: ${prompt}\n\n`;
+    
+    // Add content of each file
+    fileContexts.forEach((file, index) => {
+      enhancedPrompt += `===== CONTENT OF FILE ${index + 1}: ${file.fileName} =====\n`;
+      enhancedPrompt += file.content;
+      enhancedPrompt += '\n\n';
+    });
+  } else if (fileContexts.length === 1) {
+    // Use the original formatPromptWithContext logic for a single file
+    return formatPromptWithContext(prompt, fileContexts[0]);
   }
-  return null;
+  
+  return enhancedPrompt;
+}
+
+// Original formatPromptWithContext function remains for single file compatibility
+function formatPromptWithContext(prompt, fileData) {
+  if (!fileData || !fileData.content) return prompt;
+  
+  let enhancedPrompt = "";
+  
+  if (fileData.documentType === "pdf" || fileData.documentType === "text" || fileData.documentType === "ppt") {
+    enhancedPrompt = `I've uploaded a ${fileData.documentType.toUpperCase()} document called "${fileData.fileName}". Here is the content:\n\n${fileData.content}\n\nMy question about this document is: ${prompt}`;
+  } else if (fileData.documentType === "image") {
+    // For images, we'll include the base64 data in the prompt for image models
+    enhancedPrompt = `[This is an image upload with filename "${fileData.fileName}". The image is provided in the message.]\n\nPlease analyze this image. ${prompt}`;
+  } else {
+    // Generic fallback
+    enhancedPrompt = `I've uploaded a file called "${fileData.fileName}". Here is the content:\n\n${fileData.content}\n\nMy question about this file is: ${prompt}`;
+  }
+  
+  return enhancedPrompt;
 }
 
 // Update sendEvent helper function with safety checks
@@ -284,6 +325,21 @@ const createSafeEventSender = (res) => {
     }
   };
 };
+
+// Helper function to determine document type from mimetype
+function getDocumentTypeFromMimetype(mimetype) {
+  if (mimetype === 'application/pdf') {
+    return 'pdf';
+  } else if (mimetype === 'text/plain') {
+    return 'text';
+  } else if (mimetype === 'application/vnd.ms-powerpoint' || 
+             mimetype === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') {
+    return 'ppt';
+  } else if (mimetype.startsWith('image/')) {
+    return 'image';
+  }
+  return null;
+}
 
 export default async function handler(req, res) {
   // Set headers right at the start for all requests
@@ -426,6 +482,7 @@ Format your response as a clear, concise analysis.`;
 
   // Continue with regular model streaming...
   const { prompt, models, fileId, fileType } = req.query;
+  const fileIds = req.query.fileIds ? req.query.fileIds.split(',') : [];
   const threadId = req.query.threadId;
   const conversationId = req.query.conversationId;
   const useContext = req.query.useContext === 'true';
@@ -433,30 +490,38 @@ Format your response as a clear, concise analysis.`;
   
   let enhancedPrompt = prompt;
   let fileData = null;
+  let fileContexts = [];
 
-  // Get file content if fileId is provided
-  if (fileId) {
+  // Get user ID for file access
+  const userId = session?.user?.id;
+
+  // Check for multiple fileIds first
+  if (fileIds.length > 0 && userId) {
     try {
-      const userId = session?.user?.id;
-      if (userId) {
-        // Use the updated getFileContext function for any document type
-        const fileContext = await getFileContext(userId, fileId);
-        if (fileContext) {
-          fileData = {
-            ...fileContext,
-            isFile: true
-          };
-        }
+      fileContexts = await getMultipleFileContexts(userId, fileIds);
+      console.log(`Retrieved ${fileContexts.length} files for multiple file context`);
+      
+      if (fileContexts.length > 0) {
+        // Use the multi-file formatter
+        enhancedPrompt = formatPromptWithMultipleContexts(prompt, fileContexts);
+      }
+    } catch (error) {
+      console.error('Error retrieving multiple file contexts:', error);
+    }
+  } 
+  // Fall back to legacy single fileId if no fileIds or fileContexts
+  else if (fileId && userId && fileContexts.length === 0) {
+    try {
+      // Use the updated getFileContext function for any document type
+      fileData = await getFileContext(userId, fileId);
+      if (fileData) {
+        fileData.isFile = true;
+        // Use the formatPromptWithContext function
+        enhancedPrompt = formatPromptWithContext(prompt, fileData);
       }
     } catch (error) {
       console.error('Error retrieving file context:', error);
     }
-  }
-
-  // Update file handling in prompt enhancement
-  if (fileData && fileData.isFile) {
-    // Use the formatPromptWithContext function
-    enhancedPrompt = formatPromptWithContext(prompt, fileData);
   }
 
   // Get context for this request if useContext flag is set
@@ -1772,29 +1837,3 @@ const verifyApiKey = (modelId, providerMap, userApiKeys) => {
   const provider = providerMap[modelId];
   return provider && userApiKeys[provider] ? true : false;
 };
-
-// Update the formatPromptWithContext function to handle different file types
-function formatPromptWithContext(prompt, fileData) {
-  if (!fileData || !fileData.content) return prompt;
-  
-  let enhancedPrompt = prompt;
-  
-  switch (fileData.type) {
-    case 'pdf':
-      enhancedPrompt = `The following is content from a PDF document titled "${fileData.fileName}":\n\n${fileData.content}\n\n${prompt}`;
-      break;
-    case 'text':
-      enhancedPrompt = `The following is content from a text file titled "${fileData.fileName}":\n\n${fileData.content}\n\n${prompt}`;
-      break;
-    case 'ppt':
-      enhancedPrompt = `The following is content from a PowerPoint presentation titled "${fileData.fileName}":\n\n${fileData.content}\n\n${prompt}`;
-      break;
-    case 'image':
-      // For images, just use the original prompt without including the image data
-      // The image will be sent separately in the multimodal format
-      enhancedPrompt = prompt;
-      break;
-  }
-  
-  return enhancedPrompt;
-}

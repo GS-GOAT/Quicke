@@ -44,6 +44,7 @@ model Conversation {
   file          UploadedFile?  @relation("AssociatedFile", fields: [fileId], references: [id])
   fileId        String?
   UploadedFile  UploadedFile[]
+  metadata      String?        // JSON field for storing additional data like multiple file IDs
 }
 
 model Message {

@@ -12,7 +12,7 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const { id, prompt, responses, threadId, fileId, summary } = req.body;
+  const { id, prompt, responses, threadId, fileId, fileIds, summary } = req.body;
 
   try {
     // Check if this is an update (summary) or new conversation
@@ -60,30 +60,45 @@ export default async function handler(req, res) {
       });
     }
 
-    // Create new conversation
-    const conversation = await prisma.conversation.create({
-      data: {
-        id,
-        threadId: thread.id,
-        userId: session.user.id,
-        fileId,
-        messages: {
-          create: [
-            {
-              role: 'user',
-              content: prompt
-            },
-            ...Object.entries(responses).map(([model, data]) => ({
-              role: 'assistant',
-              content: JSON.stringify({
-                model,
-                text: data.text,
-                timestamp: data.timestamp
-              })
-            }))
-          ]
-        }
+    // Create new conversation with connection to primary file (for backward compatibility)
+    // and metadata for additional files
+    const createData = {
+      id,
+      threadId: thread.id,
+      userId: session.user.id,
+      messages: {
+        create: [
+          {
+            role: 'user',
+            content: prompt
+          },
+          ...Object.entries(responses).map(([model, data]) => ({
+            role: 'assistant',
+            content: JSON.stringify({
+              model,
+              text: data.text,
+              timestamp: data.timestamp
+            })
+          }))
+        ]
       }
+    };
+
+    // If we have legacy fileId, use it for the direct relation
+    if (fileId) {
+      createData.fileId = fileId;
+    }
+
+    // Add metadata for multi-file support
+    if (fileIds && fileIds.length > 0) {
+      createData.metadata = JSON.stringify({
+        fileIds: fileIds
+      });
+    }
+
+    // Create the conversation
+    const conversation = await prisma.conversation.create({
+      data: createData
     });
 
     res.status(200).json({ threadId: thread.id, conversation });

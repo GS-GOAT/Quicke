@@ -328,9 +328,12 @@ export default function Home() {
     // Tracking that we're processing a response
     setIsProcessing(true);
     
-    // Extract the prompt text and file ID from the context data
+    // Extract the prompt text and file information from the context data
     const promptText = contextData.prompt;
-    const fileId = contextData.fileId;
+    
+    // Support both legacy single fileId and new multiple fileIds
+    const firstFileId = contextData.fileId || (contextData.fileIds && contextData.fileIds[0]) || null;
+    const fileIds = contextData.fileIds || (contextData.fileId ? [contextData.fileId] : []);
     
     // Ensure the prompt isn't empty before proceeding
     if (!promptText || !promptText.trim()) {
@@ -369,8 +372,10 @@ export default function Home() {
       activeModels: [...selectedModels],
       timestamp: new Date(),
       isHistorical: false,
-      fileId: fileId,
-      fileName: contextData?.fileName || null 
+      fileId: firstFileId, // Keep backward compatibility
+      fileIds: fileIds, // Add the array of all file IDs
+      fileName: contextData?.fileName || null,
+      fileNames: contextData?.fileNames || []
     }]);
     
     setPrompt('');
@@ -380,11 +385,16 @@ export default function Home() {
     const queryParams = new URLSearchParams({
       prompt: promptText,
       models: selectedModels.join(','),
-      fileId: fileId || '',
+      fileId: firstFileId || '', // Keep for backward compatibility
       conversationId,
       threadId: activeThreadId || '',
       useContext: contextEnabled.toString()
     });
+
+    // Add all fileIds as separate parameters
+    if (fileIds && fileIds.length > 0) {
+      queryParams.append('fileIds', fileIds.join(','));
+    }
 
     const newEventSource = new EventSource(`/api/stream?${queryParams.toString()}`);
     eventSourceRef.current = newEventSource;
@@ -448,7 +458,8 @@ export default function Home() {
                 prompt: promptText,
                 responses: validResponsesData,
                 threadId: activeThreadId,
-                fileId: fileId
+                fileId: firstFileId, // Keep for backward compatibility
+                fileIds: fileIds // Add all file IDs
               }),
             });
 

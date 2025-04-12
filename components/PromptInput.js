@@ -12,10 +12,10 @@ export default function PromptInput({
   selectedModels
 }) {
   const textareaRef = useRef(null);
-  const [uploadedFile, setUploadedFile] = useState(null);
+  const [uploadedFiles, setUploadedFiles] = useState([]);
   const [pdfContext, setPdfContext] = useState('');
   const [isPdfProcessing, setIsPdfProcessing] = useState(false);
-  const [persistentFile, setPersistentFile] = useState(null);
+  const [persistentFiles, setPersistentFiles] = useState([]);
   const fileInputRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
   
@@ -38,23 +38,49 @@ export default function PromptInput({
     }
   };
 
-  const handleUploadComplete = async (file) => {
-    setUploadedFile(file);
-    setPersistentFile(file); // Keep persistent reference
-    setIsPdfProcessing(true);
+  const handleUploadComplete = async (files) => {
+    // Ensure files is always an array
+    const filesArray = Array.isArray(files) ? files : files ? [files] : [];
     
-    try {
-      const response = await fetch(`/api/extract-pdf?fileId=${file.id}`);
-      if (!response.ok) throw new Error('Failed to extract PDF content');
+    if (filesArray.length === 0) {
+      console.error('No files received in handleUploadComplete');
+      return;
+    }
+    
+    // Append new files to existing ones instead of replacing
+    setUploadedFiles(prevFiles => [...prevFiles, ...filesArray]);
+    setPersistentFiles(prevFiles => [...prevFiles, ...filesArray]);
+    
+    // Check if any PDF files need processing
+    const pdfFiles = filesArray.filter(file => file.isPdf || file.type === 'application/pdf');
+    
+    if (pdfFiles.length > 0) {
+      setIsPdfProcessing(true);
       
-      const data = await response.json();
-      setPdfContext(data.text || '');
-    } catch (err) {
-      console.error('Error extracting PDF:', err);
-      alert('Error processing PDF. Please try again.');
-      setUploadedFile(null);
-      setPersistentFile(null);
-    } finally {
+      try {
+        // Process the first PDF file found
+        const pdfFile = pdfFiles[0];
+        const response = await fetch(`/api/extract-pdf?fileId=${pdfFile.id}`);
+        
+        if (!response.ok) {
+          throw new Error('Failed to extract PDF content');
+        }
+        
+        const data = await response.json();
+        setPdfContext(data.text || '');
+      } catch (err) {
+        console.error('Error extracting PDF:', err);
+        alert('Error processing PDF. Please try again.');
+        
+        // Only remove the PDF files that failed, not all files
+        const failedFileIds = pdfFiles.map(file => file.id);
+        setUploadedFiles(prevFiles => prevFiles.filter(file => !failedFileIds.includes(file.id)));
+        setPersistentFiles(prevFiles => prevFiles.filter(file => !failedFileIds.includes(file.id)));
+      } finally {
+        setIsPdfProcessing(false);
+      }
+    } else {
+      // No PDFs to process
       setIsPdfProcessing(false);
     }
   };
@@ -76,16 +102,24 @@ export default function PromptInput({
     // Check if prompt is valid before proceeding
     if (!prompt || !prompt.trim()) return;
     
-    if (uploadedFile?.fileType === 'application/pdf' && isPdfProcessing) {
-      alert('Please wait for PDF processing to complete');
+    if (isPdfProcessing) {
+      alert('Please wait for file processing to complete');
       return;
     }
     
     // Prepare the context data with the file information
+    const fileInfo = persistentFiles.map(file => ({
+      id: file.id,
+      name: file.name,
+      type: file.type,
+      documentType: file.documentType
+    }));
+    
     const contextData = {
       prompt,
-      fileId: persistentFile?.id || null,
-      fileName: persistentFile?.name || null,
+      files: fileInfo,
+      fileIds: persistentFiles.map(file => file.id) || [],
+      fileNames: persistentFiles.map(file => file.name) || [],
       pdfContext
     };
     
@@ -94,14 +128,15 @@ export default function PromptInput({
     
     // Clear both the displayed file and the persistent reference after submission
     // This follows industry practice where files are only attached to the message they're sent with
-    setUploadedFile(null);
-    setPersistentFile(null);
+    setUploadedFiles([]);
+    setPersistentFiles([]);
     setPdfContext('');
   };
 
   const handleFileInputClick = () => {
     const input = document.createElement('input');
     input.type = 'file';
+    input.multiple = true;
     input.accept = 'application/pdf,image/jpeg,image/jpg,image/png,image/webp,text/plain,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation';
     input.onchange = (e) => handleFileChange(e);
     input.click();
@@ -149,8 +184,7 @@ export default function PromptInput({
       
       const files = e.dataTransfer.files;
       if (files && files.length > 0) {
-        const file = files[0]; // Only process the first file
-        processFile(file);
+        processFiles(Array.from(files));
       }
     };
 
@@ -169,7 +203,7 @@ export default function PromptInput({
     };
   }, [disabled, isPdfProcessing]);
 
-  // Extract file processing to a separate function to reuse for both drag-drop and file input
+  // Process single file compatibility wrapper
   const processFile = (file) => {
     if (!file) return;
 
@@ -183,21 +217,22 @@ export default function PromptInput({
       'application/vnd.ms-powerpoint',
       'application/vnd.openxmlformats-officedocument.presentationml.presentation'
     ];
-  
+
     if (!acceptedTypes.includes(file.type)) {
       alert('Only PDF, text, PowerPoint, and image files are allowed');
       return;
     }
-  
+    
     if (file.size > 25 * 1024 * 1024) {
       alert('File size exceeds 25MB limit');
       return;
     }
-  
+    
     setIsPdfProcessing(true);
-  
+
     const formData = new FormData();
     formData.append('file', file);
+    
     if (threadId) formData.append('threadId', threadId);
 
     fetch('/api/upload', {
@@ -210,21 +245,27 @@ export default function PromptInput({
       })
       .then(data => {
         if (data.success) {
-          handleUploadComplete(data.file);
+          // Handle response with either file or files property
+          const files = data.files || (data.file ? [data.file] : []);
+          handleUploadComplete(files);
           
           // Set appropriate prompt message based on file type
           let promptMessage = '';
-          if (data.file.isPdf) {
-            promptMessage = "I've uploaded a PDF document. Please analyze its content and provide a summary.";
-          } else if (data.file.isText) {
-            promptMessage = "I've uploaded a text file. Please analyze its content and help me understand the main points.";
-          } else if (data.file.isPpt) {
-            promptMessage = "I've uploaded a PowerPoint presentation. Please help me understand its structure and key messages.";
-          } else if (data.file.type?.startsWith('image/')) {
-            promptMessage = "I've uploaded an image. Please analyze what's shown in this image.";
-          }
+          const fileData = data.file || (data.files && data.files[0]);
           
-          setPrompt(promptMessage);
+          if (fileData) {
+            if (fileData.isPdf) {
+              promptMessage = "I've uploaded a PDF document. Please analyze its content and provide a summary.";
+            } else if (fileData.isText) {
+              promptMessage = "I've uploaded a text file. Please analyze its content and help me understand the main points.";
+            } else if (fileData.isPpt) {
+              promptMessage = "I've uploaded a PowerPoint presentation. Please help me understand its structure and key messages.";
+            } else if (fileData.type?.startsWith('image/')) {
+              promptMessage = "I've uploaded an image. Please analyze what's shown in this image.";
+            }
+            
+            setPrompt(promptMessage);
+          }
         } else {
           throw new Error(data.error || 'Upload failed');
         }
@@ -232,8 +273,6 @@ export default function PromptInput({
       .catch(err => {
         console.error('Upload error:', err);
         alert('Failed to upload file: ' + (err.message || 'Unknown error'));
-        setUploadedFile(null);
-        setPersistentFile(null);
       })
       .finally(() => {
         setIsPdfProcessing(false);
@@ -243,11 +282,125 @@ export default function PromptInput({
       });
   };
 
-  // Update the file change handler to use the new processFile function
+  // Function to process multiple files
+  const processFiles = (files) => {
+    if (!files || files.length === 0) return;
+
+    const acceptedTypes = [
+      'application/pdf', 
+      'image/jpeg', 
+      'image/jpg',
+      'image/png', 
+      'image/webp',
+      'text/plain',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+    ];
+
+    // Filter only valid files
+    const validFiles = files.filter(file => acceptedTypes.includes(file.type));
+    
+    if (validFiles.length === 0) {
+      alert('Only PDF, text, PowerPoint, and image files are allowed');
+      return;
+    }
+    
+    // Calculate size of new files
+    const newFilesSize = validFiles.reduce((sum, file) => sum + file.size, 0);
+    
+    // Estimate size of existing files (we don't have exact size, so we'll use a safety margin)
+    const estimatedExistingSize = persistentFiles.length * 5 * 1024 * 1024; // Assume average 5MB per file
+    
+    // Check total size
+    if (newFilesSize + estimatedExistingSize > 25 * 1024 * 1024) {
+      alert('Total file size exceeds 25MB limit. Please remove some files before adding more.');
+      return;
+    }
+    
+    // If it's a single file, use the traditional method for better compatibility
+    if (validFiles.length === 1) {
+      processFile(validFiles[0]);
+      return;
+    }
+    
+    setIsPdfProcessing(true);
+
+    const formData = new FormData();
+    
+    // Append all files with indexed keys
+    validFiles.forEach((file, index) => {
+      formData.append(`file-${index}`, file);
+    });
+    
+    if (threadId) formData.append('threadId', threadId);
+
+    fetch('/api/upload', {
+      method: 'POST',
+      body: formData,
+    })
+      .then(response => {
+        if (!response.ok) throw new Error('Upload failed');
+        return response.json();
+      })
+      .then(data => {
+        if (data.success) {
+          // Handle response with either file or files property
+          const files = data.files || (data.file ? [data.file] : []);
+          handleUploadComplete(files);
+          
+          // Set appropriate prompt message based on file types
+          const fileTypes = {
+            pdf: files.some(f => f.isPdf),
+            text: files.some(f => f.isText),
+            ppt: files.some(f => f.isPpt),
+            image: files.some(f => f.isImage || f.type?.startsWith('image/'))
+          };
+          
+          let promptMessage = "I've uploaded ";
+          
+          if (files.length === 1) {
+            // Single file message
+            if (fileTypes.pdf) {
+              promptMessage += "a PDF document. Please analyze its content and provide a summary.";
+            } else if (fileTypes.text) {
+              promptMessage += "a text file. Please analyze its content and help me understand the main points.";
+            } else if (fileTypes.ppt) {
+              promptMessage += "a PowerPoint presentation. Please help me understand its structure and key messages.";
+            } else if (fileTypes.image) {
+              promptMessage += "an image. Please analyze what's shown in this image.";
+            }
+          } else {
+            // Multiple files message
+            promptMessage += `${files.length} files. Please analyze their content.`;
+          }
+          
+          // If there are already other files, modify the message
+          if (persistentFiles.length > files.length) {
+            promptMessage = `I've added ${files.length} more file(s). Please analyze all attached files.`;
+          }
+          
+          setPrompt(promptMessage);
+        } else {
+          throw new Error(data.error || 'Upload failed');
+        }
+      })
+      .catch(err => {
+        console.error('Upload error:', err);
+        alert('Failed to upload files: ' + (err.message || 'Unknown error'));
+      })
+      .finally(() => {
+        setIsPdfProcessing(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      });
+  };
+
+  // Update the file change handler to use the new processFiles function
   const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      processFile(file);
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      processFiles(Array.from(files));
     }
   };
 
@@ -280,8 +433,8 @@ export default function PromptInput({
   useEffect(() => {
     const handleClearFileReferences = () => {
       console.log('Clearing file references');
-      setUploadedFile(null);
-      setPersistentFile(null);
+      setUploadedFiles([]);
+      setPersistentFiles([]);
       setPdfContext('');
     };
 
@@ -294,61 +447,69 @@ export default function PromptInput({
   return (
     <div className="space-y-4">
       {/* File attachment display area (shown above the prompt area) */}
-      {uploadedFile && (
+      {uploadedFiles.length > 0 && (
         <div className="relative mb-2 bg-gray-50/80 dark:bg-gray-800/50 rounded-xl border border-gray-200/50 dark:border-gray-700/50 p-3">
-          {/* File attachment clip */}
-          <div className="relative inline-block mr-2 mb-2 bg-white dark:bg-gray-700/80 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 shadow-sm max-w-[280px]">
-            {/* Close button at the top right */}
-            <button 
-              onClick={() => {
-                setUploadedFile(null);
-                setPersistentFile(null);
-                setPdfContext('');
-              }}
-              className="absolute -top-2 -right-2 p-1 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-full transition-colors"
-              aria-label="Remove file"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 011.414 1.414L11.414 10l4.293 4.293a1 1 0 010 1.414-1.414 0l-4.293-4.293-4.293 4.293a1 1 01-1.414-1.414L8.586 10 4.293 5.707a1 1 010-1.414z" clipRule="evenodd" />
-              </svg>
-            </button>
-            
-            <div className="flex items-center space-x-2">
-              {/* File type icon */}
-              {uploadedFile.type?.startsWith('image/') && (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
-                </svg>
-              )}
-              {uploadedFile.type === 'application/pdf' && (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-red-500" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
-                </svg>
-              )}
-              {uploadedFile.type === 'text/plain' && (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-500" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm3 1h6v4H7V5zm8 8v2h1v1H4v-1h1v-2H4v-1h16v1h-1z" clipRule="evenodd" />
-                </svg>
-              )}
-              {(uploadedFile.type === 'application/vnd.ms-powerpoint' || 
-                uploadedFile.type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') && (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-orange-500" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
-                </svg>
-              )}
-              <span 
-                className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate max-w-[200px] inline-block"
-                title={uploadedFile.name} // Show full filename on hover
-              >
-                {uploadedFile.name}
-              </span>
-              {isPdfProcessing && (
-                <div className="flex items-center space-x-2">
-                  <div className="animate-spin h-3 w-3 border-2 border-primary-500 border-t-transparent rounded-full" />
-                  <span className="text-xs text-gray-500 dark:text-gray-400">Processing...</span>
-                </div>
-              )}
+          {uploadedFiles.length > 1 && (
+            <div className="absolute -top-2 -right-2 bg-primary-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+              {uploadedFiles.length}
             </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {uploadedFiles.map((file, index) => (
+              <div key={index} className="relative inline-block bg-white dark:bg-gray-700/80 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 shadow-sm max-w-[280px]">
+                <button 
+                  onClick={() => {
+                    const newFiles = [...uploadedFiles];
+                    newFiles.splice(index, 1);
+                    setUploadedFiles(newFiles);
+                    setPersistentFiles(newFiles);
+                  }}
+                  className="absolute -top-2 -right-2 p-1 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-full transition-colors"
+                  aria-label="Remove file"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 011.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </button>
+                
+                <div className="flex items-center space-x-2">
+                  {/* File type icon */}
+                  {file.type?.startsWith('image/') && (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+                    </svg>
+                  )}
+                  {file.type === 'application/pdf' && (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                    </svg>
+                  )}
+                  {file.type === 'text/plain' && (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm3 1h6v4H7V5zm8 8v2h1v1H4v-1h1v-2H4v-1h16v1h-1z" clipRule="evenodd" />
+                    </svg>
+                  )}
+                  {(file.type === 'application/vnd.ms-powerpoint' || 
+                    file.type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') && (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-orange-500" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                    </svg>
+                  )}
+                  <span 
+                    className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate max-w-[200px] inline-block"
+                    title={file.name} // Show full filename on hover
+                  >
+                    {file.name}
+                  </span>
+                  {isPdfProcessing && (
+                    <div className="flex items-center space-x-2">
+                      <div className="animate-spin h-3 w-3 border-2 border-primary-500 border-t-transparent rounded-full" />
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Processing...</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -398,13 +559,23 @@ export default function PromptInput({
             <div className="absolute right-3 bottom-3 flex items-center space-x-2">
               <button
                 onClick={handleFileInputClick}
-                className="p-1.5 rounded-full transition-colors text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                title="Upload PDF and Images"
+                className={`p-1.5 rounded-full transition-colors ${
+                  uploadedFiles.length > 0 
+                    ? 'text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300 hover:bg-primary-50 dark:hover:bg-primary-900/20' 
+                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                }`}
+                title={uploadedFiles.length > 0 ? `${uploadedFiles.length} file(s) attached` : "Upload files"}
                 disabled={isPdfProcessing}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                </svg>
+                {uploadedFiles.length > 0 ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
+                  </svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                  </svg>
+                )}
               </button>
               
               {prompt && (
@@ -466,6 +637,7 @@ export default function PromptInput({
         accept="application/pdf,image/jpeg,image/jpg,image/png,image/webp,text/plain,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
         onChange={handleFileChange}
         ref={fileInputRef}
+        multiple
       />
     </div>
   );
