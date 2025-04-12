@@ -24,8 +24,8 @@ export default function FileUpload({ onUploadComplete, threadId, conversationId 
       return;
     }
 
-    if (file.size > 10 * 1024 * 1024) {
-      setError('File size exceeds 10MB limit');
+    if (file.size > 25 * 1024 * 1024) {
+      setError('File size exceeds 25MB limit');
       return;
     }
 

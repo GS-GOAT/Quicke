@@ -15,7 +15,7 @@ export default async function handler(req, res) {
 
   const form = new IncomingForm({
     keepExtensions: true,
-    maxFileSize: 10 * 1024 * 1024,
+    maxFileSize: 25 * 1024 * 1024,
   });
 
   form.parse(req, async (err, fields, files) => {
