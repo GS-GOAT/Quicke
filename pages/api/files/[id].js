@@ -28,10 +28,21 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: 'File not found' });
     }
 
-    // Instead of serving the file, return the content as text
-    res.setHeader('Content-Type', 'text/plain');
-    res.setHeader('Content-Disposition', `attachment; filename="${fileInfo.fileName}.txt"`);
-    res.status(200).send(fileInfo.content || 'No content available');
+    // Check if this is an image file
+    const isImage = fileInfo.fileType.startsWith('image/') || fileInfo.documentType === 'image';
+    
+    if (isImage && fileInfo.content) {
+      // For images, return the base64 content with proper image headers
+      const imageData = Buffer.from(fileInfo.content, 'base64');
+      res.setHeader('Content-Type', fileInfo.fileType);
+      res.setHeader('Content-Disposition', `inline; filename="${fileInfo.fileName}"`);
+      res.status(200).send(imageData);
+    } else {
+      // For non-image files, return the content as text
+      res.setHeader('Content-Type', 'text/plain');
+      res.setHeader('Content-Disposition', `attachment; filename="${fileInfo.fileName}.txt"`);
+      res.status(200).send(fileInfo.content || 'No content available');
+    }
   } catch (error) {
     console.error('Error retrieving content:', error);
     res.status(500).json({ error: 'Failed to retrieve content' });

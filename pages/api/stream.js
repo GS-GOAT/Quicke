@@ -212,11 +212,18 @@ async function getMultipleFileContexts(userId, fileIds) {
     // Process each file
     for (const file of files) {
       const documentType = file.documentType || getDocumentTypeFromMimetype(file.fileType);
+      const isImage = documentType === 'image' || file.fileType.startsWith('image/');
+
       const fileContext = {
         id: file.id,
         fileName: file.fileName,
+        fileType: file.fileType,
         documentType,
         content: file.content,
+        isImage,
+        isPdf: documentType === 'pdf',
+        isText: documentType === 'text',
+        isPpt: documentType === 'ppt',
         isFile: true
       };
       fileContexts.push(fileContext);
@@ -244,12 +251,18 @@ async function getFileContext(userId, fileId) {
     if (!file) return null;
     
     const documentType = file.documentType || getDocumentTypeFromMimetype(file.fileType);
+    const isImage = documentType === 'image' || file.fileType.startsWith('image/');
     
     return {
       id: file.id,
       fileName: file.fileName,
+      fileType: file.fileType,
       documentType,
-      content: file.content
+      content: file.content,
+      isImage,
+      isPdf: documentType === 'pdf',
+      isText: documentType === 'text',
+      isPpt: documentType === 'ppt'
     };
   } catch (error) {
     console.error('Error fetching file context:', error);
@@ -261,29 +274,48 @@ async function getFileContext(userId, fileId) {
 function formatPromptWithMultipleContexts(prompt, fileContexts) {
   if (!fileContexts || fileContexts.length === 0) return prompt;
   
-  // Start with the original prompt
-  let enhancedPrompt = prompt;
+  // Count file types
+  const fileTypes = {
+    pdf: fileContexts.filter(f => f.documentType === 'pdf').length,
+    text: fileContexts.filter(f => f.documentType === 'text').length,
+    ppt: fileContexts.filter(f => f.documentType === 'ppt').length,
+    image: fileContexts.filter(f => f.documentType === 'image' || f.fileType?.startsWith('image/')).length
+  };
   
-  // Add a header section for multiple files
-  if (fileContexts.length > 1) {
-    enhancedPrompt = `I've uploaded ${fileContexts.length} files for you to analyze. Here are their details:\n\n`;
+  // Separate text-based and image-based files
+  const textFiles = fileContexts.filter(f => f.documentType === 'pdf' || f.documentType === 'text' || f.documentType === 'ppt');
+  const imageFiles = fileContexts.filter(f => f.documentType === 'image' || f.fileType?.startsWith('image/'));
+  
+  let enhancedPrompt = "";
+  
+  // Include text-based content
+  if (textFiles.length > 0) {
+    enhancedPrompt = `I've uploaded ${textFiles.length} document${textFiles.length > 1 ? 's' : ''}:\n\n`;
     
-    // List all files with their types
-    fileContexts.forEach((file, index) => {
-      enhancedPrompt += `File ${index + 1}: "${file.fileName}" (${file.documentType})\n`;
+    textFiles.forEach((file, index) => {
+      enhancedPrompt += `--- Document ${index + 1}: ${file.fileName} ---\n${file.content}\n\n`;
     });
     
-    enhancedPrompt += `\nHere is my question: ${prompt}\n\n`;
-    
-    // Add content of each file
-    fileContexts.forEach((file, index) => {
-      enhancedPrompt += `===== CONTENT OF FILE ${index + 1}: ${file.fileName} =====\n`;
-      enhancedPrompt += file.content;
-      enhancedPrompt += '\n\n';
-    });
-  } else if (fileContexts.length === 1) {
-    // Use the original formatPromptWithContext logic for a single file
-    return formatPromptWithContext(prompt, fileContexts[0]);
+    enhancedPrompt += `My question about these documents is: ${prompt}`;
+  }
+  
+  // Handle image files
+  if (imageFiles.length > 0) {
+    // If we only have images (no text files)
+    if (textFiles.length === 0) {
+      if (imageFiles.length === 1) {
+        enhancedPrompt = `[I've uploaded an image with filename: ${imageFiles[0].fileName}. The image is provided in the message.]\n\nPlease analyze this image. ${prompt}`;
+      } else {
+        enhancedPrompt = `[I've uploaded ${imageFiles.length} images with the filenames: ${imageFiles.map(f => f.fileName).join(', ')}. All images are provided in the message.]\n\nPlease analyze all of these images. ${prompt}`;
+      }
+    } else {
+      // If we have both text and images, add information about the images
+      if (imageFiles.length === 1) {
+        enhancedPrompt += `\n\nI've also uploaded an image: ${imageFiles[0].fileName}. Please analyze both the document(s) and this image.`;
+      } else {
+        enhancedPrompt += `\n\nI've also uploaded ${imageFiles.length} images: ${imageFiles.map(f => f.fileName).join(', ')}. Please analyze both the document(s) and all of these images.`;
+      }
+    }
   }
   
   return enhancedPrompt;
@@ -809,50 +841,75 @@ Format your response as a clear, concise analysis.`;
 
     const provider = providerMap[modelId];
     
-    if (fileData.isImage) {
-      console.log(`Processing image for ${modelId} with provider ${provider}`);
+    // Check if fileData is a single file or an array of files
+    const isArray = Array.isArray(fileData);
+    
+    // Find all image files if it's an array
+    let imageFiles = [];
+    if (isArray) {
+      imageFiles = fileData.filter(file => 
+        file.documentType === 'image' || 
+        file.fileType?.startsWith('image/') || 
+        file.isImage
+      );
       
-      if (provider === 'google') {
-        return [{
-          role: "user",
-          parts: [
-            {
-              inlineData: {
-                mimeType: fileData.fileType,
-                data: fileData.content
-              }
-            },
-            { text: enhancedPrompt }
-          ]
-        }];
-      }
+      // If no images found, return the original messages
+      if (imageFiles.length === 0) return messages;
       
-      // For other providers (OpenAI, Anthropic, OpenRouter, etc)
-      // Create a proper multimodal message with the image data
-      const imageUrl = `data:${fileData.fileType};base64,${fileData.content}`;
+    } else if (fileData.documentType === 'image' || fileData.fileType?.startsWith('image/') || fileData.isImage) {
+      // Single image file
+      imageFiles = [fileData];
+    } else {
+      // No images found
+      return messages;
+    }
+    
+    // Handle image files based on provider
+    if (provider === 'google') {
+      // Google models support multiple images in a single prompt
+      const parts = [];
       
-      // Log the message structure (without the actual image data)
-      console.log(`Creating multimodal message for ${modelId} with prompt: ${enhancedPrompt.substring(0, 50)}...`);
+      // Add all images
+      imageFiles.forEach(imageFile => {
+        parts.push({
+          inlineData: {
+            mimeType: imageFile.fileType || imageFile.type,
+            data: imageFile.content
+          }
+        });
+      });
+      
+      // Add the text prompt
+      parts.push({ text: enhancedPrompt });
       
       return [{
         role: "user",
-        content: [
-          { 
-            type: "text", 
-            text: enhancedPrompt 
-          },
-          {
-            type: "image_url",
-            image_url: { 
-              url: imageUrl,
-              detail: provider === 'openrouter' ? 'high' : 'auto'  // Use high detail for OpenRouter
-            }
+        parts: parts
+      }];
+    } else {
+      // For other providers (OpenAI, Anthropic, OpenRouter)
+      // Create a multimodal message with all images
+      const content = [{ type: "text", text: enhancedPrompt }];
+      
+      // Add all images
+      imageFiles.forEach(imageFile => {
+        const imageUrl = `data:${imageFile.fileType || imageFile.type};base64,${imageFile.content}`;
+        content.push({
+          type: "image_url",
+          image_url: { 
+            url: imageUrl,
+            detail: provider === 'openrouter' ? 'high' : 'auto'
           }
-        ]
+        });
+      });
+      
+      console.log(`Creating multimodal message with ${imageFiles.length} images for ${modelId}`);
+      
+      return [{
+        role: "user",
+        content: content
       }];
     }
-
-    return messages;
   };
 
   try {
@@ -964,10 +1021,23 @@ Format your response as a clear, concise analysis.`;
         
         // Process model-specific streams with individual error handling
         try {
+          // Get the file data - either a single file or an array of files
+          let filesForModel = null;
+          
+          if (Array.isArray(fileContexts) && fileContexts.length > 0) {
+            // We have multiple files
+            filesForModel = fileContexts;
+            console.log(`Using ${fileContexts.length} files for model ${modelId}, including ${fileContexts.filter(f => f.isImage).length} images`);
+          } else if (fileData) {
+            // We have a single file
+            filesForModel = fileData;
+            console.log(`Using single file for model ${modelId}, isImage: ${fileData.isImage}`);
+          }
+          
           const formattedMessages = formatMessagesForModel(
             modelId,
             formattedContext,
-            fileData
+            filesForModel
           );
 
           if (openAIModels[modelId]) {
@@ -1410,22 +1480,22 @@ async function handleGeminiStream(modelId, messages, sendEvent, genAI, geminiMod
       ? messages 
       : [{ role: 'user', parts: [{ text: messages }] }];
     
-    // Log a preview of the messages
-    if (geminiMessages.length > 0) {
-      console.log('Gemini context preview:');
-      geminiMessages.forEach((msg, i) => {
-        if (i < 3) { // Limit to first 3 for brevity
-          const role = msg.role;
-          const content = msg.parts && msg.parts[0] && msg.parts[0].text 
-            ? msg.parts[0].text.substring(0, 50) + '...'
-            : 'No content';
-          console.log(`[${i+1}] ${role}: ${content}`);
-        }
-      });
-      if (geminiMessages.length > 3) {
-        console.log(`...and ${geminiMessages.length - 3} more messages`);
-      }
-    }
+    // // Log a preview of the messages
+    // if (geminiMessages.length > 0) {
+    //   console.log('Gemini context preview:');
+    //   geminiMessages.forEach((msg, i) => {
+    //     if (i < 3) { // Limit to first 3 for brevity
+    //       const role = msg.role;
+    //       const content = msg.parts && msg.parts[0] && msg.parts[0].text 
+    //         ? msg.parts[0].text.substring(0, 50) + '...'
+    //         : 'No content';
+    //       console.log(`[${i+1}] ${role}: ${content}`);
+    //     }
+    //   });
+    //   if (geminiMessages.length > 3) {
+    //     console.log(`...and ${geminiMessages.length - 3} more messages`);
+    //   }
+    // }
     
     // Add safety mechanisms for stream processing
     let streamComplete = false;
