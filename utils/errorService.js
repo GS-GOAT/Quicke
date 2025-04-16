@@ -25,6 +25,166 @@ export const TIMEOUT_SETTINGS = {
   RETRY_DELAY: 2000,        // 2 seconds between retries
 };
 
+// Stream utilities for common processing patterns
+export const streamUtils = {
+  // Safety limits for stream processing
+  SAFETY_LIMITS: {
+    MAX_CHUNKS: 5000,
+    MAX_STREAM_DURATION: 300000 // 5 minutes
+  },
+  
+  // Track chunk count for a model
+  chunkCounters: new Map(),
+  
+  // Reset chunk counter
+  resetChunkCounter: (modelId) => {
+    streamUtils.chunkCounters.set(modelId, 0);
+  },
+  
+  // Increment and check chunk counter
+  incrementChunkCounter: (modelId) => {
+    const currentCount = streamUtils.chunkCounters.get(modelId) || 0;
+    const newCount = currentCount + 1;
+    streamUtils.chunkCounters.set(modelId, newCount);
+    
+    // Check if we've exceeded safety limit
+    return {
+      count: newCount,
+      exceededLimit: newCount > streamUtils.SAFETY_LIMITS.MAX_CHUNKS
+    };
+  },
+  
+  // Helper to format mathematical expressions properly
+  formatMathExpression: (text) => {
+    if (!text) return text;
+    
+    // Replace inline math delimiters with proper LaTeX formatting
+    let formattedText = text;
+    
+    // Replace $...$ with proper inline math formatting
+    formattedText = formattedText.replace(/\$([^$]+)\$/g, (match, p1) => {
+      // Clean the math content
+      const cleanMath = p1.trim();
+      return `\\(${cleanMath}\\)`;
+    });
+    
+    // Replace $$...$$ with proper block math formatting
+    formattedText = formattedText.replace(/\$\$([^$]+)\$\$/g, (match, p1) => {
+      // Clean the math content
+      const cleanMath = p1.trim();
+      return `\\[${cleanMath}\\]`;
+    });
+    
+    return formattedText;
+  },
+  
+  // Send a stream event with proper error handling
+  sendStreamEvent: async (options) => {
+    const {
+      modelId,
+      text,
+      error,
+      errorType,
+      loading = false,
+      streaming = false,
+      done = false,
+      sendEvent,
+      retryCount,
+      maxRetries
+    } = options;
+    
+    try {
+      // Format math expressions if there's text
+      const formattedText = text ? streamUtils.formatMathExpression(text) : text;
+      
+      const eventData = {
+        model: modelId,
+        ...(formattedText !== undefined && { text: formattedText }),
+        ...(error && { error }),
+        ...(errorType && { errorType }),
+        loading,
+        streaming,
+        done,
+        ...(retryCount !== undefined && { retryCount, maxRetries })
+      };
+      
+      await sendEvent(eventData);
+    } catch (e) {
+      console.error(`Error sending stream event for ${modelId}:`, e);
+    }
+  },
+  
+  // Handle errors uniformly across different stream handlers
+  handleStreamError: (error, modelId, provider = '') => {
+    console.error(`Stream error (${modelId}):`, error);
+    
+    // Extract message and status properly
+    const message = typeof error === 'string' ? error : 
+                   (error.message || error.toString());
+    const status = error.status || error.statusCode || error.code || 0;
+    
+    let errorType = ERROR_TYPES.UNKNOWN_ERROR;
+    let errorMessage = message || 'Unknown error occurred';
+    
+    // Provider-specific error handling
+    if (provider === 'openrouter') {
+      // OpenRouter specific errors
+      if (error.error && error.error.message && error.error.message.includes('free-models-per-day')) {
+        errorType = ERROR_TYPES.RATE_LIMIT;
+        errorMessage = `OpenRouter: Rate limit exceeded for free tier for today. Either add credits at openrouter.ai to continue using this model or wait till the quota resets.`;
+      } else if (status === 402 || (error.error && error.error.code === 402) || message.includes('Insufficient credits')) {
+        errorType = ERROR_TYPES.INSUFFICIENT_BALANCE;
+        errorMessage = `OpenRouter: Insufficient credits for ${modelId}. Please add more credits at openrouter.ai/settings/credits`;
+      } else if (error.error && error.error.message && 
+          (error.error.message.includes("maximum context length") || 
+           error.error.message.includes("token limit"))) {
+        errorType = ERROR_TYPES.TOKEN_LIMIT_EXCEEDED;
+        errorMessage = `OpenRouter: Token limit exceeded for ${modelId}. Try with a smaller prompt or image.`;
+      } else if (status === 429 || (error.error && error.error.code === 429)) {
+        errorType = ERROR_TYPES.RATE_LIMIT;
+        errorMessage = `OpenRouter: Rate limit exceeded for ${modelId}. Please try again later.`;
+      }
+    } else if (provider === 'google') {
+      // Google/Gemini specific errors
+      if (status === 429) {
+        errorType = ERROR_TYPES.RATE_LIMIT;
+        
+        // Check if it's a quota error
+        if (message.includes('exceeded your current quota') || 
+            (error.errorDetails && 
+             error.errorDetails.some(detail => detail['@type']?.includes('QuotaFailure')))) {
+          errorType = ERROR_TYPES.INSUFFICIENT_QUOTA;
+          errorMessage = `Google Gemini: You've exceeded your quota for ${modelId}. Please check your plan and billing details at https://ai.google.dev/gemini-api/docs/rate-limits`;
+        }
+      } else if (message.includes('quota')) {
+        errorType = ERROR_TYPES.INSUFFICIENT_QUOTA;
+        errorMessage = `Google Gemini: You've exceeded your quota for ${modelId}. Please check your plan and billing details at https://ai.google.dev/gemini-api/docs/rate-limits`;
+      }
+    } else if (provider === 'openai') {
+      // OpenAI specific errors
+      if (message.includes('exceeded your current quota')) {
+        errorType = ERROR_TYPES.INSUFFICIENT_QUOTA;
+      } else if (message === 'TIMEOUT') {
+        errorType = ERROR_TYPES.TIMEOUT;
+      } else if (message.includes('API key')) {
+        errorType = ERROR_TYPES.API_KEY_MISSING;
+      } else if (message === 'Empty response received') {
+        errorType = ERROR_TYPES.EMPTY_RESPONSE;
+      } else {
+        errorType = error.classifyError ? error.classifyError(error) : ERROR_TYPES.UNKNOWN_ERROR;
+      }
+    }
+    
+    // Handle generic error types if no provider-specific handling was done
+    if (errorType === ERROR_TYPES.UNKNOWN_ERROR) {
+      // Use the error service for general classification
+      errorType = error.classifyError ? error.classifyError(error) : ERROR_TYPES.UNKNOWN_ERROR;
+    }
+    
+    return { errorType, errorMessage };
+  }
+};
+
 class ErrorService {
   constructor() {
     this.activeStreams = new Map();

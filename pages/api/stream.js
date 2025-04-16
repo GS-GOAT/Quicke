@@ -44,10 +44,6 @@ const getLLMProvider = (modelId, providerMap) => {
     return providerMap[modelId].charAt(0).toUpperCase() + providerMap[modelId].slice(1);
   }
   
-  if (modelId && modelId.startsWith('custom-')) {
-    return 'Custom Model';
-  }
-  
   return modelId || 'Unknown';
 };
 
@@ -57,7 +53,8 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "./auth/[...nextauth]";
 import prisma from '../../lib/prisma';
-import errorService, { ERROR_TYPES as IMPORTED_ERROR_TYPES, TIMEOUT_SETTINGS } from '../../utils/errorService';
+import errorService, { ERROR_TYPES as IMPORTED_ERROR_TYPES, TIMEOUT_SETTINGS, streamUtils } from '../../utils/errorService';
+import streamUtilsModule, { handleUnifiedModelStream } from '../../utils/streamUtils';
 import contextTracker from '../../utils/contextTracker';
 import { getConversationContext } from '../../utils/contextManager';
 
@@ -637,9 +634,8 @@ Format your response as a clear, concise analysis.`;
     console.warn('Context tracking enabled but no context messages found!');
   }
 
-  // Define providerMap at the top level to ensure it's in scope everywhere
-
-  // Add model version mapping
+  // Define model mappings
+  // Add model version mapping for OpenAI
   const openAIModels = {
     'gpt-4.5-preview': 'gpt-4.5-preview-2025-02-27',
     'gpt-4o': 'gpt-4o-2024-08-06',
@@ -913,9 +909,6 @@ Format your response as a clear, concise analysis.`;
   };
 
   try {
-    // Get custom models from localStorage (passed in request)
-    const customModels = JSON.parse(req.query.customModels || '[]');
-
     // Set up timeouts for each model - with proper completion handling
     modelArray.forEach(modelId => {
       // Use a standard timeout for all models
@@ -1004,7 +997,7 @@ Format your response as a clear, concise analysis.`;
         if (modelId.includes('gemini')) modelProvider = 'gemini';
         if (modelId.includes('deepseek') || modelId.includes('mistral') || 
             modelId.includes('llama') || modelId.includes('phi') || modelId.includes('qwen') || 
-            modelId.includes('openrouter') || modelId.includes('custom-')) {
+            modelId.includes('openrouter')) {
           modelProvider = 'openrouter';
         }
         
@@ -1050,8 +1043,6 @@ Format your response as a clear, concise analysis.`;
             await handleDeepSeekStream(modelId, formattedMessages, sendEvent, deepseek);
           } else if (openRouterModels[modelId]) {
             await handleOpenRouterStream(modelId, formattedMessages, sendEvent, openRouter, openRouterModels);
-          } else if (modelId.startsWith('custom-')) {
-            await handleCustomModelStream(modelId, formattedMessages, sendEvent, customModels);
           }
         } catch (error) {
           // Handle errors for individual models without affecting others
@@ -1146,250 +1137,6 @@ Format your response as a clear, concise analysis.`;
   }
 }
 
-// Centralized stream handler utility
-const createStreamHandler = (options) => {
-  const { modelId, cleanup, timeoutDuration = 60000 } = options;
-  let hasStartedResponse = false;
-  let timeoutCheck;
-  let timeoutRejected = false;
-
-  const handleTimeout = (resolve, reject) => {
-    timeoutCheck = setTimeout(() => {
-      if (!hasStartedResponse) {
-        timeoutRejected = true;
-        cleanup?.();
-        reject(new Error('TIMEOUT'));
-      }
-    }, timeoutDuration);
-    return timeoutCheck;
-  };
-
-  return {
-    init: async (streamPromise) => {
-      try {
-        const timeoutPromise = new Promise((_, reject) => handleTimeout(_, reject));
-        const stream = await Promise.race([streamPromise, timeoutPromise]);
-        clearTimeout(timeoutCheck);
-        return stream;
-      } catch (error) {
-        if (timeoutRejected) {
-          throw new Error('TIMEOUT');
-        }
-        throw error;
-      }
-    },
-    markStarted: () => {
-      hasStartedResponse = true;
-      clearTimeout(timeoutCheck);
-    },
-    cleanup: () => {
-      clearTimeout(timeoutCheck);
-    }
-  };
-};
-
-// Unified event sender with retry logic
-const sendStreamEvent = async ({
-  modelId,
-  text,
-  error,
-  loading = false,
-  streaming = false,
-  done = false,
-  sendEvent,
-  retryCount,
-  maxRetries
-}) => {
-  try {
-    const eventData = {
-      model: modelId,
-      ...(text !== undefined && { text }),
-      ...(error && { error }),
-      loading,
-      streaming,
-      done,
-      ...(retryCount !== undefined && { retryCount, maxRetries })
-    };
-    
-    await sendEvent(eventData);
-  } catch (e) {
-    console.error(`Error sending stream event for ${modelId}:`, e);
-  }
-};
-
-// Replace individual handlers with unified handler
-async function handleModelStream(options) {
-  const {
-    modelId,
-    prompt,
-    sendEvent,
-    client,
-    generateStream,
-    processChunk,
-    handleError // Add custom error handler option
-  } = options;
-
-  const streamHandler = createStreamHandler({
-    modelId,
-    cleanup: () => {
-      if (errorService?.unregisterStream) {
-        errorService.unregisterStream(modelId);
-      }
-    }
-  });
-
-  try {
-    await sendStreamEvent({
-      modelId,
-      loading: true,
-      sendEvent
-    });
-
-    const stream = await streamHandler.init(generateStream());
-    let text = '';
-    let isStreamDone = false;
-
-    // Add a safety counter to prevent infinite loops
-    let chunkCounter = 0;
-    const MAX_CHUNKS = 5000; // Reasonable maximum for most responses
-
-    // Process the stream with a safety counter
-    try {
-      for await (const chunk of stream) {
-        const content = processChunk(chunk);
-        if (content) {
-          text += content;
-          streamHandler.markStarted();
-          await sendStreamEvent({
-            modelId,
-            text,
-            streaming: true,
-            sendEvent
-          });
-        }
-        
-        // Safety counter
-        chunkCounter++;
-        if (chunkCounter > MAX_CHUNKS) {
-          console.warn(`[${modelId}] Safety limit of ${MAX_CHUNKS} chunks reached, forcing completion`);
-          break;
-        }
-      }
-      
-      isStreamDone = true;
-    } catch (streamError) {
-      // If we get an error during streaming, log it but still try to send the text we received
-      console.error(`Stream processing error (${modelId}):`, streamError);
-      
-      // Use custom error handler if provided
-      if (handleError) {
-        const customError = handleError(streamError);
-        if (customError) {
-          await sendStreamEvent({
-            modelId,
-            error: customError.errorMessage,
-            errorType: customError.errorType,
-            loading: false,
-            streaming: false,
-            done: true,
-            sendEvent
-          });
-          isStreamDone = true;
-          return text;
-        }
-      }
-      
-      // Default error handling if no custom handler or if custom handler returned null
-      let errorType = ERROR_TYPES.UNKNOWN_ERROR;
-      if (streamError.message && streamError.message.includes('exceeded your current quota')) {
-        errorType = ERROR_TYPES.INSUFFICIENT_QUOTA;
-      } else if (streamError.status === 429 || (streamError.message && streamError.message.includes('Too Many Requests'))) {
-        errorType = ERROR_TYPES.RATE_LIMIT;
-      }
-      
-      // Send proper error event
-      await sendStreamEvent({
-        modelId,
-        error: streamError.message,
-        errorType,
-        loading: false,
-        streaming: false,
-        done: true,
-        sendEvent
-      });
-      
-      // Don't re-throw the stream error, just mark it as done
-      isStreamDone = true;
-    }
-
-    // Only send completion event if we haven't encountered an error
-    if (isStreamDone && text) {
-      await sendStreamEvent({
-        modelId,
-        text: text,
-        loading: false,
-        streaming: false,
-        done: true,
-        sendEvent
-      });
-    }
-
-    return text;
-  } catch (error) {
-    console.error(`Stream error (${modelId}):`, error);
-    
-    // Use custom error handler if provided
-    if (handleError) {
-      const customError = handleError(error);
-      if (customError) {
-        await sendStreamEvent({
-          modelId,
-          error: customError.errorMessage,
-          errorType: customError.errorType,
-          loading: false,
-          streaming: false,
-          done: true,
-          sendEvent
-        });
-        return '';
-      }
-    }
-    
-    // Default error handling if no custom handler or if custom handler returned null
-    let errorType = ERROR_TYPES.UNKNOWN_ERROR;
-    let errorMessage = error.message || 'Unknown error occurred';
-    
-    // Check for OpenRouter specific error status 402 (insufficient credits)
-    if (error.status === 402 || 
-        (error.error && error.error.code === 402) || 
-        (error.message && error.message.includes('Insufficient credits'))) {
-      errorType = ERROR_TYPES.INSUFFICIENT_BALANCE;
-      errorMessage = `Insufficient credits for model ${modelId}. Please add more credits.`;
-    } else {
-      // Handle other types of errors
-      errorType = error.message === 'TIMEOUT' ? ERROR_TYPES.TIMEOUT :
-                 error.message.includes('API key') ? ERROR_TYPES.API_KEY_MISSING :
-                 error.message === 'Empty response received' ? ERROR_TYPES.EMPTY_RESPONSE :
-                 errorService?.classifyError(error) || ERROR_TYPES.UNKNOWN_ERROR;
-    }
-    
-    await sendStreamEvent({
-      modelId,
-      error: errorMessage,
-      errorType,
-      loading: false,
-      streaming: false,
-      done: true,
-      sendEvent
-    });
-    
-    // Return empty string instead of throwing to isolate errors
-    return '';
-  } finally {
-    streamHandler.cleanup();
-  }
-}
-
 // Replace individual model handlers with unified handler calls
 async function handleOpenAIStream(modelId, messages, sendEvent, openai) {
   // Check if messages is an array or a string
@@ -1399,11 +1146,12 @@ async function handleOpenAIStream(modelId, messages, sendEvent, openai) {
   
   console.log(`OpenAI: Using model ${modelId} with ${formattedMessages.length} messages`);
   
-  return handleModelStream({
+  return handleUnifiedModelStream({
     modelId,
     prompt: formattedMessages,
     sendEvent,
     client: openai,
+    provider: 'openai',
     generateStream: () => openai.chat.completions.create({
       model: openAIModels[modelId] || modelId,
       messages: formattedMessages,
@@ -1421,11 +1169,12 @@ async function handleClaudeStream(modelId, messages, sendEvent, anthropic) {
   
   console.log(`Claude: Using model ${modelId} with ${formattedMessages.length} messages`);
   
-  return handleModelStream({
+  return handleUnifiedModelStream({
     modelId,
     prompt: formattedMessages,
     sendEvent,
     client: anthropic,
+    provider: 'anthropic',
     generateStream: () => anthropic.messages.create({
       model: claudeModels[modelId] || 'claude-3-7-sonnet-20250219',
       max_tokens: 5000,
@@ -1436,187 +1185,56 @@ async function handleClaudeStream(modelId, messages, sendEvent, anthropic) {
   });
 }
 
-// Replace the handleGeminiStream function entirely
-
 async function handleGeminiStream(modelId, messages, sendEvent, genAI, geminiModels) {
   const modelInfo = geminiModels[modelId];
   if (!modelInfo) {
     throw new Error(`Invalid Gemini model: ${modelId}`);
   }
   
-  let text = '';
-  const startTime = Date.now();
+  // Ensure messages are in the correct format for Gemini
+  const geminiMessages = Array.isArray(messages) 
+    ? messages 
+    : [{ role: 'user', parts: [{ text: messages }] }];
   
-  try {
-    // Initial state for model
-    await sendEvent({
-      model: modelId,
-      text: '',
-      loading: true,
-      streaming: true
-    });
-    
-    console.log(`Gemini: Using model ${modelInfo.id} with ${Array.isArray(messages) ? messages.length : 'single'} messages`);
-    
-    // Initialize the model
-    const geminiModel = genAI.getGenerativeModel({ 
-      model: modelInfo.id,
-      api_version: 'v1alpha',
-      ...(modelInfo.id !== 'gemini-2.0-flash-thinking-exp-01-21' && {
-        tools: [{ 'google_search': {} }]
-      })
-    });
-    
-    // Start streaming with context
-    const generationConfig = {
-      temperature: 1.0,
-      topP: 0.8,
-      topK: 40,
-      maxOutputTokens: 12192,
-    };
-    
-    // Ensure messages are in the correct format for Gemini
-    const geminiMessages = Array.isArray(messages) 
-      ? messages 
-      : [{ role: 'user', parts: [{ text: messages }] }];
-    
-    // // Log a preview of the messages
-    // if (geminiMessages.length > 0) {
-    //   console.log('Gemini context preview:');
-    //   geminiMessages.forEach((msg, i) => {
-    //     if (i < 3) { // Limit to first 3 for brevity
-    //       const role = msg.role;
-    //       const content = msg.parts && msg.parts[0] && msg.parts[0].text 
-    //         ? msg.parts[0].text.substring(0, 50) + '...'
-    //         : 'No content';
-    //       console.log(`[${i+1}] ${role}: ${content}`);
-    //     }
-    //   });
-    //   if (geminiMessages.length > 3) {
-    //     console.log(`...and ${geminiMessages.length - 3} more messages`);
-    //   }
-    // }
-    
-    // Add safety mechanisms for stream processing
-    let streamComplete = false;
-    let chunkCounter = 0;
-    const MAX_CHUNKS = 5000;
-    
-    try {
-      const result = await geminiModel.generateContentStream({
+  console.log(`Gemini: Using model ${modelInfo.id} with ${geminiMessages.length} messages`);
+  
+  return handleUnifiedModelStream({
+    modelId,
+    prompt: geminiMessages,
+    sendEvent,
+    client: genAI,
+    provider: 'google',
+    generateStream: async () => {
+      // Initialize the model
+      const geminiModel = genAI.getGenerativeModel({ 
+        model: modelInfo.id,
+        api_version: 'v1alpha',
+        ...(modelInfo.id !== 'gemini-2.0-flash-thinking-exp-01-21' && {
+          tools: [{ 'google_search': {} }]
+        })
+      });
+      
+      // Start streaming with context
+      const generationConfig = {
+        temperature: 1.0,
+        topP: 0.8,
+        topK: 40,
+        maxOutputTokens: 12192,
+      };
+      
+      // Important: Return the stream property, not the response itself
+      const response = await geminiModel.generateContentStream({
         contents: geminiMessages,
         generationConfig
       });
       
-      // Process the stream with a safety counter
-      for await (const chunk of result.stream) {
-        const content = chunk.text();
-        if (content) {
-          text += content;
-          await sendEvent({
-            model: modelId,
-            text,
-            streaming: true,
-            loading: true
-          });
-        }
-        
-        // Safety counter
-        chunkCounter++;
-        if (chunkCounter > MAX_CHUNKS) {
-          console.warn(`[${modelId}] Safety limit of ${MAX_CHUNKS} chunks reached, forcing completion`);
-          break;
-        }
-      }
-      
-      streamComplete = true;
-    } catch (streamError) {
-      console.error(`Gemini stream processing error (${modelId}):`, streamError);
-      
-      // Classify the error properly
-      let errorType = ERROR_TYPES.UNKNOWN_ERROR;
-      let errorMessage = streamError.message;
-      
-      // Specific handling for quota/rate limit errors
-      if (streamError.status === 429) {
-        errorType = ERROR_TYPES.RATE_LIMIT;
-        
-        // Check if it's a quota error
-        if (streamError.message && streamError.message.includes('exceeded your current quota') || 
-            (streamError.errorDetails && 
-             streamError.errorDetails.some(detail => detail['@type']?.includes('QuotaFailure')))) {
-          errorType = ERROR_TYPES.INSUFFICIENT_QUOTA;
-          errorMessage = `Google Gemini: You've exceeded your quota for ${modelId}. Please check your plan and billing details at https://ai.google.dev/gemini-api/docs/rate-limits`;
-        }
-      } else if (streamError.message && streamError.message.includes('quota')) {
-        errorType = ERROR_TYPES.INSUFFICIENT_QUOTA;
-        errorMessage = `Google Gemini: You've exceeded your quota for ${modelId}. Please check your plan and billing details at https://ai.google.dev/gemini-api/docs/rate-limits`;
-      }
-      
-      // Send proper error event
-      await sendEvent({
-        model: modelId,
-        error: errorMessage,
-        errorType,
-        streaming: false,
-        loading: false,
-        done: true
-      });
-      
-      // Return early but don't throw to prevent affecting other models
-      return text || '';
-    }
-    
-    // Stream completed successfully
-    const endTime = Date.now();
-    const elapsed = endTime - startTime;
-    
-    // Always send a final completion event
-    await sendEvent({
-      model: modelId,
-      text,
-      streaming: false,
-      loading: false,
-      processingTime: elapsed,
-      done: true // Add explicit done flag
-    });
-    
-    return text;
-  } catch (error) {
-    // Handle errors
-    console.error(`Stream error (${modelId}):`, error);
-    
-    // Classify error type for better user feedback
-    let errorType = ERROR_TYPES.UNKNOWN_ERROR;
-    let errorMessage = error.message;
-    
-    if (error.status === 429) {
-      errorType = ERROR_TYPES.RATE_LIMIT;
-      
-      // Check if it's a quota error
-      if (error.message && error.message.includes('exceeded your current quota') ||
-          (error.errorDetails && 
-           error.errorDetails.some(detail => detail['@type']?.includes('QuotaFailure')))) {
-        errorType = ERROR_TYPES.INSUFFICIENT_QUOTA;
-        errorMessage = `Google Gemini: You've exceeded your quota for ${modelId}. Please check your plan and billing details at https://ai.google.dev/gemini-api/docs/rate-limits`;
-      }
-    }
-    
-    // Make sure to send a final error event
-    await sendEvent({
-      model: modelId,
-      error: errorMessage,
-      errorType,
-      streaming: false,
-      loading: false,
-      done: true // Add explicit done flag
-    });
-    
-    // Removed the throw error line
-  }
+      // Return the stream property which is the actual async iterable
+      return response.stream;
+    },
+    processChunk: chunk => chunk.text()
+  });
 }
 
-// Update OpenRouter handler to support context and handle premature closures
 async function handleOpenRouterStream(modelId, messages, sendEvent, openRouter, openRouterModels) {
   // Check if messages is an array or a string
   const formattedMessages = Array.isArray(messages) 
@@ -1629,11 +1247,12 @@ async function handleOpenRouterStream(modelId, messages, sendEvent, openRouter, 
   // Check if model needs a special URL format for images
   const modelInfo = openRouterModels[modelId];
   
-  return handleModelStream({
+  return handleUnifiedModelStream({
     modelId,
     prompt: formattedMessages,
     sendEvent,
     client: openRouter,
+    provider: 'openrouter',
     generateStream: () => openRouter.chat.completions.create({
       model: modelInfo?.id || modelId,
       messages: formattedMessages,
@@ -1644,7 +1263,7 @@ async function handleOpenRouterStream(modelId, messages, sendEvent, openRouter, 
       return chunk.choices && chunk.choices[0]?.delta?.content;
     },
     // Add specific error handler for OpenRouter
-    handleError: (error) => {
+    customErrorHandler: (error) => {
       console.error(`OpenRouter error for ${modelId}:`, error);
       
       // Check specifically for free-models-per-day rate limit message
@@ -1691,7 +1310,6 @@ async function handleOpenRouterStream(modelId, messages, sendEvent, openRouter, 
   });
 }
 
-// Update DeepSeek handler to support context
 async function handleDeepSeekStream(modelId, messages, sendEvent, deepseek) {
   // Check if messages is an array or a string
   const formattedMessages = Array.isArray(messages) 
@@ -1700,11 +1318,12 @@ async function handleDeepSeekStream(modelId, messages, sendEvent, deepseek) {
   
   console.log(`DeepSeek: Using model ${modelId} with ${formattedMessages.length} messages`);
   
-  return handleModelStream({
+  return handleUnifiedModelStream({
     modelId,
     prompt: formattedMessages,
     sendEvent,
     client: deepseek,
+    provider: 'deepseek',
     generateStream: () => deepseek.chat.completions.create({
       model: modelId,
       messages: formattedMessages,
@@ -1712,194 +1331,6 @@ async function handleDeepSeekStream(modelId, messages, sendEvent, deepseek) {
     }),
     processChunk: chunk => chunk.choices[0]?.delta?.content
   });
-}
-
-async function handleCustomModelStream(modelId, prompt, sendEvent, customModels) {
-  const customModel = customModels.find(model => model.id === modelId);
-  if (!customModel) {
-    errorHandler.sendErrorEvent(modelId, ERROR_TYPES.UNKNOWN_ERROR, 'Custom model configuration not found');
-    return null;
-  }
-
-  // Create abort controller for manual cancellation
-  const abortController = new AbortController();
-  let accumulatedText = '';
-  
-  // Setup cleanup function
-  const cleanup = () => {
-    abortController.abort();
-    console.log(`[${modelId}] Stream cleanup completed`);
-  };
-  
-  try {
-    // Register with error service
-    errorService.registerStream(modelId, cleanup);
-    
-    // Send initial loading state
-    sendEvent({
-      model: modelId,
-      loading: true,
-      streaming: true,
-      text: ''
-    });
-
-    // Set up request with timeout
-    const fetchPromise = fetch(customModel.apiEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        [customModel.apiKeyName]: customModel.apiKeyValue
-      },
-      body: JSON.stringify({
-        prompt: prompt,
-        stream: true
-      }),
-      signal: abortController.signal
-    });
-    
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Custom model API timeout')), 
-      TIMEOUT_SETTINGS.INITIAL_RESPONSE)
-    );
-    
-    // Race between fetch and timeout
-    const response = await Promise.race([fetchPromise, timeoutPromise]);
-
-    // Add OpenRouter specific checks
-    if (response.headers.get('x-ratelimit-remaining') === '0') {
-      throw new Error('OpenRouter rate limit exceeded [ADD_KEY]');
-    }
-    
-    if (response.headers.get('x-credit-remaining') === '0') {
-      throw new Error('OpenRouter credits depleted [ADD_KEY]');
-    }
-
-    if (!response.ok) {
-      // Add specific OpenRouter error handling
-      if (response.status === 429) {
-        throw new Error('OpenRouter rate limit exceeded [ADD_KEY]');
-      }
-      throw new Error(`Custom model API error: ${response.status} ${response.statusText}`);
-    }
-
-    const reader = response.body.getReader();
-    
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      // Update stream status
-      errorService.updateStream(modelId);
-      
-      // Decode chunk
-      const chunk = new TextDecoder().decode(value);
-      try {
-        // Try to parse JSON response
-        const data = JSON.parse(chunk);
-        if (data.text || data.content || data.response) {
-          const newContent = data.text || data.content || data.response;
-          accumulatedText += newContent;
-          sendEvent({
-            model: modelId,
-            text: accumulatedText,
-            loading: false,
-            streaming: true
-          });
-        }
-      } catch (e) {
-        // If not JSON, treat as raw text
-        accumulatedText += chunk;
-        sendEvent({
-          model: modelId,
-          text: accumulatedText,
-          loading: false,
-          streaming: true
-        });
-      }
-    }
-
-    // Check if we got any content
-    if (!accumulatedText.trim()) {
-      console.log(`[${modelId}] Empty response received`);
-      errorService.unregisterStream(modelId);
-      
-      // Try again if we should retry empty responses
-      const retryCount = errorService.getRetryCount(modelId);
-      if (errorService.shouldRetry(modelId, ERROR_TYPES.EMPTY_RESPONSE)) {
-        sendEvent({
-          model: modelId,
-          text: '',
-          loading: true,
-          streaming: false,
-          retrying: true,
-          retryCount: retryCount,
-          maxRetries: TIMEOUT_SETTINGS.MAX_RETRIES
-        });
-        
-        // Wait before retrying
-        await new Promise(resolve => setTimeout(resolve, TIMEOUT_SETTINGS.RETRY_DELAY));
-        return handleCustomModelStream(modelId, prompt, sendEvent, customModels);
-      } else {
-        errorHandler.sendErrorEvent(modelId, ERROR_TYPES.EMPTY_RESPONSE);
-        return null;
-      }
-    }
-    
-    // Stream completed successfully
-    errorService.unregisterStream(modelId);
-    
-    sendEvent({
-      model: modelId,
-      text: accumulatedText,
-      loading: false,
-      streaming: false,
-      done: true
-    });
-    
-    return {
-      text: accumulatedText,
-      loading: false,
-      streaming: false,
-      done: true,
-      duration: ((Date.now() - errorService.activeStreams.get(modelId)?.startTime || 0) / 1000).toFixed(1)
-    };
-  } catch (error) {
-    console.error(`[OpenRouter] Error for model ${modelId}:`, error);
-    errorService.unregisterStream(modelId);
-    
-    // Classify the error
-    const errorType = errorService.classifyError(error);
-    
-    // Handle retry logic
-    if (errorService.shouldRetry(modelId, errorType)) {
-      const retryCount = errorService.getRetryCount(modelId);
-      
-      sendEvent({
-        model: modelId,
-        text: '',
-        loading: true,
-        streaming: false,
-        retrying: true,
-        retryCount: retryCount,
-        maxRetries: TIMEOUT_SETTINGS.MAX_RETRIES
-      });
-      
-      // Wait before retrying
-      await new Promise(resolve => setTimeout(resolve, TIMEOUT_SETTINGS.RETRY_DELAY));
-      
-      // Try again
-      return handleCustomModelStream(modelId, prompt, sendEvent, customModels);
-    }
-    
-    // If we've run out of retries, send final error
-    if (errorService.getRetryCount(modelId) >= TIMEOUT_SETTINGS.MAX_RETRIES) {
-      errorHandler.sendErrorEvent(modelId, ERROR_TYPES.MAX_RETRIES_EXCEEDED);
-    } else {
-      errorHandler.sendErrorEvent(modelId, errorType);
-    }
-    
-    return null;
-  }
 }
 
 // Helper function to verify if user has the required API key
