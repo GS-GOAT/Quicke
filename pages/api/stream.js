@@ -145,8 +145,19 @@ const createErrorHandler = (completionManager, sendEvent) => {
       console.log(`[${modelId}] Sending error event: ${errorType}`);
       
       const retryCount = errorService?.getRetryCount?.(modelId) || 0;
-      // Use display name or fallback to ID
-      const modelName = modelDisplayNames[modelId] || openRouterModels[modelId]?.name || modelId;
+      
+      // Get a user-friendly model name with proper fallbacks
+      let modelName = modelId;
+      
+      // Try to get a more user-friendly name from the openRouterModels if it exists
+      if (openRouterModels && openRouterModels[modelId] && openRouterModels[modelId].name) {
+        modelName = openRouterModels[modelId].name;
+      } 
+      // Try gemini models if available
+      else if (geminiModels && geminiModels[modelId] && geminiModels[modelId].name) {
+        modelName = geminiModels[modelId].name;
+      }
+      
       const errorMessage = errorService?.getErrorMessage?.(errorType, modelName) 
         || `Error with ${modelName}: ${errorType}`;
       
