@@ -316,6 +316,12 @@ export default function Home() {
     // Prevent multiple submissions in quick succession
     if (loading) return;
     
+    // If user is not logged in, redirect to signin page
+    if (!session) {
+      router.push('/auth/signin');
+      return;
+    }
+    
     setLoading(true);
     
     if (isProcessing && eventSourceRef.current) {
@@ -329,7 +335,7 @@ export default function Home() {
     setIsProcessing(true);
     
     // Extract the prompt text and file information from the context data
-    const promptText = contextData.prompt;
+    const promptText = contextData.prompt || contextData.text;
     
     // Support both legacy single fileId and new multiple fileIds
     const firstFileId = contextData.fileId || (contextData.fileIds && contextData.fileIds[0]) || null;
@@ -636,7 +642,8 @@ export default function Home() {
             key={i} 
             onClick={() => {
               setPrompt(suggestion);
-              handleSubmit({ text: suggestion });
+              // Don't immediately submit, just set the prompt text
+              // handleSubmit({ text: suggestion });
             }}
             className="suggestion-item inline-block px-3 py-1.5 mr-2 bg-gray-100/70 dark:bg-gray-800/70 text-gray-800 dark:text-gray-200 rounded-full text-sm cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-200"
             style={{ backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}

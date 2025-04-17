@@ -553,6 +553,9 @@ export default function PromptInput({
                   setPrompt('');
                 }
               }}
+              onCut={(e) => e.stopPropagation()}
+              onCopy={(e) => e.stopPropagation()}
+              onPaste={(e) => e.stopPropagation()}
             />
             
             {/* Action buttons */}
