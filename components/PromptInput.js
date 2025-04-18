@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { toast } from 'react-hot-toast';
 
 export default function PromptInput({ 
   prompt, 
@@ -308,12 +309,9 @@ export default function PromptInput({
     // Calculate size of new files
     const newFilesSize = validFiles.reduce((sum, file) => sum + file.size, 0);
     
-    // Estimate size of existing files (we don't have exact size, so we'll use a safety margin)
-    const estimatedExistingSize = persistentFiles.length * 5 * 1024 * 1024; // Assume average 5MB per file
-    
-    // Check total size
-    if (newFilesSize + estimatedExistingSize > 25 * 1024 * 1024) {
-      alert('Total file size exceeds 25MB limit. Please remove some files before adding more.');
+    // Check if any individual file exceeds the limit
+    if (validFiles.some(file => file.size > 25 * 1024 * 1024)) {
+      alert('One or more files exceed the 25MB size limit');
       return;
     }
     
@@ -404,7 +402,7 @@ export default function PromptInput({
     }
   };
 
-  // Add effect for global keyboard shortcuts
+  // Update the effect for global keyboard shortcuts
   useEffect(() => {
     const handleKeyPress = (e) => {
       // Ignore if target is already an input/textarea or modal/dialog
@@ -429,6 +427,55 @@ export default function PromptInput({
     return () => document.removeEventListener('keypress', handleKeyPress);
   }, [setPrompt]);
 
+  // Handle clipboard paste
+  const handlePaste = async (e) => {
+    try {
+      const clipboardData = e.clipboardData;
+      
+      // Check if the paste event has files (including images)
+      const hasFiles = clipboardData.files && clipboardData.files.length > 0;
+      
+      // If there are files, process them
+      if (hasFiles) {
+        e.preventDefault(); // Prevent the default paste behavior
+
+        const files = Array.from(clipboardData.files);
+        
+        // Rename screenshot files to a generic name
+        const processedFiles = files.map(file => {
+          if (file.type.startsWith('image/')) {
+            // Create a new file object with a generic name
+            const fileExtension = file.name.split('.').pop();
+            const newFileName = `screenshot_${Date.now()}.${fileExtension}`;
+            return new File([file], newFileName, { type: file.type });
+          }
+          return file;
+        });
+        
+        // Use the existing processFiles function to handle files
+        processFiles(processedFiles);
+      }
+      
+      // Continue with text paste handling (if no files, or alongside files)
+      const pastedText = clipboardData.getData('text');
+      
+      // Only handle text if there's actual text content
+      if (pastedText && !hasFiles) {
+        // Let the default paste behavior handle text pasting
+        // The editor will handle this automatically
+      }
+    } catch (error) {
+      console.error("Error handling paste:", error);
+      toast({
+        title: "Paste error",
+        description: "There was an error processing your pasted content.",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
+  
   // Add effect for clearing file references on thread change
   useEffect(() => {
     const handleClearFileReferences = () => {
@@ -555,7 +602,7 @@ export default function PromptInput({
               }}
               onCut={(e) => e.stopPropagation()}
               onCopy={(e) => e.stopPropagation()}
-              onPaste={(e) => e.stopPropagation()}
+              onPaste={handlePaste}
             />
             
             {/* Action buttons */}

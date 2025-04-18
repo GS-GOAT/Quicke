@@ -7,6 +7,7 @@ import { InlineMath, BlockMath } from 'react-katex';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
+import React from 'react';
 // import CodeBlock from './CodeBlock'; // Add this import
 
 // Model display names mapping
@@ -107,39 +108,249 @@ const getDisplayProvider = (provider) => {
   return provider;
 };
 
-// // Add this function to render multimodal content
-// const renderContent = (content) => {
-//   // Check if content is an array (multimodal response)
-//   if (Array.isArray(content)) {
-//     return content.map((item, index) => {
-//       if (item.type === 'text') {
-//         return (
-//           <ReactMarkdown key={index} components={MarkdownComponents}>
-//             {item.text}
-//           </ReactMarkdown>
-//         );
-//       } else if (item.type === 'image_url') {
-//         return (
-//           <div key={index} className="my-4">
-//             <img 
-//               src={item.image_url.url} 
-//               alt="Generated image" 
-//               className="max-w-full rounded-lg"
-//             />
-//           </div>
-//         );
-//       }
-//       return null;
-//     });
-//   }
+// Add specialized math preprocessing function
+const preprocessMathContent = (content) => {
+  if (!content) return content;
+  try {
+    // Protect special content first
+    const protectedContent = new Map();
+    let counter = 0;
+    
+    // Helper to protect content
+    const protect = (match, type) => {
+      const key = `___${type}_${counter++}___`;
+      protectedContent.set(key, match);
+      return key;
+    };
+
+    // Protect code blocks and inline code
+    let text = content
+      .replace(/```[\s\S]*?```/g, m => protect(m, 'CODE'))
+      .replace(/`[^`]+`/g, m => protect(m, 'INLINE'));
+
+    // Handle LaTeX display environments first
+    const displayEnvs = [
+      'equation', 'align', 'gather', 'multline',
+      'matrix', 'cases', 'bmatrix', 'pmatrix',
+      'vmatrix', 'Vmatrix', 'array'
+    ];
+    
+    // Process display environments
+    displayEnvs.forEach(env => {
+      const pattern = new RegExp(`\\\\begin\\{${env}\\}([\\s\\S]*?)\\\\end\\{${env}\\}`, 'g');
+      text = text.replace(pattern, (match) => `\n\n$$${match}$$\n\n`);
+    });
+
+    // Handle display math
+    text = text
+      .replace(/\\\[([\s\S]*?)\\\]/g, '\n\n$$$$1$$\n\n')
+      .replace(/\$\$([\s\S]*?)\$\$/g, (_, content) => {
+        // Ensure proper spacing for display math
+        const cleaned = content.trim()
+          .replace(/\n+/g, ' ')  // Replace multiple newlines with space
+          .replace(/\s+/g, ' '); // Normalize spaces
+        return `\n\n$$${cleaned}$$\n\n`;
+      });
+
+    // Handle inline math carefully
+    text = text
+      .replace(/\\\(([\s\S]*?)\\\)/g, '$$$1$')
+      .replace(/\$([^$\n]+?)\$/g, (match, content) => {
+        // Skip if it looks like currency or file path
+        if (content.match(/^\s*\d+([.,]\d{2})?\s*$/)) return match;
+        if (content.match(/^.*[/\\].*$/)) return match;
+        return `$${content.trim()}$`;
+      });
+
+    // Process special LaTeX commands that should be in math mode
+    const mathCommands = [
+      'frac', 'sqrt', 'sum', 'int', 'prod', 'lim',
+      'infty', 'partial', 'nabla', 'vec', 'hat', 'bar',
+      'alpha', 'beta', 'gamma', 'delta', 'epsilon',
+      'zeta', 'eta', 'theta', 'iota', 'kappa',
+      'lambda', 'mu', 'nu', 'xi', 'omicron',
+      'pi', 'rho', 'sigma', 'tau', 'upsilon',
+      'phi', 'chi', 'psi', 'omega',
+      'sin', 'cos', 'tan', 'csc', 'sec', 'cot',
+      'arcsin', 'arccos', 'arctan'
+    ];
+
+    // Create pattern for commands
+    const commandPattern = new RegExp(`\\\\(${mathCommands.join('|')})(?![a-zA-Z])`, 'g');
+    text = text.replace(commandPattern, match => 
+      match.startsWith('$') ? match : `$${match}$`
+    );
+
+    // Handle subscripts and superscripts
+    text = text
+      .replace(/([a-zA-Z0-9])_(\{[^}]+\}|[a-zA-Z0-9])/g, '$$$1_$2$$')
+      .replace(/([a-zA-Z0-9])\^(\{[^}]+\}|[a-zA-Z0-9])/g, '$$$1^$2$$');
+
+    // Restore protected content
+    protectedContent.forEach((value, key) => {
+      text = text.replace(new RegExp(key, 'g'), value);
+    });
+
+    return text;
+  } catch (error) {
+    console.error('Math preprocessing error:', error);
+    return content;
+  }
+};
+
+// Enhanced Math component
+const Math = ({ value, inline }) => {
+  if (!value) return null;
   
-//   // Regular text response
-//   return (
-//     <ReactMarkdown components={MarkdownComponents}>
-//       {content}
-//     </ReactMarkdown>
-//   );
-// };
+  try {
+    // Clean up math content
+    const cleanValue = value
+      .replace(/^(\$|\$\$)/, '')
+      .replace(/(\$|\$\$)$/, '')
+      .trim();
+
+    // Enhanced KaTeX options
+    const options = {
+      throwOnError: false,
+      errorColor: '#f06',
+      strict: false,
+      trust: true,
+      globalGroup: true,
+      displayMode: !inline,
+      fleqn: false,
+      leqno: false,
+      maxSize: 800,
+      maxExpand: 1000,
+      minRuleThickness: 0.05,
+      macros: {
+        "\\R": "\\mathbb{R}",
+        "\\N": "\\mathbb{N}",
+        "\\Z": "\\mathbb{Z}",
+        "\\Q": "\\mathbb{Q}",
+        "\\C": "\\mathbb{C}",
+        "\\implies": "\\Rightarrow",
+        "\\iff": "\\Leftrightarrow",
+        "\\d": "\\mathrm{d}",
+        "\\diff": "\\mathrm{d}",
+        "\\e": "\\mathrm{e}",
+        "\\i": "\\mathrm{i}",
+        "\\Re": "\\mathrm{Re}",
+        "\\Im": "\\mathrm{Im}",
+        "\\vec": "\\boldsymbol",
+        "\\mat": "\\mathbf",
+        "\\abs": "#1",
+        "\\norm": "\\left\\|#1\\right\\|",
+        "\\set": "\\{#1\\}",
+        "\\defeq": "\\overset{\\text{def}}{=}",
+        "\\deg": "^{\\circ}",
+        "\\diff": "\\mathrm{d}",
+        "\\exp": "\\mathrm{e}^{#1}",
+        "\\ln": "\\log_e",
+        "\\dp": "\\cdot",
+        "\\grad": "\\nabla",
+        "\\divg": "\\nabla\\cdot",
+        "\\curl": "\\nabla\\times",
+        "\\lapl": "\\nabla^2",
+        "\\dx": "\\,\\mathrm{d}x",
+        "\\dy": "\\,\\mathrm{d}y",
+        "\\dz": "\\,\\mathrm{d}z",
+        "\\dt": "\\,\\mathrm{d}t",
+        "\\ds": "\\,\\mathrm{d}s"
+      }
+    };
+
+    return inline ? (
+      <InlineMath math={cleanValue} settings={options} />
+    ) : (
+      <BlockMath math={cleanValue} settings={options} />
+    );
+  } catch (error) {
+    console.error('KaTeX rendering error:', error);
+    return (
+      <span className="text-red-300 bg-red-900/20 px-2 py-1 rounded font-mono text-sm">
+        {value}
+      </span>
+    );
+  }
+};
+
+const processMathInText = (text) => {
+  if (!text) return text;
+  try {
+    // Protect code blocks first
+    const codeBlocks = [];
+    let counter = 0;
+    text = text.replace(/```[\s\S]*?```/g, (match) => {
+      const id = `__CODE_${counter++}__`;
+      codeBlocks.push(match);
+      return id;
+    });
+
+    // Handle LaTeX environments first
+    const environments = ['equation', 'align', 'gather', 'matrix', 'cases', 'array'];
+    environments.forEach(env => {
+      const pattern = new RegExp(`\\\\begin\\{${env}\\}([\\s\\S]*?)\\\\end\\{${env}\\}`, 'g');
+      text = text.replace(pattern, (match) => `\n\n$$${match}$$\n\n`);
+    });
+
+    // Handle block math
+    text = text
+      .replace(/\\\[([\s\S]*?)\\\]/g, (_, content) => `\n\n$$${content.trim()}$$\n\n`)
+      .replace(/\$\$([\s\S]*?)\$\$/g, (_, content) => `\n\n$$${content.trim()}$$\n\n`);
+
+    // Handle inline math
+    text = text
+      .replace(/\\\(([\s\S]*?)\\\)/g, (_, content) => `$${content.trim()}$`)
+      .replace(/\$([^$\n]+?)\$/g, (match, content) => {
+        if (content.match(/^\s*\d+([.,]\d{2})?\s*$/)) return match;
+        if (content.match(/^.*[/\\].*$/)) return match;
+        return `$${content.trim()}$`;
+      });
+
+    // Restore code blocks
+    codeBlocks.forEach((block, i) => {
+      text = text.replace(`__CODE_${i}__`, block);
+    });
+
+    return text;
+  } catch (error) {
+    console.error('Math processing error:', error);
+    return text;
+  }
+};
+
+const markdownConfig = {
+  remarkPlugins: [
+    remarkGfm,
+    [remarkMath, {
+      singleDollarTextMath: true,
+      inlineMathDouble: false,
+    }]
+  ],
+  rehypePlugins: [
+    [rehypeKatex, {
+      strict: false,
+      throwOnError: false,
+      trust: true,
+      macros: {
+        "\\R": "\\mathbb{R}",
+        "\\N": "\\mathbb{N}",
+        "\\Z": "\\mathbb{Z}",
+        "\\Q": "\\mathbb{Q}",
+        "\\C": "\\mathbb{C}",
+      }
+    }]
+  ],
+  components: {
+    // ...existing components...
+    code: ({ node, inline, className, children, ...props }) => {
+      if (String(children).match(/^\$.*\$$/)) {
+        return <span>{children}</span>;
+      }
+      // ...rest of code component logic...
+    }
+  }
+};
 
 export default function ResponseColumn({ model, response, streaming, className, conversationId, onRetry, isSummary }) {  // Add conversationId prop
   const contentRef = useRef(null);
@@ -314,106 +525,50 @@ export default function ResponseColumn({ model, response, streaming, className, 
     }
   };
 
-  // Process mathematical expressions in text
+  // Simplified math processing - let the libraries do the work
   const processMathInText = (text) => {
-    if (!text) return text;
-    
-    // First protect code blocks and inline code
-    const codeBlocks = [];
-    let processedText = text.replace(/```[\s\S]*?```/g, match => {
-      codeBlocks.push(match);
-      return `CODE_BLOCK_${codeBlocks.length - 1}`;
-    });
-    
-    const inlineCodes = [];
-    processedText = processedText.replace(/`[^`]+`/g, match => {
-      inlineCodes.push(match);
-      return `INLINE_CODE_${inlineCodes.length - 1}`;
-    });
-
-    // Simple detector for square brackets containing LaTeX expressions
-    processedText = processedText.replace(/\[(.*?\\frac.*?|.*?\\sqrt.*?|.*?\\boxed.*?)\]/g, (match, p1) => {
-      // Skip if it looks like a link
-      if (p1.includes('](') || p1.includes('http')) {
-        return match;
-      }
-      return `$$${p1}$$`;
-    });
-
-    // Handle common math pattern replacements
-    
-    // LaTeX-style exponents
-    processedText = processedText.replace(/\\x\s*([0-9]+)/g, 'x^$1');
-    
-    // Integration expressions with boxed results
-    processedText = processedText.replace(
-      /\[\s*\\int\s+([^\],]+),?\s*dx\s*=\s*\\boxed\{([^{}]+)\}\s*\]/g,
-      '$$\\int $1\\,dx = \\boxed{$2}$$'
-    );
-    
-    // Simple integrations
-    processedText = processedText.replace(
-      /\[\s*\\int\s+([^\],]+),?\s*dx\s*=\s*([^\\[\]]+)\s*\]/g,
-      '$$\\int $1\\,dx = $2$$'
-    );
-    
-    // Unicode integration symbol
-    processedText = processedText.replace(
-      /∫\s+([^\n,]+),?\s*dx\s*=\s*([^]+)/g,
-      '$$\\int $1\\,dx = $2$$'
-    );
-    
-    // Standalone LaTeX expressions
-    processedText = processedText.replace(
-      /\\(frac|boxed|sqrt|vec|overrightarrow|hat|bar)\{([^{}]+)\}\{?([^{}]*)\}?/g,
-      '$$\\$1{$2}{$3}$$'
-    );
-
-    // Fix problematic math expressions
-    processedText = processedText.replace(/KaTeX can only parse string typed expression/g, '');
-    
-    // Restore code blocks and inline code
-    processedText = processedText.replace(/CODE_BLOCK_(\d+)/g, (_, i) => codeBlocks[parseInt(i)]);
-    processedText = processedText.replace(/INLINE_CODE_(\d+)/g, (_, i) => inlineCodes[parseInt(i)]);
-    
-    return processedText;
-  };
-
-  // Enhanced Math component with better error handling
-  const Math = ({ value, inline }) => {
-    // Clean up problematic text
-    const cleanValue = value ? value
-      .replace(/KaTeX can only parse string typed expression/g, '')
-      .replace(/​/g, '') // Remove zero-width spaces
-      .replace(/\s+([{}])/g, '$1') // Remove spaces before braces
-      .replace(/([{}])\s+/g, '$1') // Remove spaces after braces
-      .trim() : '';
-
-    const options = {
-      throwOnError: false,
-      errorColor: '#aaa',
-      strict: false,
-      trust: true,
-      macros: {
-        "\\R": "\\mathbb{R}",
-        "\\N": "\\mathbb{N}",
-        "\\Z": "\\mathbb{Z}",
-        "\\Q": "\\mathbb{Q}",
-        "\\C": "\\mathbb{C}",
-        "\\implies": "\\Rightarrow",
-        "\\iff": "\\Leftrightarrow"
-      },
-    };
-
     try {
-      return inline ? (
-        <InlineMath math={cleanValue} settings={options} />
-      ) : (
-        <BlockMath math={cleanValue} settings={options} />
-      );
+      if (!text) return text;
+      
+      // First, protect code blocks from being processed
+      const codeBlocks = [];
+      let codeBlocksIndex = 0;
+      text = text.replace(/```(?:[a-z]+)?\n([\s\S]*?)\n```/g, (match) => {
+        codeBlocks.push(match);
+        return `____CODE_BLOCK_${codeBlocksIndex++}____`;
+      });
+      
+      // Also protect inline code from being processed
+      const inlineCodes = [];
+      let inlineCodesIndex = 0;
+      text = text.replace(/`([^`]+)`/g, (match) => {
+        inlineCodes.push(match);
+        return `____INLINE_CODE_${inlineCodesIndex++}____`;
+      });
+      
+      // Fix some specific edge cases for math expressions
+      // Ensure proper formatting of dollar signs to help the parser
+      
+      // Convert \[ \] to $$ $$ for block math
+      text = text.replace(/\\\[([\s\S]*?)\\\]/g, (_, content) => `$$${content}$$`);
+      
+      // Convert \( \) to $ $ for inline math
+      text = text.replace(/\\\(([\s\S]*?)\\\)/g, (_, content) => `$${content}$`);
+      
+      // Restore code blocks
+      for (let i = 0; i < codeBlocks.length; i++) {
+        text = text.replace(`____CODE_BLOCK_${i}____`, codeBlocks[i]);
+      }
+      
+      // Restore inline code
+      for (let i = 0; i < inlineCodes.length; i++) {
+        text = text.replace(`____INLINE_CODE_${i}____`, inlineCodes[i]);
+      }
+      
+      return text;
     } catch (error) {
-      console.error('KaTeX error:', error);
-      return <code className="text-gray-400 bg-gray-800/60 px-1.5 py-0.5 rounded font-mono text-sm">{value}</code>;
+      console.error('Error processing math in text:', error);
+      return text; // Return original text if processing fails
     }
   };
 
@@ -692,53 +847,78 @@ export default function ResponseColumn({ model, response, streaming, className, 
       <td className="px-6 py-4 text-sm text-gray-300 align-middle">{children}</td>
     ),
     
-    // Enhanced code blocks with syntax highlighting, language label, and copy button
+    // Code component that doesn't interfere with math expressions
     code: ({ node, inline, className, children, ...props }) => {
+      // Skip processing for content that appears to be math expressions
+      if (String(children).startsWith('\\') || 
+          String(children).includes('\\frac') || 
+          String(children).includes('\\sum') || 
+          String(children).includes('\\binom') || 
+          String(children).includes('\\sqrt')) {
+        return <span>{children}</span>; // Return as plain text for math parser to handle
+      }
+    
       const [isCopied, setIsCopied] = useState(false);
+      
+      // Match language class (e.g. "language-javascript")
       const match = /language-(\w+)/.exec(className || '');
       const language = match ? match[1] : '';
       
-      if (!inline) {
+      // If it has a language class or appears to be a code block, render as syntax highlighted block
+      if (!inline && (language || className?.includes('codeblock'))) {
+        // Extract filename if available (from first line of code)
+        let filename = '';
+        let codeContent = String(children).replace(/\n$/, '');
+        
+        // Check for filename pattern in the first line
+        const firstLineMatch = codeContent.match(/^.*?filename:(.+?)$/m);
+        if (firstLineMatch) {
+          filename = firstLineMatch[1].trim();
+          codeContent = codeContent.replace(/^.*?filename:.+?\n/m, ''); // Remove filename line
+        }
+        
         const handleCopy = () => {
-          navigator.clipboard.writeText(String(children).replace(/\n$/, ''));
+          navigator.clipboard.writeText(codeContent);
           setIsCopied(true);
           setTimeout(() => setIsCopied(false), 2000);
         };
-
+        
         return (
-          <div className="relative my-4 overflow-hidden" style={{ backgroundColor: 'rgb(0, 0, 20)', borderRadius: '0.5rem' }}>
-            {/* Language indicator */}
-            {language && (
-              <div className="absolute top-0 left-0 bg-gray-800/70 text-gray-400 text-xs px-2 py-1 font-mono z-10">
-                {language}
+          <div className="relative group my-4 codeblock">
+            {/* Code header with language badge and copy button */}
+            <div className="absolute top-0 left-0 right-0 flex justify-between items-center px-4 py-1.5 bg-gray-900/80 text-xs font-medium text-gray-400 rounded-t-md">
+              <div className="flex items-center space-x-2">
+                {/* Language badge */}
+                <span className="px-2 py-0.5 rounded bg-gray-800 text-gray-300">
+                  {filename || language || 'code'}
+                </span>
               </div>
-            )}
+              
+              {/* Copy button */}
+              <button
+                onClick={handleCopy}
+                className="flex items-center space-x-1 text-gray-400 hover:text-gray-200 transition-colors"
+                aria-label="Copy code"
+              >
+                {isCopied ? (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                    </svg>
+                    <span>Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    <span>Copy</span>
+                  </>
+                )}
+              </button>
+            </div>
             
-            {/* Copy button with success state */}
-            <button
-              onClick={handleCopy}
-              className={`absolute top-2 right-2 p-1.5 rounded text-xs font-medium transition-all duration-200 z-10 ${
-                isCopied 
-                  ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30' 
-                  : 'bg-gray-700/50 hover:bg-gray-600/50 text-gray-300'
-              }`}
-            >
-              {isCopied ? (
-                <span className="flex items-center gap-1">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-green-400">
-                    <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
-                  </svg>
-                  <span className="text-green-400">Copied!</span>
-                </span>
-              ) : (
-                <span className="flex items-center gap-1">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" />
-                  </svg>
-                </span>
-              )}
-            </button>
-            
+            {/* Code content */}
             <SyntaxHighlighter
               language={language || 'text'}
               style={oneDark}
@@ -759,12 +939,19 @@ export default function ResponseColumn({ model, response, streaming, className, 
                 }
               }}
             >
-              {String(children).replace(/\n$/, '')}
+              {codeContent}
             </SyntaxHighlighter>
           </div>
         );
       }
       
+      // Don't render as code if it looks like a math expression
+      if (String(children).match(/\\\w+(\{.*?\})+/) || 
+          String(children).match(/\$.*?\$/)) {
+        return <span>{children}</span>;
+      }
+      
+      // Render as inline code
       return (
         <code className="px-1.5 py-0.5 rounded font-mono text-sm bg-gray-800/40">
           {children}
@@ -965,13 +1152,19 @@ export default function ResponseColumn({ model, response, streaming, className, 
         {/* Content state */}
         {hasText && (
           <div className="prose prose-invert max-w-none">
-            <ReactMarkdown
-              components={MarkdownComponents}
-              remarkPlugins={[remarkGfm, remarkMath]}
-              rehypePlugins={[rehypeKatex]}
-            >
-              {processMathInText(displayedText || response.text)}
-            </ReactMarkdown>
+            {/* Add error boundary for ReactMarkdown */}
+            <ErrorBoundary fallback={
+              <div className="p-4 bg-red-900/20 border border-red-800/30 rounded-lg">
+                <p className="text-red-300">There was an error rendering this response. The content may contain malformed math expressions.</p>
+                <pre className="mt-4 p-2 bg-gray-900/50 rounded text-gray-300 text-sm overflow-auto">
+                  {displayedText || response.text}
+                </pre>
+              </div>
+            }>
+              <ReactMarkdown {...markdownConfig}>
+                {processMathInText(displayedText || response.text)}
+              </ReactMarkdown>
+            </ErrorBoundary>
             {isActive && (
               <span className="typing-cursor">|</span>
             )}
@@ -1008,6 +1201,14 @@ export default function ResponseColumn({ model, response, streaming, className, 
         .prose em {
           color: #d1d5db;
         }
+
+        /* Ensure italic text doesn't get math styling */
+        em {
+          font-style: italic;
+          background: transparent;
+          padding: 0;
+          font-family: inherit;
+        }
         
         /* List styling */
         .prose ul {
@@ -1034,15 +1235,11 @@ export default function ResponseColumn({ model, response, streaming, className, 
           color: #9ca3af;
         }
         
-        /* KaTeX math styling */
+        /* KaTeX math styling - Improved */
         .katex {
-          font-size: 1.15em !important;
-          font-weight: 500 !important;
-        }
-        
-        .katex-display > .katex {
-          font-size: 1.25em !important;
-          font-weight: 600 !important;
+          font-size: 1.2em !important;
+          font-weight: normal !important;
+          color: #ffffff !important; /* Ensure math expressions are white */
         }
         
         .katex-display {
@@ -1050,11 +1247,25 @@ export default function ResponseColumn({ model, response, streaming, className, 
           padding: 0.5em 0 !important;
           overflow-x: auto;
           overflow-y: hidden;
+          background: transparent !important; /* Ensure no background for math blocks */
+          border: none !important;
+          text-align: center !important;
+        }
+        
+        /* Make sure inline math stands out */
+        .katex-inline {
+          padding: 0 0.1em;
+          margin: 0 0.1em;
         }
         
         /* Make fractions more readable */
         .katex .mfrac .frac-line {
           border-bottom-width: 0.08em !important;
+        }
+        
+        /* Ensure math expressions don't look like code */
+        .katex-html {
+          background: transparent !important;
         }
         
         /* Make boxed expressions stand out */
@@ -1063,6 +1274,32 @@ export default function ResponseColumn({ model, response, streaming, className, 
           border-radius: 0.1em !important;
           padding: 0.1em 0.2em !important;
           border-color: #6c6 !important;
+        }
+
+        /* Ensure math content is clearly distinguishable */
+        .katex-display > .katex {
+          max-width: 100%;
+          overflow-x: auto;
+          overflow-y: hidden;
+          text-align: center !important;
+          padding: 0 !important;
+          margin: 0 auto !important;
+        }
+        
+        /* Ensure pretty KaTeX error messages */
+        .katex-error {
+          color: #f06 !important;
+          background-color: transparent !important;
+          border: none !important;
+          padding: 0 !important;
+        }
+        
+        /* Code block styling */
+        pre {
+          margin: 1.5em 0 !important;
+          padding: 1em !important;
+          border-radius: 0.5em !important;
+          background-color: #1e1e2d !important;
         }
 
         /* Code block scrollbars */
@@ -1136,4 +1373,27 @@ export default function ResponseColumn({ model, response, streaming, className, 
       `}</style>
     </div>
   );
+}
+
+// Add ErrorBoundary component at the top level of the file
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("Markdown rendering error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+    return this.props.children;
+  }
 }

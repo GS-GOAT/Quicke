@@ -343,19 +343,83 @@ a:hover {
 /* KaTeX Math Styling */
 .katex-display {
   @apply my-4 overflow-x-auto overflow-y-hidden;
+  background: rgba(0, 0, 0, 0.2) !important;
+  padding: 1em !important;
+  border-radius: 0.5rem !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
 
 .katex {
-  @apply text-gray-100;
+  font-size: 1.1em !important;
+  color: #ffffff !important;
+  text-rendering: optimizeLegibility;
 }
 
+/* Improved display math styling */
 .katex-display > .katex {
-  @apply text-lg;
+  text-align: center !important;
+  padding: 0.5em !important;
+  font-size: 1.2em !important;
 }
 
-/* Ensure math expressions wrap on small screens */
-.katex-html {
-  @apply overflow-x-auto overflow-y-hidden;
+/* Better inline math styling */
+.katex-inline {
+  padding: 0.15em 0.3em !important;
+  margin: 0 0.1em !important;
+  background: rgba(0, 0, 0, 0.2) !important;
+  border-radius: 0.25rem !important;
+  font-size: 1.05em !important;
+}
+
+/* Improve fraction and operator visibility */
+.katex .mfrac .frac-line {
+  border-bottom-width: 0.08em !important;
+  border-color: #fff !important;
+}
+
+.katex .sqrt > .root {
+  color: #fff !important;
+  margin-top: 0.1em !important;
+}
+
+/* Better operator spacing */
+.katex .mbin + .mord,
+.katex .mbin + .mop {
+  margin-left: 0.2em !important;
+}
+
+.katex .mrel + .mord,
+.katex .mrel + .mop {
+  margin-left: 0.2em !important;
+}
+
+/* Scrollbar styling for math overflow */
+.katex-display::-webkit-scrollbar {
+  height: 4px;
+}
+
+.katex-display::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 2px;
+}
+
+.katex-display::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
+}
+
+.katex-display::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+/* Error styling */
+.katex-error {
+  color: #f06 !important;
+  background: rgba(255, 0, 102, 0.1) !important;
+  padding: 0.2em 0.4em !important;
+  border-radius: 0.25rem !important;
+  font-family: monospace !important;
+  font-size: 0.9em !important;
 }
 
 /* Add styles for conversation separator animation */
