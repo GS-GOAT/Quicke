@@ -277,7 +277,8 @@ a:hover {
 }
 
 .prose code {
-  @apply bg-gray-800 px-1 py-0.5 rounded text-sm font-mono text-gray-200;
+  @apply px-1.5 py-0.5 rounded font-mono text-sm;
+  background-color: #000014;
 }
 
 .prose pre {
@@ -350,7 +351,8 @@ a:hover {
 }
 
 .katex {
-  font-size: 1.1em !important;
+  font-size: 1.2em !important;
+  font-weight: normal !important;
   color: #ffffff !important;
   text-rendering: optimizeLegibility;
 }
@@ -686,8 +688,8 @@ a:hover {
 
 /* Code block styling */
 .code-block-container {
-  @apply relative my-4 overflow-hidden rounded-lg;
-  background: #1a1b26;
+  @apply relative my-6 overflow-hidden rounded-lg;
+  background: #000014;
   box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
@@ -712,18 +714,31 @@ a:hover {
 
 .code-block-content {
   @apply !bg-[#1a1b26] !p-4;
+  background: #000014 !important;
 }
 
+/* Remove pre element styles */
 .code-block-content pre {
-  @apply !bg-transparent m-0;
+  @apply !bg-transparent !m-0 !p-0 !shadow-none !border-0;
 }
 
+/* Ensure code content is properly styled */
 .code-block-content code {
-  @apply !bg-transparent text-[0.95rem] leading-relaxed font-mono;
+  @apply !bg-transparent text-[0.95rem] leading-relaxed font-mono block;
   font-family: 'JetBrains Mono', Menlo, Monaco, Consolas, 'Courier New', monospace;
 }
 
-/* Syntax highlighting colors - Vibrant theme */
+/* Override any prose pre styles */
+.prose pre {
+  @apply !p-0 !m-0 !bg-transparent !shadow-none !border-0;
+}
+
+/* Ensure proper spacing between consecutive code blocks */
+.code-block-container + .code-block-container {
+  @apply mt-6;
+}
+
+/* Syntax highlighting colors - Tokyo Night theme */
 .code-block-content .token.comment { color: #737aa2 !important; }
 .code-block-content .token.string { color: #9ece6a !important; }
 .code-block-content .token.number { color: #ff9e64 !important; }
@@ -754,6 +769,21 @@ a:hover {
 
 .code-block-container {
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* API Key error styling */
+.api-key-error {
+  @apply border-yellow-600/30 bg-yellow-900/20;
+  cursor: pointer;
+}
+
+.api-key-error:hover {
+  @apply bg-yellow-900/30;
+}
+
+/* Add key button styling */
+.add-key-btn {
+  @apply mt-2 text-xs text-yellow-500 hover:text-yellow-400 font-medium flex items-center;
 }
 
 main {

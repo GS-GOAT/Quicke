@@ -108,155 +108,22 @@ const getDisplayProvider = (provider) => {
   return provider;
 };
 
-// Add specialized math preprocessing function
-const preprocessMathContent = (content) => {
-  if (!content) return content;
-  try {
-    // Protect special content first
-    const protectedContent = new Map();
-    let counter = 0;
-    
-    // Helper to protect content
-    const protect = (match, type) => {
-      const key = `___${type}_${counter++}___`;
-      protectedContent.set(key, match);
-      return key;
-    };
-
-    // Protect code blocks and inline code
-    let text = content
-      .replace(/```[\s\S]*?```/g, m => protect(m, 'CODE'))
-      .replace(/`[^`]+`/g, m => protect(m, 'INLINE'));
-
-    // Handle LaTeX display environments first
-    const displayEnvs = [
-      'equation', 'align', 'gather', 'multline',
-      'matrix', 'cases', 'bmatrix', 'pmatrix',
-      'vmatrix', 'Vmatrix', 'array'
-    ];
-    
-    // Process display environments
-    displayEnvs.forEach(env => {
-      const pattern = new RegExp(`\\\\begin\\{${env}\\}([\\s\\S]*?)\\\\end\\{${env}\\}`, 'g');
-      text = text.replace(pattern, (match) => `\n\n$$${match}$$\n\n`);
-    });
-
-    // Handle display math
-    text = text
-      .replace(/\\\[([\s\S]*?)\\\]/g, '\n\n$$$$1$$\n\n')
-      .replace(/\$\$([\s\S]*?)\$\$/g, (_, content) => {
-        // Ensure proper spacing for display math
-        const cleaned = content.trim()
-          .replace(/\n+/g, ' ')  // Replace multiple newlines with space
-          .replace(/\s+/g, ' '); // Normalize spaces
-        return `\n\n$$${cleaned}$$\n\n`;
-      });
-
-    // Handle inline math carefully
-    text = text
-      .replace(/\\\(([\s\S]*?)\\\)/g, '$$$1$')
-      .replace(/\$([^$\n]+?)\$/g, (match, content) => {
-        // Skip if it looks like currency or file path
-        if (content.match(/^\s*\d+([.,]\d{2})?\s*$/)) return match;
-        if (content.match(/^.*[/\\].*$/)) return match;
-        return `$${content.trim()}$`;
-      });
-
-    // Process special LaTeX commands that should be in math mode
-    const mathCommands = [
-      'frac', 'sqrt', 'sum', 'int', 'prod', 'lim',
-      'infty', 'partial', 'nabla', 'vec', 'hat', 'bar',
-      'alpha', 'beta', 'gamma', 'delta', 'epsilon',
-      'zeta', 'eta', 'theta', 'iota', 'kappa',
-      'lambda', 'mu', 'nu', 'xi', 'omicron',
-      'pi', 'rho', 'sigma', 'tau', 'upsilon',
-      'phi', 'chi', 'psi', 'omega',
-      'sin', 'cos', 'tan', 'csc', 'sec', 'cot',
-      'arcsin', 'arccos', 'arctan'
-    ];
-
-    // Create pattern for commands
-    const commandPattern = new RegExp(`\\\\(${mathCommands.join('|')})(?![a-zA-Z])`, 'g');
-    text = text.replace(commandPattern, match => 
-      match.startsWith('$') ? match : `$${match}$`
-    );
-
-    // Handle subscripts and superscripts
-    text = text
-      .replace(/([a-zA-Z0-9])_(\{[^}]+\}|[a-zA-Z0-9])/g, '$$$1_$2$$')
-      .replace(/([a-zA-Z0-9])\^(\{[^}]+\}|[a-zA-Z0-9])/g, '$$$1^$2$$');
-
-    // Restore protected content
-    protectedContent.forEach((value, key) => {
-      text = text.replace(new RegExp(key, 'g'), value);
-    });
-
-    return text;
-  } catch (error) {
-    console.error('Math preprocessing error:', error);
-    return content;
-  }
-};
-
-// Enhanced Math component
+// Math component with enhanced KaTeX options
 const Math = ({ value, inline }) => {
   if (!value) return null;
   
   try {
-    // Clean up math content
     const cleanValue = value
       .replace(/^(\$|\$\$)/, '')
       .replace(/(\$|\$\$)$/, '')
       .trim();
 
-    // Enhanced KaTeX options
     const options = {
       throwOnError: false,
       errorColor: '#f06',
       strict: false,
       trust: true,
-      globalGroup: true,
-      displayMode: !inline,
-      fleqn: false,
-      leqno: false,
-      maxSize: 800,
-      maxExpand: 1000,
-      minRuleThickness: 0.05,
-      macros: {
-        "\\R": "\\mathbb{R}",
-        "\\N": "\\mathbb{N}",
-        "\\Z": "\\mathbb{Z}",
-        "\\Q": "\\mathbb{Q}",
-        "\\C": "\\mathbb{C}",
-        "\\implies": "\\Rightarrow",
-        "\\iff": "\\Leftrightarrow",
-        "\\d": "\\mathrm{d}",
-        "\\diff": "\\mathrm{d}",
-        "\\e": "\\mathrm{e}",
-        "\\i": "\\mathrm{i}",
-        "\\Re": "\\mathrm{Re}",
-        "\\Im": "\\mathrm{Im}",
-        "\\vec": "\\boldsymbol",
-        "\\mat": "\\mathbf",
-        "\\abs": "#1",
-        "\\norm": "\\left\\|#1\\right\\|",
-        "\\set": "\\{#1\\}",
-        "\\defeq": "\\overset{\\text{def}}{=}",
-        "\\deg": "^{\\circ}",
-        "\\diff": "\\mathrm{d}",
-        "\\exp": "\\mathrm{e}^{#1}",
-        "\\ln": "\\log_e",
-        "\\dp": "\\cdot",
-        "\\grad": "\\nabla",
-        "\\divg": "\\nabla\\cdot",
-        "\\curl": "\\nabla\\times",
-        "\\lapl": "\\nabla^2",
-        "\\dx": "\\,\\mathrm{d}x",
-        "\\dy": "\\,\\mathrm{d}y",
-        "\\dz": "\\,\\mathrm{d}z",
-        "\\dt": "\\,\\mathrm{d}t",
-        "\\ds": "\\,\\mathrm{d}s"
-      }
+      displayMode: !inline
     };
 
     return inline ? (
@@ -274,57 +141,13 @@ const Math = ({ value, inline }) => {
   }
 };
 
-const processMathInText = (text) => {
-  if (!text) return text;
-  try {
-    // Protect code blocks first
-    const codeBlocks = [];
-    let counter = 0;
-    text = text.replace(/```[\s\S]*?```/g, (match) => {
-      const id = `__CODE_${counter++}__`;
-      codeBlocks.push(match);
-      return id;
-    });
-
-    // Handle LaTeX environments first
-    const environments = ['equation', 'align', 'gather', 'matrix', 'cases', 'array'];
-    environments.forEach(env => {
-      const pattern = new RegExp(`\\\\begin\\{${env}\\}([\\s\\S]*?)\\\\end\\{${env}\\}`, 'g');
-      text = text.replace(pattern, (match) => `\n\n$$${match}$$\n\n`);
-    });
-
-    // Handle block math
-    text = text
-      .replace(/\\\[([\s\S]*?)\\\]/g, (_, content) => `\n\n$$${content.trim()}$$\n\n`)
-      .replace(/\$\$([\s\S]*?)\$\$/g, (_, content) => `\n\n$$${content.trim()}$$\n\n`);
-
-    // Handle inline math
-    text = text
-      .replace(/\\\(([\s\S]*?)\\\)/g, (_, content) => `$${content.trim()}$`)
-      .replace(/\$([^$\n]+?)\$/g, (match, content) => {
-        if (content.match(/^\s*\d+([.,]\d{2})?\s*$/)) return match;
-        if (content.match(/^.*[/\\].*$/)) return match;
-        return `$${content.trim()}$`;
-      });
-
-    // Restore code blocks
-    codeBlocks.forEach((block, i) => {
-      text = text.replace(`__CODE_${i}__`, block);
-    });
-
-    return text;
-  } catch (error) {
-    console.error('Math processing error:', error);
-    return text;
-  }
-};
-
 const markdownConfig = {
   remarkPlugins: [
     remarkGfm,
     [remarkMath, {
       singleDollarTextMath: true,
-      inlineMathDouble: false,
+      inlineMathLimiter: '$',
+      blockMathLimiter: '$$'
     }]
   ],
   rehypePlugins: [
@@ -332,23 +155,99 @@ const markdownConfig = {
       strict: false,
       throwOnError: false,
       trust: true,
+      maxSize: 800,
+      maxExpand: 1000,
       macros: {
         "\\R": "\\mathbb{R}",
         "\\N": "\\mathbb{N}",
         "\\Z": "\\mathbb{Z}",
         "\\Q": "\\mathbb{Q}",
         "\\C": "\\mathbb{C}",
+        "\\d": "\\mathrm{d}",
+        "\\diff": "\\mathrm{d}",
+        "\\e": "\\mathrm{e}",
+        "\\i": "\\mathrm{i}",
+        "\\vec": "\\boldsymbol",
+        "\\matrix": "\\begin{matrix}#1\\end{matrix}",
+        "\\bmatrix": "\\begin{bmatrix}#1\\end{bmatrix}",
+        "\\pmatrix": "\\begin{pmatrix}#1\\end{pmatrix}",
+        "\\cases": "\\begin{cases}#1\\end{cases}"
       }
     }]
   ],
   components: {
-    // ...existing components...
     code: ({ node, inline, className, children, ...props }) => {
-      if (String(children).match(/^\$.*\$$/)) {
-        return <span>{children}</span>;
+      if (inline) {
+        return (
+          <code className="px-1.5 py-0.5 rounded font-mono text-sm bg-gray-800/40">
+            {children}
+          </code>
+        );
       }
-      // ...rest of code component logic...
-    }
+    
+      const [isCopied, setIsCopied] = useState(false);
+      const match = /language-(\w+)/.exec(className || '');
+      const language = match ? match[1] : '';
+      const codeContent = String(children).replace(/\n$/, '');
+    
+      const handleCopy = () => {
+        navigator.clipboard.writeText(codeContent);
+        setIsCopied(true);
+        setTimeout(() => setIsCopied(false), 2000);
+      };
+    
+      return (
+        <div className="code-block-container">
+          <div className="code-block-header">
+            <span className="code-block-language">
+              {language || 'text'}
+            </span>
+            <button
+              onClick={handleCopy}
+              className="code-block-copy-btn"
+            >
+              {isCopied ? (
+                <>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+                    <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm9.707 5.707a1 1 0 00-1.414-1.414L9 12.586l-1.293-1.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  <span>Copied!</span>
+                </>
+              ) : (
+                <>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M7 9a2 2 0 012-2h6a2 2 0 012 2v6a2 2 0 01-2 2H9a2 2 0 01-2-2V9z" />
+                    <path d="M5 3a2 2 0 00-2 2v6a2 2 0 002 2V5h8a2 2 0 00-2-2H5z" />
+                  </svg>
+                  <span>Copy</span>
+                </>
+              )}
+            </button>
+          </div>
+          <div className="code-block-content">
+            <SyntaxHighlighter
+              language={language || 'text'}
+              style={oneDark}
+              customStyle={{
+                margin: 0,
+                padding: 0,
+                background: 'transparent',
+              }}
+              codeTagProps={{
+                style: {
+                  fontFamily: 'JetBrains Mono, Menlo, Monaco, Consolas, monospace',
+                }
+              }}
+            >
+              {codeContent}
+            </SyntaxHighlighter>
+          </div>
+        </div>
+      );
+    },
+    math: ({ value }) => <Math value={value} inline={false} />,
+    inlineMath: ({ value }) => <Math value={value} inline={true} />
   }
 };
 
@@ -644,28 +543,30 @@ export default function ResponseColumn({ model, response, streaming, className, 
       }
     };
 
-    const getErrorIcon = () => {
-      switch (errorType) {
-        case 'API_KEY_MISSING':
-          return (
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-              <path fillRule="evenodd" d="M8 7a5 5 0 113.61 4.804l-1.903 1.903A1 1 0 019 14H8v1a1 1 0 01-1 1H6v1a1 1 0 01-1 1H3a1 1 0 01-1-1v-2a1 1 0 01.293-.707L8.196 8.39A5.002 5.002 0 018 7zm5-3a.75.75 0 000 1.5A1.5 1.5 0 0114.5 7 .75.75 0 0016 7a3 3 0 00-3-3z" clipRule="evenodd" />
-            </svg>
-          );
-        case 'TIMEOUT':
-        case 'MODEL_UNAVAILABLE':
-          return (
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z" clipRule="evenodd" />
-            </svg>
-          );
-        default:
-          return (
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-            </svg>
-          );
-      }
+    const getErrorIcon = (errorType) => {
+      const icons = {
+        'API_KEY_MISSING': (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+            <path fillRule="evenodd" d="M8 7a5 5 0 113.61 4.804l-1.903 1.903A1 1 0 019 14H8v1a1 1 0 01-1 1H6v1a1 1 0 01-1 1H3a1 1 0 01-1-1v-2a1 1 0 01.293-.707L8.196 8.39A5.002 5.002 0 018 7zm5-3a.75.75 0 000 1.5A1.5 1.5 0 0114.5 7 .75.75 0 0016 7a3 3 0 00-3-3z" clipRule="evenodd" />
+          </svg>
+        ),
+        'TIMEOUT': (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z" clipRule="evenodd" />
+          </svg>
+        ),
+        'MODEL_UNAVAILABLE': (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z" clipRule="evenodd" />
+          </svg>
+        )
+      };
+    
+      return icons[errorType] || (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+        </svg>
+      );
     };
 
     const getErrorMessage = () => {
@@ -697,7 +598,7 @@ export default function ResponseColumn({ model, response, streaming, className, 
       <div className={`p-4 rounded-lg border ${getErrorStyles()} transition-colors duration-200`}>
         <div className="flex items-start space-x-3">
           <div className={`p-1.5 rounded-full ${errorTextClass()} bg-opacity-20`}>
-            {getErrorIcon()}
+            {getErrorIcon(errorType)}
           </div>
           <div>
             <p className={`font-medium ${errorTextClass()}`}>{getErrorTitle()}</p>
