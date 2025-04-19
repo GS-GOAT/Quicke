@@ -1113,3 +1113,243 @@ footer {
   min-height: 44px;
   min-width: 44px;
 }
+
+/* Split Panel Layout Styles */
+.split-panel-container {
+  @apply flex h-full relative;
+  isolation: isolate;
+}
+
+.split-panel-separator {
+  @apply w-2 cursor-col-resize bg-gray-300/10 dark:bg-gray-700/30 hover:bg-primary-500/30 transition-colors duration-150 flex-shrink-0 relative;
+  touch-action: none;
+}
+
+.split-panel-separator::after {
+  content: '';
+  @apply absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-8 bg-gray-400/20 rounded;
+}
+
+.split-panel-separator:hover::after {
+  @apply bg-primary-500/40;
+}
+
+/* Panel transitions */
+.split-panel-left,
+.split-panel-right {
+  @apply transition-[width] duration-300 ease-in-out;
+}
+
+.split-panel-content {
+  @apply h-full w-full overflow-hidden relative;
+}
+
+/* Ensure proper z-index stacking */
+.split-panel-left {
+  @apply z-10;
+}
+
+.split-panel-right {
+  @apply z-20;
+}
+
+.split-panel-separator {
+  @apply z-30;
+}
+
+/* Panel scrollbar styling */
+.panel-content::-webkit-scrollbar {
+  @apply w-1.5;
+}
+
+.panel-content::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+.panel-content::-webkit-scrollbar-thumb {
+  @apply bg-gray-700/50 rounded-full hover:bg-gray-600/50;
+}
+
+/* Disable text selection during resize */
+.resizing * {
+  @apply select-none;
+}
+
+/* Thinking animation */
+.thinking-dots {
+  display: inline-flex;
+  margin-left: 2px;
+}
+
+.thinking-dot {
+  width: 2px;
+  height: 2px;
+  margin: 0 1px;
+  background-color: currentColor;
+  border-radius: 50%;
+  animation: thinking 1.4s infinite;
+  opacity: 0.5;
+}
+
+.thinking-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.thinking-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes thinking {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+/* Code block styles */
+.code-block-container {
+  @apply rounded-lg overflow-hidden bg-gray-800/50 border border-gray-700/50 my-4;
+}
+
+.code-block-header {
+  @apply flex justify-between items-center px-4 py-2 bg-gray-800/50 border-b border-gray-700/50;
+}
+
+.code-block-language {
+  @apply text-xs font-medium text-gray-400 uppercase tracking-wide;
+}
+
+.code-block-copy-btn {
+  @apply flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-gray-400 hover:text-gray-200 transition-colors rounded;
+}
+
+.code-block-content {
+  @apply p-4 overflow-x-auto;
+}
+
+/* Enhanced Typography Styles */
+.prose {
+  font-size: 1rem;
+  line-height: 1.75;
+  color: rgba(229, 231, 235, 0.9);
+}
+
+.prose h1, .prose h2, .prose h3, .prose h4 {
+  color: rgba(255, 255, 255, 0.95);
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.prose h1 {
+  font-size: 2rem;
+  margin-top: 2.5rem;
+  margin-bottom: 1.5rem;
+  background: linear-gradient(90deg, rgba(255,255,255,0.95), rgba(255,255,255,0.8));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.prose h2 {
+  font-size: 1.5rem;
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+}
+
+.prose h3 {
+  font-size: 1.25rem;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.prose p {
+  margin-top: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.prose a {
+  color: #60a5fa;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.prose a:hover {
+  color: #93c5fd;
+}
+
+/* Code Block Styling */
+.code-block-container {
+  margin: 1.5rem 0;
+  background: rgba(17, 24, 39, 0.8);
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+
+.code-block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: rgba(31, 41, 55, 0.7);
+  border-bottom: 1px solid rgba(75, 85, 99, 0.4);
+}
+
+.code-block-content {
+  padding: 1rem;
+  overflow-x: auto;
+  font-family: 'JetBrains Mono', Menlo, Monaco, Consolas, monospace;
+  font-size: 0.875rem;
+  line-height: 1.7;
+}
+
+/* Syntax Highlighting - ChatGPT-like Theme */
+.token.comment { color: #6b7280; font-style: italic; }
+.token.keyword { color: #60a5fa; }
+.token.string { color: #34d399; }
+.token.number { color: #f472b6; }
+.token.boolean { color: #60a5fa; }
+.token.function { color: #f59e0b; }
+.token.class-name { color: #34d399; }
+.token.constant { color: #f472b6; }
+.token.operator { color: #60a5fa; }
+.token.punctuation { color: #9ca3af; }
+
+/* Table Enhancements */
+.table-container {
+  margin: 1.5rem 0;
+  overflow-x: auto;
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  background: rgba(17, 24, 39, 0.6);
+  backdrop-filter: blur(8px);
+}
+
+.table-container table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.table-container th {
+  background: rgba(31, 41, 55, 0.6);
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.table-container td {
+  padding: 0.75rem 1rem;
+  color: rgba(229, 231, 235, 0.9);
+  font-size: 0.875rem;
+  border-bottom: 1px solid rgba(75, 85, 99, 0.2);
+}
+
+.table-container tr:last-child td {
+  border-bottom: none;
+}

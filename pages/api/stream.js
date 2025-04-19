@@ -659,7 +659,7 @@ Format your response as a clear, concise analysis.`;
   // Add model version mapping for Claude
   const claudeModels = {
     'claude-3-7': 'claude-3-7-sonnet-20250219',
-    'claude-3-5': 'claude-3-5-sonnet-20241022'
+    'claude-3-5': 'claude-3-5-sonnet-20250219' // Updated to latest version
   };
 
   const deepseekModels = {
@@ -1187,7 +1187,7 @@ async function handleClaudeStream(modelId, messages, sendEvent, anthropic) {
     client: anthropic,
     provider: 'anthropic',
     generateStream: () => anthropic.messages.create({
-      model: claudeModels[modelId] || 'claude-3-7-sonnet-20250219',
+      model: claudeModels[modelId] || 'claude-3-5-sonnet-20250219', // Updated default model
       max_tokens: 5000,
       messages: formattedMessages,
       stream: true,

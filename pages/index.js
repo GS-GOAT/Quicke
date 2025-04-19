@@ -9,6 +9,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useLocalStorage } from '../hooks/useLocalStorage'; 
 import StarfieldBackground from '../components/StarfieldBackground';
+import { useSplitPanel } from '../components/SplitPanelContext';
+import SplitPanelLayout from '../components/SplitPanelLayout';
 
 export default function Home() {
   const router = useRouter();
@@ -87,6 +89,14 @@ export default function Home() {
   // Add new state for summary
   const [showSummary, setShowSummary] = useState({});
   const [summaryLoading, setSummaryLoading] = useState({});
+
+  // Get split panel context
+  const { isSidePanelOpen, sidePanelContent, openSidePanel, closeSidePanel } = useSplitPanel();
+
+  // Add handler for opening response in side panel
+  const handleOpenInSidePanel = (columnProps) => {
+    openSidePanel(columnProps);
+  };
 
   // Modify auto-scroll to only trigger on new prompt addition
   useEffect(() => {
@@ -707,265 +717,129 @@ export default function Home() {
   };
 
   const getResponseLayoutClass = () => {
-    return responseLayout === 'grid'
-      ? 'grid grid-cols-1 md:grid-cols-2 gap-6' // Increased gap and reduced columns
-      : 'flex flex-col space-y-6'; // Keep stack layout the same
+    if (isSidePanelOpen) {
+      return 'flex flex-col space-y-6'; // Single column when side panel is open
+    }
+    return responseLayout === 'grid' 
+      ? 'grid grid-cols-1 md:grid-cols-2 gap-6'
+      : 'flex flex-col space-y-6';
   };
 
-  const renderConversationHistory = () => (
-    <div className="space-y-10 pb-24 pt-4">
-      {/* Load More button with updated styling */}
-      {history.some(entry => entry.isHistorical) && hasMore && (
-        <button
-          onClick={handleLoadMore}
-          className="flex items-center justify-center space-x-1 mx-auto px-3 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 bg-white dark:bg-gray-800 rounded-full shadow-sm hover:shadow transition-all duration-200 border border-gray-200 dark:border-gray-700 group"
-        >
-          <svg 
-            xmlns="http://www.w3.org/2000/svg" 
-            viewBox="0 0 20 20" 
-            fill="currentColor" 
-            className="w-3.5 h-3.5 rotate-180"
+  const renderConversationHistory = () => {
+    return (
+      <div className="space-y-10 pb-24 pt-4">
+        {/* Load More button with updated styling */}
+        {history.some(entry => entry.isHistorical) && hasMore && (
+          <button
+            onClick={handleLoadMore}
+            className="flex items-center justify-center space-x-1 mx-auto px-3 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 bg-white dark:bg-gray-800 rounded-full shadow-sm hover:shadow transition-all duration-200 border border-gray-200 dark:border-gray-700 group"
           >
-            <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-          </svg>
-          <span>Load more</span>
-        </button>
-      )}
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" 
+              viewBox="0 0 20 20" 
+              fill="currentColor" 
+              className="w-3.5 h-3.5 rotate-180"
+            >
+              <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+            </svg>
+            <span>Load more</span>
+          </button>
+        )}
 
-      {/* Historical conversations first */}
-      {history.filter(entry => entry.isHistorical).map((entry) => (
-        <div key={entry.id} className="space-y-6">
-          {/* File attachment display - POSITIONED ABOVE MESSAGE */}
-          {entry.fileId && (
-            <div className="flex justify-end mb-2">
-              <div className="bg-gray-50 dark:bg-gray-800 px-3 py-3 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm max-w-[280px]">
-                <div className="flex items-center">
-                  {/* Display appropriate icon based on file type or extension */}
-                  {entry.fileName?.toLowerCase().endsWith('.pdf') && (
-                    <div className="mr-3">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-red-500" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
-                      </svg>
+        {history.map((entry, index) => (
+          <div key={entry.id || `entry-${index}`} className="space-y-6">
+            {/* File attachment display - POSITIONED ABOVE MESSAGE */}
+            {entry.fileId && (
+              <div className="flex justify-end mb-2">
+                <div className="bg-gray-50 dark:bg-gray-800 px-3 py-3 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm max-w-[280px]">
+                  <div className="flex items-center">
+                    {/* Display appropriate icon based on file type or extension */}
+                    {entry.fileName?.toLowerCase().endsWith('.pdf') && (
+                      <div className="mr-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    )}
+                    {entry.fileName?.toLowerCase().match(/\.(jpe?g|png|gif|webp)$/) && (
+                      <div className="mr-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    )}
+                    {entry.fileName?.toLowerCase().endsWith('.txt') && (
+                      <div className="mr-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm3 1h6v4H7V5zm8 8v2h1v1H4v-1h1v-2H4v-1h16v1h-1z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    )}
+                    {entry.fileName?.toLowerCase().match(/\.(ppt|pptx)$/) && (
+                      <div className="mr-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-orange-500" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    )}
+                    {!entry.fileName?.toLowerCase().match(/\.(pdf|jpe?g|png|gif|webp|txt|ppt|pptx)$/) && (
+                      <div className="mr-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 012 0v4a1 1 0 102 0V7a3 3 0 00-3-3z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    )}
+                    <div className="flex-1 overflow-hidden">
+                      <p 
+                        className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate w-full"
+                        title={entry.fileName || "Attached Document"} // Show full filename on hover
+                      >
+                        {entry.fileName || "Attached Document"}
+                      </p>
                     </div>
-                  )}
-                  {entry.fileName?.toLowerCase().match(/\.(jpe?g|png|gif|webp)$/) && (
-                    <div className="mr-3">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                  )}
-                  {entry.fileName?.toLowerCase().endsWith('.txt') && (
-                    <div className="mr-3">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-500" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm3 1h6v4H7V5zm8 8v2h1v1H4v-1h1v-2H4v-1h16v1h-1z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                  )}
-                  {entry.fileName?.toLowerCase().match(/\.(ppt|pptx)$/) && (
-                    <div className="mr-3">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-orange-500" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                  )}
-                  {!entry.fileName?.toLowerCase().match(/\.(pdf|jpe?g|png|gif|webp|txt|ppt|pptx)$/) && (
-                    <div className="mr-3">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 012 0v4a1 1 0 102 0V7a3 3 0 00-3-3z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                  )}
-                  <div className="flex-1 overflow-hidden">
-                    <p 
-                      className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate w-full"
-                      title={entry.fileName || "Attached Document"} // Show full filename on hover
-                    >
-                      {entry.fileName || "Attached Document"}
-                    </p>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
-          
-          <div className="flex justify-end">
-            <div className="bg-primary-100 dark:bg-primary-900/30 p-4 rounded-2xl rounded-tr-none shadow-sm max-w-[80%] border border-primary-200 dark:border-primary-800/30">
-              <p className="text-gray-800 dark:text-gray-200">{entry.prompt}</p>
-            </div>
-          </div>
-          
-          <div className={getResponseLayoutClass()}>
-            {(entry.activeModels || []).map(model => (
-              <ResponseColumn 
-                key={`${entry.id}-${model}`}
-                model={model}
-                conversationId={entry.id}  // Add conversation ID
-                response={
-                  // Only pass current responses if this is the active conversation
-                  currentPromptId === entry.id 
-                    ? responses[model] 
-                    : entry.responses?.[model]
-                }
-                streaming={
-                  currentPromptId === entry.id && 
-                  (responses[model]?.streaming || entry.responses?.[model]?.streaming)
-                }
-                className="light-response-column"
-                onRetry={handleModelRetry}
-              />
-            ))}
-          </div>
-          
-          {/* Display summary if available */}
-          {entry.summary && (
-            <ResponseColumn
-              model="summary"
-              response={{ text: entry.summary }}
-              streaming={false}
-              isCollapsed={false}
-              className="w-full"
-              isSummary={true}
-            />
-          )}
-          
-          {/* Add summarize button if summary not showing */}
-          {!entry.summary && !currentPromptId && (
-            <div className="flex justify-center mt-6">
-              <button
-                onClick={() => generateSummary(entry.id)}
-                disabled={summaryLoading[entry.id]}
-                className={`
-                  group relative flex items-center gap-3 px-6 py-2.5 
-                  text-sm font-medium transition-all duration-300
-                  ${summaryLoading[entry.id]
-                    ? 'text-purple-300 bg-purple-900/20'
-                    : 'text-gray-300 hover:text-white bg-gradient-to-r from-purple-900/30 via-gray-800/30 to-purple-900/30 hover:from-purple-800/40 hover:via-gray-700/40 hover:to-purple-800/40'
-                  }
-                  rounded-xl border border-purple-500/20 hover:border-purple-500/30
-                  shadow-lg hover:shadow-purple-500/10
-                  backdrop-blur-sm
-                `}
-              >
-                {summaryLoading[entry.id] ? (
-                  <>
-                    <div className="relative">
-                      <div className="w-4 h-4 rounded-full border-2 border-current border-r-transparent animate-spin"></div>
-                    </div>
-                    <span>Analyzing Responses...</span>
-                  </>
-                ) : (
-                  <>
-                    <svg 
-                      xmlns="http://www.w3.org/2000/svg" 
-                      viewBox="0 0 24 24" 
-                      fill="currentColor" 
-                      className="w-5 h-5 transition-transform duration-300 group-hover:scale-110"
-                    >
-                      <path d="M21 6.375c0 2.692-4.03 4.875-9 4.875S3 9.067 3 6.375 7.03 1.5 12 1.5s9 2.183 9 4.875z" />
-                      <path d="M12 12.75c2.685 0 5.19-.586 7.078-1.609a8.283 8.283 0 001.897-1.384c.016.121.025.244.025.368C21 12.817 16.97 15 12 15s-9-2.183-9-4.875c0-.124.009-.247.025-.368a8.285 8.285 0 001.897 1.384C6.809 12.164 9.315 12.75 12 12.75z" />
-                      <path d="M12 16.5c2.685 0 5.19-.586 7.078-1.609a8.282 8.282 0 001.897-1.384c.016.121.025.244.025.368 0 2.692-4.03 4.875-9 4.875s-9-2.183-9-4.875c0-.124.009-.247.025-.368a8.284 8.284 0 001.897 1.384C6.809 15.914 9.315 16.5 12 16.5z" />
-                    </svg>
-                    <span>Summarize Responses</span>
-                    
-                    {/* Add subtle glow effect */}
-                    <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-purple-500/0 via-purple-500/5 to-purple-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
-                  </>
-                )}
-              </button>
-            </div>
-          )}
-        </div>
-      ))}
-
-      {/* Separator - only show if there are both historical and new conversations */}
-      {history.some(entry => entry.isHistorical) && history.some(entry => !entry.isHistorical) && (
-        <div className="flex items-center my-8">
-          <div className="flex-grow h-px bg-gradient-to-r from-transparent via-gray-300 dark:via-gray-600 to-transparent" />
-          <div className="mx-4 px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-xs text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
-            New Conversations
-          </div>
-          <div className="flex-grow h-px bg-gradient-to-r from-transparent via-gray-300 dark:via-gray-600 to-transparent" />
-        </div>
-      )}
-
-      {/* New conversations last */}
-      {history.filter(entry => !entry.isHistorical).map((entry) => (
-        <div key={entry.id} className="space-y-6">
-          {/* File attachment display - POSITIONED ABOVE MESSAGE */}
-          {entry.fileId && (
-            <div className="flex justify-end mb-2">
-              <div className="bg-gray-50 dark:bg-gray-800 px-3 py-3 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm max-w-[280px]">
-                <div className="flex items-center">
-                  {/* Display appropriate icon based on file type or extension */}
-                  {entry.fileName?.toLowerCase().endsWith('.pdf') && (
-                    <div className="mr-3">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-red-500" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                  )}
-                  {entry.fileName?.toLowerCase().match(/\.(jpe?g|png|gif|webp)$/) && (
-                    <div className="mr-3">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                  )}
-                  {entry.fileName?.toLowerCase().endsWith('.txt') && (
-                    <div className="mr-3">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-500" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm3 1h6v4H7V5zm8 8v2h1v1H4v-1h1v-2H4v-1h16v1h-1z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                  )}
-                  {entry.fileName?.toLowerCase().match(/\.(ppt|pptx)$/) && (
-                    <div className="mr-3">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-orange-500" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                  )}
-                  {!entry.fileName?.toLowerCase().match(/\.(pdf|jpe?g|png|gif|webp|txt|ppt|pptx)$/) && (
-                    <div className="mr-3">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 012 0v4a1 1 0 102 0V7a3 3 0 00-3-3z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                  )}
-                  <div className="flex-1 overflow-hidden">
-                    <p 
-                      className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate w-full"
-                      title={entry.fileName || "Attached Document"} // Show full filename on hover
-                    >
-                      {entry.fileName || "Attached Document"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          <div className="flex justify-end">
-            <div className="bg-primary-100 dark:bg-primary-900/30 p-4 rounded-2xl rounded-tr-none shadow-sm max-w-[80%] border border-primary-200 dark:border-primary-800/30">
-              <p className="text-gray-800 dark:text-gray-200">{entry.prompt}</p>
-            </div>
-          </div>
-          
-          <div className={getResponseLayoutClass()}>
-            {/* Render normal responses */}
-            {(entry.activeModels || []).map(model => (
-              <ResponseColumn 
-                key={`${entry.id}-${model}`}
-                model={model}
-                conversationId={entry.id}
-                response={currentPromptId === entry.id ? responses[model] : entry.responses?.[model]}
-                streaming={currentPromptId === entry.id && responses[model]?.streaming}
-                className="light-response-column"
-                onRetry={handleModelRetry}
-              />
-            ))}
+            )}
             
+            <div className="flex justify-end">
+              <div className="bg-primary-100 dark:bg-primary-900/30 p-4 rounded-2xl rounded-tr-none shadow-sm max-w-[80%] border border-primary-200 dark:border-primary-800/30">
+                <p className="text-gray-800 dark:text-gray-200">{entry.prompt}</p>
+              </div>
+            </div>
+            
+            <div className={getResponseLayoutClass()}>
+              {(entry.activeModels || []).map(model => {
+                // Check if this response is in side panel
+                const isInSidePanel = isSidePanelOpen &&
+                  sidePanelContent?.conversationId === entry.id &&
+                  sidePanelContent?.model === model;
+
+                return (
+                  <ResponseColumn
+                    key={`${entry.id}-${model}`}
+                    model={model}
+                    conversationId={entry.id}
+                    response={
+                      currentPromptId === entry.id
+                        ? responses[model]
+                        : entry.responses?.[model]
+                    }
+                    streaming={
+                      currentPromptId === entry.id &&
+                      responses[model]?.streaming
+                    }
+                    className="light-response-column"
+                    onRetry={handleModelRetry}
+                    isInSidePanel={isInSidePanel}
+                    onOpenInSidePanel={handleOpenInSidePanel}
+                    onCloseSidePanel={closeSidePanel}
+                    isSummary={false}
+                  />
+                );
+              })}
+            </div>
+
             {/* Display summary if available */}
             {entry.summary && (
               <ResponseColumn
@@ -977,261 +851,207 @@ export default function Home() {
                 isSummary={true}
               />
             )}
-          </div>
-
-          {/* Add summarize button */}
-          {!entry.summary && !currentPromptId && (
-            <div className="flex justify-center mt-6">
-              <button
-                onClick={() => generateSummary(entry.id)}
-                disabled={summaryLoading[entry.id]}
-                className={`
-                  group relative flex items-center gap-3 px-6 py-2.5 
-                  text-sm font-medium transition-all duration-300
-                  ${summaryLoading[entry.id]
-                    ? 'text-purple-300 bg-purple-900/20'
-                    : 'text-gray-300 hover:text-white bg-gradient-to-r from-purple-900/30 via-gray-800/30 to-purple-900/30 hover:from-purple-800/40 hover:via-gray-700/40 hover:to-purple-800/40'
-                  }
-                  rounded-xl border border-purple-500/20 hover:border-purple-500/30
-                  shadow-lg hover:shadow-purple-500/10
-                  backdrop-blur-sm
-                `}
-              >
-                {summaryLoading[entry.id] ? (
-                  <>
-                    <div className="relative">
-                      <div className="w-4 h-4 rounded-full border-2 border-current border-r-transparent animate-spin"></div>
-                    </div>
-                    <span>Analyzing Responses...</span>
-                  </>
-                ) : (
-                  <>
-                    <svg 
-                      xmlns="http://www.w3.org/2000/svg" 
-                      viewBox="0 0 24 24" 
-                      fill="currentColor" 
-                      className="w-5 h-5 transition-transform duration-300 group-hover:scale-110"
-                    >
-                      <path d="M21 6.375c0 2.692-4.03 4.875-9 4.875S3 9.067 3 6.375 7.03 1.5 12 1.5s9 2.183 9 4.875z" />
-                      <path d="M12 12.75c2.685 0 5.19-.586 7.078-1.609a8.283 8.283 0 001.897-1.384c.016.121.025.244.025.368C21 12.817 16.97 15 12 15s-9-2.183-9-4.875c0-.124.009-.247.025-.368a8.285 8.285 0 001.897 1.384C6.809 12.164 9.315 12.75 12 12.75z" />
-                      <path d="M12 16.5c2.685 0 5.19-.586 7.078-1.609a8.282 8.282 0 001.897-1.384c.016.121.025.244.025.368 0 2.692-4.03 4.875-9 4.875s-9-2.183-9-4.875c0-.124.009-.247.025-.368a8.284 8.284 0 001.897 1.384C6.809 15.914 9.315 16.5 12 16.5z" />
-                    </svg>
-                    <span>Summarize Responses</span>
-                    
-                    {/* Add subtle glow effect */}
-                    <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-purple-500/0 via-purple-500/5 to-purple-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
-                  </>
-                )}
-              </button>
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-
-  // component definition before your main return statement
-
-  const ThreadSidebar = ({ isOpen, onClose, threads, onNewThread, onThreadSelect, activeThreadId }) => {
-    return (
-      <>
-        {/* Glass overlay backdrop */}
-        {isOpen && (
-          <div 
-            className="fixed inset-0 bg-black/30 backdrop-blur-sm z-30"
-            onClick={onClose}
-          />
-        )}
-        
-        {/* Glass sidebar */}
-        <div 
-          className={`fixed top-0 left-0 w-64 h-full z-40 border-r border-gray-700/30 shadow-xl transform transition-transform duration-300 ease-in-out ${
-            isOpen ? 'translate-x-0' : '-translate-x-full'
-          }`}
-          style={{
-            backgroundColor: 'rgba(28, 28, 32, 0.75)',
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-          }}
-        >
-          <div className="p-4 border-b border-gray-700/30" style={{ backgroundColor: 'rgba(24, 24, 28, 0.6)' }}>
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-lg font-semibold text-gray-200">Library</h2>
-              <button 
-                onClick={onClose}
-                className="p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-800/50"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              </button>
-            </div>
-          </div>
-          
-          <div className="p-4">
-            {/* New Thread Button with enhanced hover */}
-            <button
-              onClick={onNewThread}
-              className="flex items-center justify-center w-full px-3 py-2 mb-6 text-sm font-medium text-white rounded-lg shadow-lg transition-all duration-200 hover:bg-gray-700/90 hover:transform hover:scale-[1.02] active:scale-[0.98]"
-              style={{
-                backgroundColor: 'rgba(45, 45, 50, 0.7)',
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
-              }}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 mr-2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-              </svg>
-              <span>New Thread</span>
-            </button>
             
-            {/* Thread List with purple accent border */}
-            <div className="space-y-2">
-              {threads.length === 0 ? (
-                <div className="text-center py-8 text-gray-400" style={{ backgroundColor: 'rgba(40, 40, 45, 0.3)', borderRadius: '0.5rem' }}>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 mx-auto mb-2 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                  </svg>
-                  <p className="text-sm font-medium">No threads yet</p>
-                  <p className="text-xs mt-1">Start a new conversation</p>
-                </div>
-              ) : (
-                threads.map(thread => (
-                  <div 
-                    key={thread.id}
-                    onClick={() => onThreadSelect(thread.id)}
-                    className="transition-all duration-200 mb-2"
-                  >
-                    <div
-                      className={`p-3 rounded-lg cursor-pointer transition-all duration-150 border-l-2 ${
-                        activeThreadId === thread.id 
-                          ? 'bg-gray-700/70 border-purple-400' 
-                          : 'bg-gray-800/40 border-transparent hover:bg-gray-700/50 hover:border-gray-500'
-                      }`}
-                      style={{
-                        transition: "all 0.15s ease",
-                        transform: `scale(${activeThreadId === thread.id ? '1.02' : '1'})`,
-                        borderLeftColor: activeThreadId === thread.id 
-                          ? 'rgba(167, 139, 250, 0.8)'  // Purplish color for the left border
-                          : 'transparent',
-                      }}
-                    >
-                      <h3 className="text-sm font-medium text-gray-200 truncate">{thread.title}</h3>
-                      <p className="text-xs text-gray-400 mt-1">
-                        {new Date(thread.updatedAt).toLocaleDateString()}
+            {/* Add summarize button if summary not showing */}
+            {!entry.summary && !currentPromptId && (
+              <div className="flex justify-center mt-6">
+                <button
+                  onClick={() => generateSummary(entry.id)}
+                  disabled={summaryLoading[entry.id]}
+                  className={`
+                    group relative flex items-center gap-3 px-6 py-2.5 
+                    text-sm font-medium transition-all duration-300
+                    ${summaryLoading[entry.id]
+                      ? 'text-purple-300 bg-purple-900/20'
+                      : 'text-gray-300 hover:text-white bg-gradient-to-r from-purple-900/30 via-gray-800/30 to-purple-900/30 hover:from-purple-800/40 hover:via-gray-700/40 hover:to-purple-800/40'
+                    }
+                    rounded-xl border border-purple-500/20 hover:border-purple-500/30
+                    shadow-lg hover:shadow-purple-500/10
+                    backdrop-blur-sm
+                  `}
+                >
+                  {summaryLoading[entry.id] ? (
+                    <>
+                      <div className="relative">
+                        <div className="w-4 h-4 rounded-full border-2 border-current border-r-transparent animate-spin"></div>
+                      </div>
+                      <span>Analyzing Responses...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg 
+                        xmlns="http://www.w3.org/2000/svg" 
+                        viewBox="0 0 24 24" 
+                        fill="currentColor" 
+                        className="w-5 h-5 transition-transform duration-300 group-hover:scale-110"
+                      >
+                        <path d="M21 6.375c0 2.692-4.03 4.875-9 4.875S3 9.067 3 6.375 7.03 1.5 12 1.5s9 2.183 9 4.875z" />
+                        <path d="M12 12.75c2.685 0 5.19-.586 7.078-1.609a8.283 8.283 0 001.897-1.384c.016.121.025.244.025.368C21 12.817 16.97 15 12 15s-9-2.183-9-4.875c0-.124.009-.247.025-.368a8.285 8.285 0 001.897 1.384C6.809 12.164 9.315 12.75 12 12.75z" />
+                        <path d="M12 16.5c2.685 0 5.19-.586 7.078-1.609a8.282 8.282 0 001.897-1.384c.016.121.025.244.025.368 0 2.692-4.03 4.875-9 4.875s-9-2.183-9-4.875c0-.124.009-.247.025-.368a8.284 8.284 0 001.897 1.384C6.809 15.914 9.315 16.5 12 16.5z" />
+                      </svg>
+                      <span>Summarize Responses</span>
+                      
+                      {/* Add subtle glow effect */}
+                      <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-purple-500/0 via-purple-500/5 to-purple-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+
+        {/* Separator - only show if there are both historical and new conversations */}
+        {history.some(entry => entry.isHistorical) && history.some(entry => !entry.isHistorical) && (
+          <div className="flex items-center my-8">
+            <div className="flex-grow h-px bg-gradient-to-r from-transparent via-gray-300 dark:via-gray-600 to-transparent" />
+            <div className="mx-4 px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-xs text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
+              New Conversations
+            </div>
+            <div className="flex-grow h-px bg-gradient-to-r from-transparent via-gray-300 dark:via-gray-600 to-transparent" />
+          </div>
+        )}
+
+        {/* New conversations last */}
+        {history.filter(entry => !entry.isHistorical).map((entry) => (
+          <div key={entry.id} className="space-y-6">
+            {/* File attachment display - POSITIONED ABOVE MESSAGE */}
+            {entry.fileId && (
+              <div className="flex justify-end mb-2">
+                <div className="bg-gray-50 dark:bg-gray-800 px-3 py-3 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm max-w-[280px]">
+                  <div className="flex items-center">
+                    {/* Display appropriate icon based on file type or extension */}
+                    {entry.fileName?.toLowerCase().endsWith('.pdf') && (
+                      <div className="mr-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    )}
+                    {entry.fileName?.toLowerCase().match(/\.(jpe?g|png|gif|webp)$/) && (
+                      <div className="mr-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    )}
+                    {entry.fileName?.toLowerCase().endsWith('.txt') && (
+                      <div className="mr-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm3 1h6v4H7V5zm8 8v2h1v1H4v-1h1v-2H4v-1h16v1h-1z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    )}
+                    {entry.fileName?.toLowerCase().match(/\.(ppt|pptx)$/) && (
+                      <div className="mr-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-orange-500" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    )}
+                    {!entry.fileName?.toLowerCase().match(/\.(pdf|jpe?g|png|gif|webp|txt|ppt|pptx)$/) && (
+                      <div className="mr-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 012 0v4a1 1 0 102 0V7a3 3 0 00-3-3z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    )}
+                    <div className="flex-1 overflow-hidden">
+                      <p 
+                        className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate w-full"
+                        title={entry.fileName || "Attached Document"}
+                      >
+                        {entry.fileName || "Attached Document"}
                       </p>
                     </div>
                   </div>
-                ))
+                </div>
+              </div>
+            )}
+            
+            <div className="flex justify-end">
+              <div className="bg-primary-100 dark:bg-primary-900/30 p-4 rounded-2xl rounded-tr-none shadow-sm max-w-[80%] border border-primary-200 dark:border-primary-800/30">
+                <p className="text-gray-800 dark:text-gray-200">{entry.prompt}</p>
+              </div>
+            </div>
+            
+            <div className={getResponseLayoutClass()}>
+              {/* Render normal responses */}
+              {(entry.activeModels || []).map(model => (
+                <ResponseColumn 
+                  key={`${entry.id}-${model}`}
+                  model={model}
+                  conversationId={entry.id}
+                  response={currentPromptId === entry.id ? responses[model] : entry.responses?.[model]}
+                  streaming={currentPromptId === entry.id && responses[model]?.streaming}
+                  className="light-response-column"
+                  onRetry={handleModelRetry}
+                />
+              ))}
+              
+              {/* Display summary if available */}
+              {entry.summary && (
+                <ResponseColumn
+                  model="summary"
+                  response={{ text: entry.summary }}
+                  streaming={false}
+                  isCollapsed={false}
+                  className="w-full"
+                  isSummary={true}
+                />
               )}
             </div>
+
+            {/* Add summarize button */}
+            {!entry.summary && !currentPromptId && (
+              <div className="flex justify-center mt-6">
+                <button
+                  onClick={() => generateSummary(entry.id)}
+                  disabled={summaryLoading[entry.id]}
+                  className={`
+                    group relative flex items-center gap-3 px-6 py-2.5 
+                    text-sm font-medium transition-all duration-300
+                    ${summaryLoading[entry.id]
+                      ? 'text-purple-300 bg-purple-900/20'
+                      : 'text-gray-300 hover:text-white bg-gradient-to-r from-purple-900/30 via-gray-800/30 to-purple-900/30 hover:from-purple-800/40 hover:via-gray-700/40 hover:to-purple-800/40'
+                    }
+                    rounded-xl border border-purple-500/20 hover:border-purple-500/30
+                    shadow-lg hover:shadow-purple-500/10
+                    backdrop-blur-sm
+                  `}
+                >
+                  {summaryLoading[entry.id] ? (
+                    <>
+                      <div className="relative">
+                        <div className="w-4 h-4 rounded-full border-2 border-current border-r-transparent animate-spin"></div>
+                      </div>
+                      <span>Analyzing Responses...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg 
+                        xmlns="http://www.w3.org/2000/svg" 
+                        viewBox="0 0 24 24" 
+                        fill="currentColor" 
+                        className="w-5 h-5 transition-transform duration-300 group-hover:scale-110"
+                      >
+                        <path d="M21 6.375c0 2.692-4.03 4.875-9 4.875S3 9.067 3 6.375 7.03 1.5 12 1.5s9 2.183 9 4.875z" />
+                        <path d="M12 12.75c2.685 0 5.19-.586 7.078-1.609a8.283 8.283 0 001.897-1.384c.016.121.025.244.025.368C21 12.817 16.97 15 12 15s-9-2.183-9-4.875c0-.124.009-.247.025-.368a8.285 8.285 0 001.897 1.384C6.809 12.164 9.315 12.75 12 12.75z" />
+                        <path d="M12 16.5c2.685 0 5.19-.586 7.078-1.609a8.282 8.282 0 001.897-1.384c.016.121.025.244.025.368 0 2.692-4.03 4.875-9 4.875s-9-2.183-9-4.875c0-.124.009-.247.025-.368a8.284 8.284 0 001.897 1.384C6.809 15.914 9.315 16.5 12 16.5z" />
+                      </svg>
+                      <span>Summarize Responses</span>
+                      
+                      {/* Add subtle glow effect */}
+                      <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-purple-500/0 via-purple-500/5 to-purple-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
-        </div>
-        
-        {/* Add this style tag to ensure the glass effect works */}
-        <style jsx>{`
-          @supports (backdrop-filter: blur(20px)) or (-webkit-backdrop-filter: blur(20px)) {
-            div[style*="backdrop-filter"] {
-              backdrop-filter: blur(20px) !important;
-              -webkit-backdrop-filter: blur(20px) !important;
-            }
-          }
-        `}</style>
-      </>
+        ))}
+      </div>
     );
-  };
-
-  // Fetch threads on component mount
-  useEffect(() => {
-    if (session?.user) {
-      fetchThreads();
-    }
-  }, [session]);
-
-  // Function to fetch threads
-  const fetchThreads = async () => {
-    try {
-      const response = await fetch('/api/threads/list');
-      if (!response.ok) throw new Error('Failed to fetch threads');
-      
-      const data = await response.json();
-      // Display up to 10 threads
-      setThreads(data.threads);
-    } catch (error) {
-      console.error('Error fetching threads:', error);
-    }
-  };
-
-  // Function to delete the oldest thread and its conversations
-  const deleteOldestThread = async () => {
-    try {
-      const response = await fetch('/api/threads/delete-oldest', {
-        method: 'DELETE'
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to delete oldest thread');
-      }
-      
-      return await response.json();
-    } catch (error) {
-      console.error('Error deleting oldest thread:', error);
-      return { success: false };
-    }
-  };
-
-  // Function to handle new thread creation
-  const handleNewThread = async () => {
-    // If we already have 10 threads, delete the oldest one first
-    if (threads.length >= 10) {
-      const deleteResult = await deleteOldestThread();
-      if (!deleteResult.success) {
-        console.error('Failed to delete oldest thread before creating a new one');
-        // Continue anyway
-      }
-    }
-    
-    // Clear the current conversation
-    setHistory([]);
-    setActiveThreadId(null);
-    setSidebarOpen(false);
-    
-    // Dispatch a custom event to clear any persistent file references
-    window.dispatchEvent(new Event('clearFileReferences'));
-  };
-
-  // Function to handle thread selection
-  const handleThreadSelect = async (threadId) => {
-    if (threadId === activeThreadId) return;
-    
-    try {
-      setLoading(true);
-      const response = await fetch(`/api/threads/retrieve?id=${threadId}`);
-      
-      if (!response.ok) throw new Error('Failed to load thread');
-      
-      const data = await response.json();
-      setHistory(data.conversations);
-      setActiveThreadId(threadId);
-      setSidebarOpen(false);
-      
-      // Dispatch a custom event to clear any persistent file references
-      window.dispatchEvent(new Event('clearFileReferences'));
-      
-      // Add smooth scrolling to bottom
-      setTimeout(() => {
-        const mainContent = document.querySelector('main');
-        if (mainContent) {
-          mainContent.scrollTo({
-            top: mainContent.scrollHeight,
-            behavior: 'smooth'
-          });
-        }
-      }, 100);
-    } catch (error) {
-      console.error('Error loading thread:', error);
-    } finally {
-      setLoading(false);
-    }
   };
 
   const handleModelRetry = async (modelId, conversationId) => {
@@ -1440,6 +1260,208 @@ export default function Home() {
     setIsProcessing(false);
     setLoading(false); // Critical: Reset the loading state to re-enable the prompt bar
     setCurrentPromptId(null);
+  };
+
+  // Function to fetch threads
+  const fetchThreads = async () => {
+    try {
+      const response = await fetch('/api/threads/list');
+      if (!response.ok) throw new Error('Failed to fetch threads');
+      
+      const data = await response.json();
+      // Display up to 10 threads
+      setThreads(data.threads);
+    } catch (error) {
+      console.error('Error fetching threads:', error);
+    }
+  };
+
+  // Function to delete the oldest thread and its conversations
+  const deleteOldestThread = async () => {
+    try {
+      const response = await fetch('/api/threads/delete-oldest', {
+        method: 'DELETE'
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete oldest thread');
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error deleting oldest thread:', error);
+      return { success: false };
+    }
+  };
+
+  // Function to handle thread selection
+  const handleThreadSelect = async (threadId) => {
+    if (threadId === activeThreadId) return;
+    
+    try {
+      setLoading(true);
+      const response = await fetch(`/api/threads/retrieve?id=${threadId}`);
+      
+      if (!response.ok) throw new Error('Failed to load thread');
+      
+      const data = await response.json();
+      setHistory(data.conversations);
+      setActiveThreadId(threadId);
+      setSidebarOpen(false);
+      
+      // Dispatch a custom event to clear any persistent file references
+      window.dispatchEvent(new Event('clearFileReferences'));
+      
+      // Add smooth scrolling to bottom
+      setTimeout(() => {
+        const mainContent = document.querySelector('main');
+        if (mainContent) {
+          mainContent.scrollTo({
+            top: mainContent.scrollHeight,
+            behavior: 'smooth'
+          });
+        }
+      }, 100);
+    } catch (error) {
+      console.error('Error loading thread:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch threads on component mount
+  useEffect(() => {
+    if (session?.user) {
+      fetchThreads();
+    }
+  }, [session]);
+
+  // Function to handle new thread creation
+  const handleNewThread = async () => {
+    // If we already have 10 threads, delete the oldest one first
+    if (threads.length >= 10) {
+      const deleteResult = await deleteOldestThread();
+      if (!deleteResult.success) {
+        console.error('Failed to delete oldest thread before creating a new one');
+        // Continue anyway
+      }
+    }
+    
+    // Clear the current conversation
+    setHistory([]);
+    setActiveThreadId(null);
+    setSidebarOpen(false);
+    
+    // Dispatch a custom event to clear any persistent file references
+    window.dispatchEvent(new Event('clearFileReferences'));
+  };
+
+  const ThreadSidebar = ({ isOpen, onClose, threads, onNewThread, onThreadSelect, activeThreadId }) => {
+    return (
+      <>
+        {/* Glass overlay backdrop */}
+        {isOpen && (
+          <div 
+            className="fixed inset-0 bg-black/30 backdrop-blur-sm z-30"
+            onClick={onClose}
+          />
+        )}
+        
+        {/* Glass sidebar */}
+        <div 
+          className={`fixed top-0 left-0 w-64 h-full z-40 border-r border-gray-700/30 shadow-xl transform transition-transform duration-300 ease-in-out ${
+            isOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+          style={{
+            backgroundColor: 'rgba(28, 28, 32, 0.75)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+          }}
+        >
+          <div className="p-4 border-b border-gray-700/30" style={{ backgroundColor: 'rgba(24, 24, 28, 0.6)' }}>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-lg font-semibold text-gray-200">Library</h2>
+              <button 
+                onClick={onClose}
+                className="p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-800/50"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          
+          <div className="p-4">
+            {/* New Thread Button with enhanced hover */}
+            <button
+              onClick={onNewThread}
+              className="flex items-center justify-center w-full px-3 py-2 mb-6 text-sm font-medium text-white rounded-lg shadow-lg transition-all duration-200 hover:bg-gray-700/90 hover:transform hover:scale-[1.02] active:scale-[0.98]"
+              style={{
+                backgroundColor: 'rgba(45, 45, 50, 0.7)',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 mr-2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              <span>New Thread</span>
+            </button>
+            
+            {/* Thread List with purple accent border */}
+            <div className="space-y-2">
+              {threads.length === 0 ? (
+                <div className="text-center py-8 text-gray-400" style={{ backgroundColor: 'rgba(40, 40, 45, 0.3)', borderRadius: '0.5rem' }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 mx-auto mb-2 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  <p className="text-sm font-medium">No threads yet</p>
+                  <p className="text-xs mt-1">Start a new conversation</p>
+                </div>
+              ) : (
+                threads.map(thread => (
+                  <div 
+                    key={thread.id}
+                    onClick={() => onThreadSelect(thread.id)}
+                    className="transition-all duration-200 mb-2"
+                  >
+                    <div
+                      className={`p-3 rounded-lg cursor-pointer transition-all duration-150 border-l-2 ${
+                        activeThreadId === thread.id 
+                          ? 'bg-gray-700/70 border-purple-400' 
+                          : 'bg-gray-800/40 border-transparent hover:bg-gray-700/50 hover:border-gray-500'
+                      }`}
+                      style={{
+                        transition: "all 0.15s ease",
+                        transform: `scale(${activeThreadId === thread.id ? '1.02' : '1'})`,
+                        borderLeftColor: activeThreadId === thread.id 
+                          ? 'rgba(167, 139, 250, 0.8)'  // Purplish color for the left border
+                          : 'transparent',
+                      }}
+                    >
+                      <h3 className="text-sm font-medium text-gray-200 truncate">{thread.title}</h3>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {new Date(thread.updatedAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+        
+        {/* Add this style tag to ensure the glass effect works */}
+        <style jsx>{`
+          @supports (backdrop-filter: blur(20px)) or (-webkit-backdrop-filter: blur(20px)) {
+            div[style*="backdrop-filter"] {
+              backdrop-filter: blur(20px) !important;
+              -webkit-backdrop-filter: blur(20px) !important;
+            }
+          }
+        `}</style>
+      </>
+    );
   };
 
   return (
@@ -1722,9 +1744,10 @@ export default function Home() {
           </div>
         )}
         
-        <main className="flex-grow px-2 sm:px-4 py-2 pb-[120px] sm:pb-2">
-          <div className="max-w-5xl mx-auto">
-            {history.length === 0 ? (
+        <main className="flex-1 h-screen flex flex-col overflow-hidden">
+          {history.length === 0 ? (
+            // Welcome screen
+            <div className="flex-1 flex items-center justify-center">
               <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
                 <div className="max-w-3xl w-full space-y-8">
                   <div className="space-y-4">
@@ -1740,16 +1763,48 @@ export default function Home() {
 
                   {/* Quick start section */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-8">
-                    {/* <div className="p-4 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm">
-                      <h3 className="font-semibold text-gray-900 dark:text-white">Multiple Models</h3>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Compare responses from leading AI models</p>
-                    </div> */}
                     {/* Add more quick start cards */}
                   </div>
                 </div>
               </div>
-            ) : renderConversationHistory()}
-          </div>
+            </div>
+          ) : (
+            // Main conversation history with side panel support
+            <div className="flex-1 overflow-hidden">
+              <div className="h-full overflow-y-auto">
+                {isSidePanelOpen ? (
+                  <SplitPanelLayout
+                    leftContent={
+                      <div className="px-2 sm:px-4 py-2 pb-[120px] sm:pb-2">
+                        <div className="max-w-7xl mx-auto">
+                          {renderConversationHistory()}
+                          <div ref={messagesEndRef} />
+                        </div>
+                      </div>
+                    }
+                    rightContent={
+                      sidePanelContent && (
+                        <ResponseColumn
+                          {...sidePanelContent}
+                          isInSidePanel={true}
+                          onCloseSidePanel={closeSidePanel}
+                          onOpenInSidePanel={handleOpenInSidePanel}
+                          onRetry={handleModelRetry}
+                        />
+                      )
+                    }
+                  />
+                ) : (
+                  <div className="px-2 sm:px-4 py-2 pb-[120px] sm:pb-2">
+                    <div className="max-w-7xl mx-auto">
+                      {renderConversationHistory()}
+                      <div ref={messagesEndRef} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </main>
         
         <footer className="px-2 sm:px-4 py-2 sm:py-4 bg-transparent relative sm:relative z-[40] safe-area-bottom">
@@ -1792,7 +1847,6 @@ export default function Home() {
             </div>
           </div>
         </footer>
-
         <ThreadSidebar 
           isOpen={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
