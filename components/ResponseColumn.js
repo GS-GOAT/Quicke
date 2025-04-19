@@ -186,7 +186,7 @@ const markdownConfig = {
     code: ({ node, inline, className, children, ...props }) => {
       if (inline) {
         return (
-          <code className="px-1.5 py-0.5 rounded font-mono text-sm bg-gray-800/40">
+          <code className="px-1.5 py-0.5 rounded font-mono text-base bg-gray-800/40">
             {children}
           </code>
         );
@@ -633,9 +633,9 @@ export default function ResponseColumn({
                 <div className="w-2 h-2 rounded-full bg-purple-400 animate-pulse"></div>
                 <div className="absolute inset-0 w-2 h-2 rounded-full bg-purple-400 animate-ping opacity-75"></div>
               </div>
-              <h3 className="text-lg font-medium text-gray-200 flex items-center gap-2">
+              <h3 className="text-xl font-medium text-gray-200 flex items-center gap-2">
                 Summary
-                <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-medium border border-purple-500/20">
+                <span className="text-sm px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-medium border border-purple-500/20">
                   Synthesizer
                 </span>
               </h3>
@@ -644,10 +644,10 @@ export default function ResponseColumn({
             <div className="flex items-center space-x-2">
               <div className="w-2 h-2 rounded-full bg-primary-500"></div>
               <div className="flex items-center">
-                <h3 className="text-lg font-medium text-gray-200 flex items-center gap-1.5">
+                <h3 className="text-xl font-medium text-gray-200 flex items-center gap-1.5">
                   {modelDisplayName}
                   <span 
-                    className="text-[9px] px-1 py-0.5 rounded-md bg-gray-800/50 text-gray-400 font-medium leading-none tracking-wide uppercase"
+                    className="text-xs px-1.5 py-0.5 rounded-md bg-gray-800/50 text-gray-400 font-medium leading-none tracking-wide uppercase"
                     title={`Provider: ${providerMap[model]}`}
                   >
                     {getDisplayProvider(providerMap[model])}
@@ -726,7 +726,7 @@ export default function ResponseColumn({
               >
                 {copiedText ? (
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-green-500">
-                    <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                    <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 101.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
                   </svg>
                 ) : (
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
@@ -746,7 +746,7 @@ export default function ResponseColumn({
           isCollapsed ? 'h-0 opacity-0 scale-95' : 'opacity-100 scale-100'
         }`}
         style={{ 
-          padding: isCollapsed ? '0' : '1.25rem',
+          padding: isCollapsed ? '0' : '1.5rem',
           minHeight: isCollapsed ? "0" : "200px", 
           maxHeight: "600px",
           pointerEvents: isCollapsed ? 'none' : 'auto',
@@ -754,14 +754,14 @@ export default function ResponseColumn({
           transformOrigin: 'top'
         }}
       >
-        {/* Content rendering */}
+        {/* Content rendering with increased text size */}
         {hasText && (
-          <div className="prose prose-invert max-w-none">
+          <div className="prose prose-lg prose-invert max-w-none">
             <ReactMarkdown {...markdownConfig}>
               {processMathInText(displayedText || response.text)}
             </ReactMarkdown>
             {isActive && (
-              <span className="typing-cursor">|</span>
+              <span className="typing-cursor text-lg">|</span>
             )}
           </div>
         )}

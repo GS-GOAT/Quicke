@@ -242,10 +242,16 @@ a:hover {
 /* Prose styling */
 .prose {
   @apply text-gray-200;
+  /* Increase base font size */
+  font-size: 1.125rem; /* 18px */
+  line-height: 1.75;
 }
 
 .prose p {
   @apply my-4;
+  margin-top: 1.25em;
+  margin-bottom: 1.25em;
+  font-size: 1.125rem; /* 18px */
 }
 
 .prose h1, .prose h2, .prose h3, .prose h4 {
@@ -254,18 +260,31 @@ a:hover {
 
 .prose h1 {
   @apply text-2xl;
+  font-size: 2rem; /* 32px */
+  margin-top: 0;
+  margin-bottom: 0.8888889em;
+  line-height: 1.1111111;
 }
 
 .prose h2 {
   @apply text-xl;
+  font-size: 1.75rem; /* 28px */
+  margin-top: 2em;
+  margin-bottom: 1em;
+  line-height: 1.3333333;
 }
 
 .prose h3 {
   @apply text-lg;
+  font-size: 1.5rem; /* 24px */
+  margin-top: 1.6em;
+  margin-bottom: 0.6em;
+  line-height: 1.6;
 }
 
 .prose ul, .prose ol {
   @apply my-4 pl-5;
+  font-size: 1.125rem;
 }
 
 .prose ul {
@@ -276,13 +295,20 @@ a:hover {
   @apply list-decimal;
 }
 
+.prose li {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
 .prose code {
   @apply px-1.5 py-0.5 rounded font-mono text-sm;
   background-color: #000014;
+  font-size: 1rem; /* 16px */
 }
 
 .prose pre {
   @apply bg-gray-800 p-3 rounded-lg my-4 overflow-auto;
+  font-size: 1rem;
 }
 
 .prose pre code {
