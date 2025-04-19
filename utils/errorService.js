@@ -17,12 +17,10 @@ export const ERROR_TYPES = {
   TOKEN_LIMIT_EXCEEDED: 'TOKEN_LIMIT_EXCEEDED'  // Add new error type for token limit
 };
 
-// Timeout settings constants
+// Timeout settings
 export const TIMEOUT_SETTINGS = {
-  INITIAL_RESPONSE: 60000,  // 60 seconds for first chunk (model availability)
-  CHUNK_TIMEOUT: 15000,     // 15 seconds between chunks 
-  MAX_RETRIES: 2,           // Maximum 2 retries per model
-  RETRY_DELAY: 2000,        // 2 seconds between retries
+  INITIAL_RESPONSE: 30000,    // 30 seconds for initial response
+  CHUNK_INTERVAL: 10000      // 10 seconds between chunks
 };
 
 // Stream utilities for common processing patterns
@@ -50,7 +48,7 @@ export const streamUtils = {
     // Check if we've exceeded safety limit
     return {
       count: newCount,
-      exceededLimit: newCount > streamUtils.SAFETY_LIMITS.MAX_CHUNKS
+      exceeded: newCount > streamUtils.SAFETY_LIMITS.MAX_CHUNKS
     };
   },
   
@@ -78,7 +76,7 @@ export const streamUtils = {
     return formattedText;
   },
   
-  // Send a stream event with proper error handling
+  // Send stream event with proper error handling
   sendStreamEvent: async (options) => {
     const {
       modelId,
@@ -88,9 +86,7 @@ export const streamUtils = {
       loading = false,
       streaming = false,
       done = false,
-      sendEvent,
-      retryCount,
-      maxRetries
+      sendEvent
     } = options;
     
     try {
@@ -104,8 +100,7 @@ export const streamUtils = {
         ...(errorType && { errorType }),
         loading,
         streaming,
-        done,
-        ...(retryCount !== undefined && { retryCount, maxRetries })
+        done
       };
       
       await sendEvent(eventData);
@@ -170,15 +165,51 @@ export const streamUtils = {
         errorType = ERROR_TYPES.API_KEY_MISSING;
       } else if (message === 'Empty response received') {
         errorType = ERROR_TYPES.EMPTY_RESPONSE;
-      } else {
-        errorType = error.classifyError ? error.classifyError(error) : ERROR_TYPES.UNKNOWN_ERROR;
       }
     }
     
     // Handle generic error types if no provider-specific handling was done
     if (errorType === ERROR_TYPES.UNKNOWN_ERROR) {
-      // Use the error service for general classification
-      errorType = error.classifyError ? error.classifyError(error) : ERROR_TYPES.UNKNOWN_ERROR;
+      // Classify by status code
+      if (status === 401 || status === 403) {
+        errorType = ERROR_TYPES.API_KEY_MISSING;
+      } else if (status === 429) {
+        errorType = ERROR_TYPES.RATE_LIMIT;
+      } else if (status === 400) {
+        errorType = ERROR_TYPES.INVALID_FORMAT;
+      } else if (status === 422) {
+        errorType = ERROR_TYPES.INVALID_PARAMETERS;
+      } else if (status === 500) {
+        errorType = ERROR_TYPES.SERVER_ERROR;
+      } else if (status === 503) {
+        errorType = ERROR_TYPES.SERVER_OVERLOADED;
+      }
+      
+      // Classify by error message patterns
+      if (message) {
+        const messageLower = message.toLowerCase();
+        
+        if (messageLower.includes('api key') || 
+            messageLower.includes('apikey') || 
+            messageLower.includes('authentication') ||
+            messageLower.includes('auth')) {
+          errorType = ERROR_TYPES.API_KEY_MISSING;
+        } else if (messageLower.includes('timeout') || 
+                   messageLower.includes('timed out')) {
+          errorType = ERROR_TYPES.TIMEOUT;
+        } else if (messageLower.includes('rate limit') || 
+                  messageLower.includes('too many requests') ||
+                  messageLower.includes('free-models-per-day')) {
+          errorType = ERROR_TYPES.RATE_LIMIT;
+        } else if (messageLower.includes('quota') || 
+                   messageLower.includes('exceeded your current quota')) {
+          errorType = ERROR_TYPES.INSUFFICIENT_QUOTA;
+        } else if (messageLower.includes('network') || 
+                   messageLower.includes('connection') ||
+                   messageLower.includes('connect')) {
+          errorType = ERROR_TYPES.NETWORK_ERROR;
+        }
+      }
     }
     
     return { errorType, errorMessage };
@@ -188,7 +219,6 @@ export const streamUtils = {
 class ErrorService {
   constructor() {
     this.activeStreams = new Map();
-    this.retryCounters = new Map();
     this.modelTimers = new Map();
   }
 
@@ -203,7 +233,7 @@ class ErrorService {
       hasReceivedChunk: false
     });
     
-    // Set standard timeout for all models
+    // Set standard timeout for initial response
     const timeoutDuration = TIMEOUT_SETTINGS.INITIAL_RESPONSE;
 
     // Create a timeout that will fire if no chunks are received
@@ -229,27 +259,32 @@ class ErrorService {
 
   // Unregister a stream (call on completion or error)
   unregisterStream(modelId) {
-    console.log(`[${modelId}] Unregistering stream`);
+    // Clear any pending timers
+    const timerId = this.modelTimers.get(modelId);
+    if (timerId) {
+      clearTimeout(timerId);
+      this.modelTimers.delete(modelId);
+    }
     
-    // Add a small delay to ensure any pending events are processed
-    setTimeout(() => {
-      const timer = this.modelTimers.get(modelId);
-      if (timer) {
-        clearTimeout(timer);
-        this.modelTimers.delete(modelId);
+    // Remove stream tracking
+    this.activeStreams.delete(modelId);
+  }
+
+  // Handle timeout scenario
+  handleTimeout(modelId) {
+    console.log(`[${modelId}] Model availability timeout`);
+    const stream = this.activeStreams.get(modelId);
+    
+    if (stream) {
+      if (typeof stream.cleanup === 'function') {
+        stream.cleanup();
       }
       
-      const stream = this.activeStreams.get(modelId);
-      if (stream && typeof stream.cleanup === 'function') {
-        try {
-          stream.cleanup();
-        } catch (error) {
-          console.error(`[${modelId}] Error during cleanup:`, error);
-        }
-      }
-      
-      this.activeStreams.delete(modelId);
-    }, 200); // Small delay to prevent race conditions
+      this.unregisterStream(modelId);
+      return ERROR_TYPES.MODEL_UNAVAILABLE;
+    }
+    
+    return null;
   }
 
   // Get user-friendly error message
@@ -303,23 +338,6 @@ class ErrorService {
       default:
         return `Error with ${modelName}: ${errorType}`;
     }
-  }
-
-  // Handle timeout scenario
-  handleTimeout(modelId) {
-    console.log(`[${modelId}] Model availability timeout`);
-    const stream = this.activeStreams.get(modelId);
-    
-    if (stream) {
-      if (typeof stream.cleanup === 'function') {
-        stream.cleanup();
-      }
-      
-      this.unregisterStream(modelId);
-      return ERROR_TYPES.MODEL_UNAVAILABLE;
-    }
-    
-    return null;
   }
 
   // Classify error type from error object
@@ -445,39 +463,6 @@ class ErrorService {
     }
     
     return ERROR_TYPES.UNKNOWN_ERROR;
-  }
-
-  // Check if retry is allowed for this error and model
-  shouldRetry(modelId, errorType) {
-    // Some error types should never retry
-    if (errorType === ERROR_TYPES.API_KEY_MISSING || 
-        errorType === ERROR_TYPES.MAX_RETRIES_EXCEEDED) {
-      return false;
-    }
-    
-    // Get current retry count
-    const currentRetries = this.retryCounters.get(modelId) || 0;
-    
-    // Check if we've reached max retries
-    if (currentRetries >= TIMEOUT_SETTINGS.MAX_RETRIES) {
-      console.log(`[${modelId}] Max retries (${TIMEOUT_SETTINGS.MAX_RETRIES}) reached`);
-      return false;
-    }
-    
-    // Increment retry counter
-    this.retryCounters.set(modelId, currentRetries + 1);
-    console.log(`[${modelId}] Retry ${currentRetries + 1}/${TIMEOUT_SETTINGS.MAX_RETRIES}`);
-    return true;
-  }
-
-  // Get current retry count for a model
-  getRetryCount(modelId) {
-    return this.retryCounters.get(modelId) || 0;
-  }
-
-  // Reset retry counter (e.g. when starting fresh)
-  resetRetryCount(modelId) {
-    this.retryCounters.set(modelId, 0);
   }
 }
 

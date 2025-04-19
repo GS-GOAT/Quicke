@@ -58,12 +58,11 @@ import streamUtilsModule, { handleUnifiedModelStream } from '../../utils/streamU
 import contextTracker from '../../utils/contextTracker';
 import { getConversationContext } from '../../utils/contextManager';
 
-// Fallback error types in case errorService isn't initialized
+// Remove MAX_RETRIES_EXCEEDED from error types since we're removing automatic retries
 const FALLBACK_ERROR_TYPES = {
   API_KEY_MISSING: 'API_KEY_MISSING',
   MODEL_UNAVAILABLE: 'MODEL_UNAVAILABLE',
   TIMEOUT: 'TIMEOUT',
-  MAX_RETRIES_EXCEEDED: 'MAX_RETRIES_EXCEEDED',
   EMPTY_RESPONSE: 'EMPTY_RESPONSE',
   RATE_LIMIT: 'RATE_LIMIT',
   NETWORK_ERROR: 'NETWORK_ERROR',
@@ -72,7 +71,7 @@ const FALLBACK_ERROR_TYPES = {
 };
 
 // Use the imported values with a fallback if needed
-const ERROR_TYPES = errorService?.ERROR_TYPES || IMPORTED_ERROR_TYPES || FALLBACK_TYPES;
+const ERROR_TYPES = errorService?.ERROR_TYPES || IMPORTED_ERROR_TYPES || FALLBACK_ERROR_TYPES;
 
 // Create a completion manager first
 const createCompletionManager = (totalModels, sendEvent, res) => {
@@ -144,8 +143,6 @@ const createErrorHandler = (completionManager, sendEvent) => {
     try {
       console.log(`[${modelId}] Sending error event: ${errorType}`);
       
-      const retryCount = errorService?.getRetryCount?.(modelId) || 0;
-      
       // Get a user-friendly model name with proper fallbacks
       let modelName = modelId;
       
@@ -168,9 +165,7 @@ const createErrorHandler = (completionManager, sendEvent) => {
         text,
         loading: false,
         streaming: false,
-        done: true,
-        ...(retryCount > 0 && { retryCount }),
-        maxRetries: TIMEOUT_SETTINGS.MAX_RETRIES
+        done: true
       });
       
       completionManager.markCompleted(modelId);

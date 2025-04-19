@@ -1,8 +1,6 @@
 export class ParallelRequestProcessor {
   constructor(options = {}) {
     this.maxConcurrentRequests = options.maxConcurrentRequests || 5;
-    this.retryCount = options.retryCount || 2;
-    this.retryDelay = options.retryDelay || 1000; // ms
     this.queue = [];
     this.activeRequests = 0;
   }
@@ -34,8 +32,7 @@ export class ParallelRequestProcessor {
         execute: requestFn,
         metadata,
         resolve,
-        reject,
-        retries: 0
+        reject
       });
       
       this.processQueue();
@@ -64,21 +61,8 @@ export class ParallelRequestProcessor {
       })
       .catch(error => {
         this.activeRequests--;
-        
-        if (request.retries < this.retryCount) {
-          request.retries++;
-          const delay = this.retryDelay * Math.pow(2, request.retries - 1);
-          
-          console.log(`Request to ${request.modelId} failed, retrying (${request.retries}/${this.retryCount}) after ${delay}ms`);
-          
-          setTimeout(() => {
-            this.queue.unshift(request);
-            this.processQueue();
-          }, delay);
-        } else {
-          request.reject(error);
-          this.processQueue();
-        }
+        request.reject(error);
+        this.processQueue();
       });
   }
 }

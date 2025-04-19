@@ -76,7 +76,7 @@ export async function handleUnifiedModelStream(options) {
         
         // Check safety counter
         const counter = streamUtils.incrementChunkCounter(modelId);
-        if (counter.exceededLimit) {
+        if (counter.exceeded) {
           console.warn(`[${modelId}] Safety limit of ${streamUtils.SAFETY_LIMITS.MAX_CHUNKS} chunks reached, forcing completion`);
           break;
         }
@@ -91,73 +91,27 @@ export async function handleUnifiedModelStream(options) {
       if (customErrorHandler) {
         const customError = customErrorHandler(streamError);
         if (customError) {
-          await streamUtils.sendStreamEvent({
-            modelId,
-            error: customError.errorMessage,
-            errorType: customError.errorType,
-            loading: false,
-            streaming: false,
-            done: true,
-            sendEvent
-          });
-          isStreamDone = true;
-          return text;
+          throw customError;
         }
       }
       
-      // Use standard error handling
-      const { errorType, errorMessage } = streamUtils.handleStreamError(streamError, modelId, provider);
-      
-      // Send proper error event
-      await streamUtils.sendStreamEvent({
-        modelId,
-        error: errorMessage,
-        errorType,
-        loading: false,
-        streaming: false,
-        done: true,
-        sendEvent
-      });
-      
-      isStreamDone = true;
+      throw streamError;
     }
 
-    // Send completion event if stream finished successfully
-    if (isStreamDone && text) {
-      await streamUtils.sendStreamEvent({
-        modelId,
-        text: text,
-        loading: false,
-        streaming: false,
-        done: true,
-        sendEvent
-      });
-    }
+    // Send final completion event
+    await streamUtils.sendStreamEvent({
+      modelId,
+      text,
+      streaming: false,
+      done: true,
+      sendEvent
+    });
 
-    return text;
   } catch (error) {
-    console.error(`Stream error (${modelId}):`, error);
-    
-    // Use custom error handler if provided
-    if (customErrorHandler) {
-      const customError = customErrorHandler(error);
-      if (customError) {
-        await streamUtils.sendStreamEvent({
-          modelId,
-          error: customError.errorMessage,
-          errorType: customError.errorType,
-          loading: false,
-          streaming: false,
-          done: true,
-          sendEvent
-        });
-        return '';
-      }
-    }
-    
-    // Use standard error handling
+    // Handle and classify the error
     const { errorType, errorMessage } = streamUtils.handleStreamError(error, modelId, provider);
     
+    // Send error event with the classified error
     await streamUtils.sendStreamEvent({
       modelId,
       error: errorMessage,
@@ -167,10 +121,6 @@ export async function handleUnifiedModelStream(options) {
       done: true,
       sendEvent
     });
-    
-    return '';
-  } finally {
-    streamHandler.cleanup();
   }
 }
 
@@ -221,4 +171,4 @@ function createStreamHandler(options) {
 export default {
   handleUnifiedModelStream,
   createStreamHandler
-}; 
+};
