@@ -306,6 +306,33 @@ export default function ResponseColumn({
   const timerRef = useRef(null);
   const startTimeRef = useRef(null);
 
+  // Handle column double click for opening side panel
+  const handleColumnDoubleClick = (e) => {
+    // Don't trigger when clicking buttons
+    if (e.target.closest('button')) return;
+    
+    if (!isInSidePanel) {
+      openSidePanel({
+        model,
+        conversationId,
+        response,
+        streaming
+      });
+    }
+  };
+
+  // Add escape key handler for closing side panel
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && isInSidePanel) {
+        closeSidePanel();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isInSidePanel, closeSidePanel]);
+
   // Get the display name for the model
   const modelDisplayName = modelDisplayNames[model] || model;
 
@@ -478,18 +505,23 @@ export default function ResponseColumn({
     }
   };
 
+  // Handle header double click
+  const handleHeaderDoubleClick = () => {
+    if (!isSummary && !isInSidePanel) {
+      openSidePanel({
+        model,
+        conversationId,
+        response,
+        streaming
+      });
+    }
+  };
+
   // Toggle response collapse
   const toggleCollapse = (e) => {
     e.stopPropagation();
     setIsCollapsed(!isCollapsed);
     if (isExpanded) setIsExpanded(false);
-  };
-
-  // Toggle fullscreen expand
-  const toggleExpand = (e) => {
-    e.stopPropagation();
-    setIsExpanded(!isExpanded);
-    if (isCollapsed) setIsCollapsed(false);
   };
 
   // Handle retry click
@@ -575,19 +607,25 @@ export default function ResponseColumn({
     : ''}`;
 
   return (
-    <div className={`rounded-xl overflow-hidden flex flex-col transition-all duration-300 ${
-      isExpanded 
-        ? 'fixed inset-6 z-50 bg-gray-900/90 backdrop-blur-md shadow-2xl' 
-        : isCollapsed
-          ? 'h-[56px]' 
-          : 'h-full'
-    } ${columnClassName}`}>
+    <div 
+      className={`rounded-xl overflow-hidden flex flex-col transition-all duration-300 ${
+        isExpanded 
+          ? 'fixed inset-6 z-50 bg-gray-900/90 backdrop-blur-md shadow-2xl' 
+          : isCollapsed
+            ? 'h-[56px]' 
+            : 'h-full'
+      } ${columnClassName}`}
+      onDoubleClick={handleColumnDoubleClick}
+    >
       {/* Header with model info and controls */}
-      <div className={`px-4 py-3 flex justify-between items-center border-b ${
-        isSummary 
-          ? 'border-purple-500/20 bg-gradient-to-r from-purple-900/20 via-gray-800/40 to-purple-900/20' 
-          : 'border-gray-800'
-      }`}>
+      <div 
+        className={`px-4 py-3 flex justify-between items-center border-b ${
+          isSummary 
+            ? 'border-purple-500/20 bg-gradient-to-r from-purple-900/20 via-gray-800/40 to-purple-900/20' 
+            : 'border-gray-800'
+        }`}
+        onDoubleClick={handleHeaderDoubleClick}
+      >
         <div className="flex items-center space-x-2">
           {isSummary ? (
             <div className="flex items-center gap-2">
@@ -661,28 +699,8 @@ export default function ResponseColumn({
                 </svg>
               </button>
               
-              {/* Expand/collapse button */}
-              <button
-                onClick={toggleExpand}
-                className="p-1.5 text-gray-400 hover:text-primary-500 hover:bg-gray-800 rounded-lg transition-all duration-200"
-                title={isExpanded ? "Exit fullscreen" : "Enter fullscreen"}
-              >
-                <svg 
-                  xmlns="http://www.w3.org/2000/svg" 
-                  viewBox="0 0 20 20" 
-                  fill="currentColor" 
-                  className="w-5 h-5"
-                >
-                  {isExpanded ? (
-                    <path d="M3 3h4v4H3V3zM13 3h4v4h-4V3zM3 13h4v4H3v-4zM13 13h4v4h-4z"/>
-                  ) : (
-                    <path fillRule="evenodd" d="M3.25 3.25a.5.5 0 0 1 .5-.5h4a.5.5 0 0 1 .5.5v.5h-4v4h-.5a.5.5 0 0 1-.5-.5v-4Zm9 0a.5.5 0 0 1 .5-.5h4a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-.5.5h-.5v-4h-4v-.5Zm-9 9a.5.5 0 0 0-.5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 0-.5-.5h-4Z" />
-                  )}
-                </svg>
-              </button>
-              
-              {/* Side Panel Toggle Button */}
-              {!isSummary && (displayedText || response?.text) && (
+              {/* Side Panel Toggle Button - now available for both regular and summary responses */}
+              {(displayedText || response?.text) && (
                 <button
                   onClick={handleSidePanelToggle}
                   className="p-1.5 text-gray-400 hover:text-primary-500 hover:bg-gray-800 rounded-lg transition-all duration-200"
@@ -730,7 +748,7 @@ export default function ResponseColumn({
         style={{ 
           padding: isCollapsed ? '0' : '1.25rem',
           minHeight: isCollapsed ? "0" : "200px", 
-          maxHeight: isExpanded ? "calc(100vh - 140px)" : "600px",
+          maxHeight: "600px",
           pointerEvents: isCollapsed ? 'none' : 'auto',
           transform: `scale(${isCollapsed ? '0.95' : '1'})`,
           transformOrigin: 'top'

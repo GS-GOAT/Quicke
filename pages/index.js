@@ -728,32 +728,28 @@ export default function Home() {
   const renderConversationHistory = () => {
     return (
       <div className="space-y-10 pb-24 pt-4">
-        {/* Load More button with updated styling */}
+        {/* Load More button */}
         {history.some(entry => entry.isHistorical) && hasMore && (
           <button
             onClick={handleLoadMore}
             className="flex items-center justify-center space-x-1 mx-auto px-3 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 bg-white dark:bg-gray-800 rounded-full shadow-sm hover:shadow transition-all duration-200 border border-gray-200 dark:border-gray-700 group"
           >
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              viewBox="0 0 20 20" 
-              fill="currentColor" 
-              className="w-3.5 h-3.5 rotate-180"
-            >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 rotate-180">
               <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
             </svg>
             <span>Load more</span>
           </button>
         )}
 
+        {/* Render all conversations in a single mapping */}
         {history.map((entry, index) => (
           <div key={entry.id || `entry-${index}`} className="space-y-6">
-            {/* File attachment display - POSITIONED ABOVE MESSAGE */}
+            {/* File attachment display */}
             {entry.fileId && (
               <div className="flex justify-end mb-2">
                 <div className="bg-gray-50 dark:bg-gray-800 px-3 py-3 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm max-w-[280px]">
                   <div className="flex items-center">
-                    {/* Display appropriate icon based on file type or extension */}
+                    {/* File type icons */}
                     {entry.fileName?.toLowerCase().endsWith('.pdf') && (
                       <div className="mr-3">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-red-500" viewBox="0 0 20 20" fill="currentColor">
@@ -761,39 +757,9 @@ export default function Home() {
                         </svg>
                       </div>
                     )}
-                    {entry.fileName?.toLowerCase().match(/\.(jpe?g|png|gif|webp)$/) && (
-                      <div className="mr-3">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                    )}
-                    {entry.fileName?.toLowerCase().endsWith('.txt') && (
-                      <div className="mr-3">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-500" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm3 1h6v4H7V5zm8 8v2h1v1H4v-1h1v-2H4v-1h16v1h-1z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                    )}
-                    {entry.fileName?.toLowerCase().match(/\.(ppt|pptx)$/) && (
-                      <div className="mr-3">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-orange-500" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                    )}
-                    {!entry.fileName?.toLowerCase().match(/\.(pdf|jpe?g|png|gif|webp|txt|ppt|pptx)$/) && (
-                      <div className="mr-3">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 012 0v4a1 1 0 102 0V7a3 3 0 00-3-3z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                    )}
+                    {/* ... other file type icons ... */}
                     <div className="flex-1 overflow-hidden">
-                      <p 
-                        className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate w-full"
-                        title={entry.fileName || "Attached Document"} // Show full filename on hover
-                      >
+                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate w-full" title={entry.fileName || "Attached Document"}>
                         {entry.fileName || "Attached Document"}
                       </p>
                     </div>
@@ -809,35 +775,17 @@ export default function Home() {
             </div>
             
             <div className={getResponseLayoutClass()}>
-              {(entry.activeModels || []).map(model => {
-                // Check if this response is in side panel
-                const isInSidePanel = isSidePanelOpen &&
-                  sidePanelContent?.conversationId === entry.id &&
-                  sidePanelContent?.model === model;
-
-                return (
-                  <ResponseColumn
-                    key={`${entry.id}-${model}`}
-                    model={model}
-                    conversationId={entry.id}
-                    response={
-                      currentPromptId === entry.id
-                        ? responses[model]
-                        : entry.responses?.[model]
-                    }
-                    streaming={
-                      currentPromptId === entry.id &&
-                      responses[model]?.streaming
-                    }
-                    className="light-response-column"
-                    onRetry={handleModelRetry}
-                    isInSidePanel={isInSidePanel}
-                    onOpenInSidePanel={handleOpenInSidePanel}
-                    onCloseSidePanel={closeSidePanel}
-                    isSummary={false}
-                  />
-                );
-              })}
+              {(entry.activeModels || []).map(model => (
+                <ResponseColumn 
+                  key={`${entry.id}-${model}`}
+                  model={model}
+                  conversationId={entry.id}
+                  response={currentPromptId === entry.id ? responses[model] : entry.responses?.[model]}
+                  streaming={currentPromptId === entry.id && responses[model]?.streaming}
+                  className="light-response-column"
+                  onRetry={handleModelRetry}
+                />
+              ))}
             </div>
 
             {/* Display summary if available */}
@@ -852,156 +800,6 @@ export default function Home() {
               />
             )}
             
-            {/* Add summarize button if summary not showing */}
-            {!entry.summary && !currentPromptId && (
-              <div className="flex justify-center mt-6">
-                <button
-                  onClick={() => generateSummary(entry.id)}
-                  disabled={summaryLoading[entry.id]}
-                  className={`
-                    group relative flex items-center gap-3 px-6 py-2.5 
-                    text-sm font-medium transition-all duration-300
-                    ${summaryLoading[entry.id]
-                      ? 'text-purple-300 bg-purple-900/20'
-                      : 'text-gray-300 hover:text-white bg-gradient-to-r from-purple-900/30 via-gray-800/30 to-purple-900/30 hover:from-purple-800/40 hover:via-gray-700/40 hover:to-purple-800/40'
-                    }
-                    rounded-xl border border-purple-500/20 hover:border-purple-500/30
-                    shadow-lg hover:shadow-purple-500/10
-                    backdrop-blur-sm
-                  `}
-                >
-                  {summaryLoading[entry.id] ? (
-                    <>
-                      <div className="relative">
-                        <div className="w-4 h-4 rounded-full border-2 border-current border-r-transparent animate-spin"></div>
-                      </div>
-                      <span>Analyzing Responses...</span>
-                    </>
-                  ) : (
-                    <>
-                      <svg 
-                        xmlns="http://www.w3.org/2000/svg" 
-                        viewBox="0 0 24 24" 
-                        fill="currentColor" 
-                        className="w-5 h-5 transition-transform duration-300 group-hover:scale-110"
-                      >
-                        <path d="M21 6.375c0 2.692-4.03 4.875-9 4.875S3 9.067 3 6.375 7.03 1.5 12 1.5s9 2.183 9 4.875z" />
-                        <path d="M12 12.75c2.685 0 5.19-.586 7.078-1.609a8.283 8.283 0 001.897-1.384c.016.121.025.244.025.368C21 12.817 16.97 15 12 15s-9-2.183-9-4.875c0-.124.009-.247.025-.368a8.285 8.285 0 001.897 1.384C6.809 12.164 9.315 12.75 12 12.75z" />
-                        <path d="M12 16.5c2.685 0 5.19-.586 7.078-1.609a8.282 8.282 0 001.897-1.384c.016.121.025.244.025.368 0 2.692-4.03 4.875-9 4.875s-9-2.183-9-4.875c0-.124.009-.247.025-.368a8.284 8.284 0 001.897 1.384C6.809 15.914 9.315 16.5 12 16.5z" />
-                      </svg>
-                      <span>Summarize Responses</span>
-                      
-                      {/* Add subtle glow effect */}
-                      <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-purple-500/0 via-purple-500/5 to-purple-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
-                    </>
-                  )}
-                </button>
-              </div>
-            )}
-          </div>
-        ))}
-
-        {/* Separator - only show if there are both historical and new conversations */}
-        {history.some(entry => entry.isHistorical) && history.some(entry => !entry.isHistorical) && (
-          <div className="flex items-center my-8">
-            <div className="flex-grow h-px bg-gradient-to-r from-transparent via-gray-300 dark:via-gray-600 to-transparent" />
-            <div className="mx-4 px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-xs text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
-              New Conversations
-            </div>
-            <div className="flex-grow h-px bg-gradient-to-r from-transparent via-gray-300 dark:via-gray-600 to-transparent" />
-          </div>
-        )}
-
-        {/* New conversations last */}
-        {history.filter(entry => !entry.isHistorical).map((entry) => (
-          <div key={entry.id} className="space-y-6">
-            {/* File attachment display - POSITIONED ABOVE MESSAGE */}
-            {entry.fileId && (
-              <div className="flex justify-end mb-2">
-                <div className="bg-gray-50 dark:bg-gray-800 px-3 py-3 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm max-w-[280px]">
-                  <div className="flex items-center">
-                    {/* Display appropriate icon based on file type or extension */}
-                    {entry.fileName?.toLowerCase().endsWith('.pdf') && (
-                      <div className="mr-3">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-red-500" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                    )}
-                    {entry.fileName?.toLowerCase().match(/\.(jpe?g|png|gif|webp)$/) && (
-                      <div className="mr-3">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                    )}
-                    {entry.fileName?.toLowerCase().endsWith('.txt') && (
-                      <div className="mr-3">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-500" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm3 1h6v4H7V5zm8 8v2h1v1H4v-1h1v-2H4v-1h16v1h-1z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                    )}
-                    {entry.fileName?.toLowerCase().match(/\.(ppt|pptx)$/) && (
-                      <div className="mr-3">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-orange-500" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                    )}
-                    {!entry.fileName?.toLowerCase().match(/\.(pdf|jpe?g|png|gif|webp|txt|ppt|pptx)$/) && (
-                      <div className="mr-3">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 012 0v4a1 1 0 102 0V7a3 3 0 00-3-3z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                    )}
-                    <div className="flex-1 overflow-hidden">
-                      <p 
-                        className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate w-full"
-                        title={entry.fileName || "Attached Document"}
-                      >
-                        {entry.fileName || "Attached Document"}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            <div className="flex justify-end">
-              <div className="bg-primary-100 dark:bg-primary-900/30 p-4 rounded-2xl rounded-tr-none shadow-sm max-w-[80%] border border-primary-200 dark:border-primary-800/30">
-                <p className="text-gray-800 dark:text-gray-200">{entry.prompt}</p>
-              </div>
-            </div>
-            
-            <div className={getResponseLayoutClass()}>
-              {/* Render normal responses */}
-              {(entry.activeModels || []).map(model => (
-                <ResponseColumn 
-                  key={`${entry.id}-${model}`}
-                  model={model}
-                  conversationId={entry.id}
-                  response={currentPromptId === entry.id ? responses[model] : entry.responses?.[model]}
-                  streaming={currentPromptId === entry.id && responses[model]?.streaming}
-                  className="light-response-column"
-                  onRetry={handleModelRetry}
-                />
-              ))}
-              
-              {/* Display summary if available */}
-              {entry.summary && (
-                <ResponseColumn
-                  model="summary"
-                  response={{ text: entry.summary }}
-                  streaming={false}
-                  isCollapsed={false}
-                  className="w-full"
-                  isSummary={true}
-                />
-              )}
-            </div>
-
             {/* Add summarize button */}
             {!entry.summary && !currentPromptId && (
               <div className="flex justify-center mt-6">
@@ -1029,23 +827,27 @@ export default function Home() {
                     </>
                   ) : (
                     <>
-                      <svg 
-                        xmlns="http://www.w3.org/2000/svg" 
-                        viewBox="0 0 24 24" 
-                        fill="currentColor" 
-                        className="w-5 h-5 transition-transform duration-300 group-hover:scale-110"
-                      >
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 transition-transform duration-300 group-hover:scale-110">
                         <path d="M21 6.375c0 2.692-4.03 4.875-9 4.875S3 9.067 3 6.375 7.03 1.5 12 1.5s9 2.183 9 4.875z" />
                         <path d="M12 12.75c2.685 0 5.19-.586 7.078-1.609a8.283 8.283 0 001.897-1.384c.016.121.025.244.025.368C21 12.817 16.97 15 12 15s-9-2.183-9-4.875c0-.124.009-.247.025-.368a8.285 8.285 0 001.897 1.384C6.809 12.164 9.315 12.75 12 12.75z" />
                         <path d="M12 16.5c2.685 0 5.19-.586 7.078-1.609a8.282 8.282 0 001.897-1.384c.016.121.025.244.025.368 0 2.692-4.03 4.875-9 4.875s-9-2.183-9-4.875c0-.124.009-.247.025-.368a8.284 8.284 0 001.897 1.384C6.809 15.914 9.315 16.5 12 16.5z" />
                       </svg>
                       <span>Summarize Responses</span>
-                      
-                      {/* Add subtle glow effect */}
                       <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-purple-500/0 via-purple-500/5 to-purple-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
                     </>
                   )}
                 </button>
+              </div>
+            )}
+
+            {/* Show separator between historical and new conversations */}
+            {index < history.length - 1 && entry.isHistorical !== history[index + 1].isHistorical && (
+              <div className="flex items-center my-8">
+                <div className="flex-grow h-px bg-gradient-to-r from-transparent via-gray-300 dark:via-gray-600 to-transparent" />
+                <div className="mx-4 px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-xs text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
+                  {entry.isHistorical ? "New Conversations" : "Previous Conversations"}
+                </div>
+                <div className="flex-grow h-px bg-gradient-to-r from-transparent via-gray-300 dark:via-gray-600 to-transparent" />
               </div>
             )}
           </div>

@@ -75,8 +75,13 @@ export default function SplitPanelLayout({ leftContent, rightContent }) {
 
       {/* Right Panel (Side Panel Content) */}
       <div
-        className="overflow-auto h-full scrollbar-thin"
-        style={{ width: `${100 - splitPosition}%` }}
+        className="overflow-auto h-full scrollbar-thin border-l border-gray-700/50"
+        style={{ 
+          width: `${100 - splitPosition}%`,
+          backgroundColor: 'rgba(17, 17, 20, 0.7)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)'
+        }}
       >
         {rightContent}
       </div>
