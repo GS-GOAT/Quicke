@@ -19,7 +19,7 @@ export const ERROR_TYPES = {
 
 // Timeout settings
 export const TIMEOUT_SETTINGS = {
-  INITIAL_RESPONSE: 30000,    // 30 seconds for initial response
+  INITIAL_RESPONSE: 59000,    // 59 seconds for initial response
   CHUNK_INTERVAL: 10000      // 10 seconds between chunks
 };
 
