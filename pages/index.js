@@ -42,6 +42,7 @@ export default function Home() {
   const universeRef = useRef(null);
   const starfieldRef = useRef(null);
   const [contextEnabled, setContextEnabled] = useState(true);
+  const [isCreatingThread, setIsCreatingThread] = useState(false);
 
   const [predefinedSuggestions] = useState([
     "Explain quantum computing in simple terms",
@@ -323,54 +324,70 @@ export default function Home() {
   };
 
   const handleSubmit = async (contextData) => {
-    // Prevent multiple submissions in quick succession
-    if (loading) return;
-    
-    // If user is not logged in, redirect to signin page
+    if (loading || isCreatingThread) return;
+
     if (!session) {
       router.push('/auth/signin');
       return;
     }
-    
-    setLoading(true);
-    
-    if (isProcessing && eventSourceRef.current) {
-      // If already processing, handle it as a stop request
-      handleStopStreaming();
-      setLoading(false);
-      return;
-    }
-    
-    // Tracking that we're processing a response
-    setIsProcessing(true);
-    
-    // Extract the prompt text and file information from the context data
+
     const promptText = contextData.prompt || contextData.text;
-    
-    // Support both legacy single fileId and new multiple fileIds
-    const firstFileId = contextData.fileId || (contextData.fileIds && contextData.fileIds[0]) || null;
-    const fileIds = contextData.fileIds || (contextData.fileId ? [contextData.fileId] : []);
-    
-    // Ensure the prompt isn't empty before proceeding
     if (!promptText || !promptText.trim()) {
       setLoading(false);
       return;
     }
-    
+
+    setIsProcessing(true);
+    setLoading(true);
     setHasInteracted(true);
-    
     if (starfieldRef.current) {
       starfieldRef.current.stopAnimation();
     }
-    
-    // Generate a unique ID for this conversation
+
+    let currentThreadId = activeThreadId;
+    let newThreadJustCreated = false;
+
+    // Create Thread if it's a new one
+    if (!currentThreadId) {
+      setIsCreatingThread(true);
+      try {
+        const tentativeTitle = promptText.split(' ').slice(0, 10).join(' ') + (promptText.split(' ').length > 10 ? '...' : '');
+        
+        const threadRes = await fetch('/api/threads/manage', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: tentativeTitle })
+        });
+
+        if (!threadRes.ok) {
+          const errorData = await threadRes.json();
+          throw new Error(errorData.error || 'Failed to create new thread');
+        }
+
+        const newThread = await threadRes.json();
+        currentThreadId = newThread.id;
+        setActiveThreadId(newThread.id);
+        fetchThreads();
+        newThreadJustCreated = true;
+      } catch (err) {
+        console.error('Error creating thread:', err);
+        setError(`Failed to start a new chat: ${err.message}`);
+        setLoading(false);
+        setIsProcessing(false);
+        setIsCreatingThread(false);
+        return;
+      } finally {
+        setIsCreatingThread(false);
+      }
+    }
+
+    // Continue with conversation setup
     const conversationId = `conv-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     setCurrentPromptId(conversationId);
-    
-    // Create tracking object for completed responses
-    const completedResponses = {};
-    
-    // Initialize response objects for each selected model
+
+    const firstFileId = contextData.fileId || (contextData.fileIds && contextData.fileIds[0]) || null;
+    const fileIds = contextData.fileIds || (contextData.fileId ? [contextData.fileId] : []);
+
     const initialResponses = {};
     selectedModels.forEach(model => {
       initialResponses[model] = {
@@ -380,34 +397,35 @@ export default function Home() {
         streaming: true
       };
     });
-    
-    setHistory(prev => [...prev, { 
+
+    // Update history with the new conversation
+    setHistory(prev => [...prev, {
       id: conversationId,
       prompt: promptText,
       responses: initialResponses,
       activeModels: [...selectedModels],
       timestamp: new Date(),
       isHistorical: false,
-      fileId: firstFileId, // Keep backward compatibility
-      fileIds: fileIds, // Add the array of all file IDs
+      fileId: firstFileId,
+      fileIds: fileIds,
       fileName: contextData?.fileName || null,
-      fileNames: contextData?.fileNames || []
+      fileNames: contextData?.fileNames || [],
+      threadId: currentThreadId
     }]);
-    
+
     setPrompt('');
     setResponses(initialResponses);
 
-    // Construct query parameters with conversation ID
+    // Set up EventSource with thread ID
     const queryParams = new URLSearchParams({
       prompt: promptText,
       models: selectedModels.join(','),
-      fileId: firstFileId || '', // Keep for backward compatibility
+      fileId: firstFileId || '',
       conversationId,
-      threadId: activeThreadId || '',
+      threadId: currentThreadId,
       useContext: contextEnabled.toString()
     });
 
-    // Add all fileIds as separate parameters
     if (fileIds && fileIds.length > 0) {
       queryParams.append('fileIds', fileIds.join(','));
     }
@@ -415,104 +433,122 @@ export default function Home() {
     const newEventSource = new EventSource(`/api/stream?${queryParams.toString()}`);
     eventSourceRef.current = newEventSource;
 
+    // Track final responses for saving
+    const finalModelTextsToSave = {};
+
     newEventSource.onmessage = async (event) => {
       const data = JSON.parse(event.data);
-      
+
       if (data.model) {
         const update = {
           text: data.text || '',
           error: data.error || null,
           loading: data.loading !== false,
-          streaming: data.streaming !== false
+          streaming: data.streaming !== false,
+          done: data.done === true
         };
-        
-        completedResponses[data.model] = update;
+
+        if (update.done && !update.error) {
+          finalModelTextsToSave[data.model] = { text: update.text, timestamp: Date.now() };
+        }
 
         setResponses(prev => ({
           ...prev,
           [data.model]: update
         }));
-        
-        // Only update the current conversation's responses
-        setHistory(prev => {
-          const updated = [...prev];
-          const currentEntry = updated.find(entry => entry.id === conversationId);
-          if (currentEntry) {
-            currentEntry.responses[data.model] = update;
+
+        setHistory(prevHist => {
+          const updatedHist = [...prevHist];
+          const currentEntryIndex = updatedHist.findIndex(entry => entry.id === conversationId);
+          if (currentEntryIndex !== -1) {
+            if (!updatedHist[currentEntryIndex].responses[data.model]) {
+              updatedHist[currentEntryIndex].responses[data.model] = {};
+            }
+            updatedHist[currentEntryIndex].responses[data.model] = {
+              ...updatedHist[currentEntryIndex].responses[data.model],
+              ...update
+            };
           }
-          return updated;
+          return updatedHist;
         });
       }
-      
-      // Handle final completion after all models are done
-      if (data.allComplete) {
-        // Reduced logging
-        
-        const validResponses = Object.entries(completedResponses)
-          .filter(([_, response]) => {
-            const text = response?.text?.trim() || '';
-            return !response.error && 
-                   text !== '' && 
-                   !text.includes('Waiting for prompt');
-          });
-        
-        try {
-          const validResponsesData = validResponses.reduce((acc, [model, response]) => {
-            acc[model] = { 
-              text: response.text,
-              timestamp: Date.now()
-            };
-            return acc;
-          }, {});
 
-          if (Object.keys(validResponsesData).length > 0) {
+      if (data.allComplete) {
+        newEventSource.close();
+        eventSourceRef.current = null;
+        setLoading(false);
+        setIsProcessing(false);
+        setCurrentPromptId(null);
+
+        // Save conversation with thread ID
+        if (Object.keys(finalModelTextsToSave).length > 0) {
+          try {
             const saveResponse = await fetch('/api/conversations/save', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 id: conversationId,
                 prompt: promptText,
-                responses: validResponsesData,
-                threadId: activeThreadId,
-                fileId: firstFileId, // Keep for backward compatibility
-                fileIds: fileIds // Add all file IDs
+                responses: finalModelTextsToSave,
+                threadId: currentThreadId,
+                fileId: firstFileId,
+                fileIds: fileIds
               }),
             });
 
             if (!saveResponse.ok) {
               throw new Error(`Failed to save conversation: ${saveResponse.statusText}`);
             }
-            
-            const saveData = await saveResponse.json();
-            
-            if (!activeThreadId && saveData.threadId) {
-              setActiveThreadId(saveData.threadId);
-              fetchThreads();
-            }
+          } catch (error) {
+            console.error('Error saving conversation:', error);
           }
-        } catch (error) {
-          console.error('Error saving conversation:', error);
-        } finally {
-          // Always ensure states are reset, even if there's an error saving responses
-          newEventSource.close();
-          eventSourceRef.current = null;
-          setLoading(false); // Reset loading state
-          setIsProcessing(false); // Reset processing state
-          setCurrentPromptId(null);
         }
       }
     };
 
-    // Handle errors
     newEventSource.onerror = (error) => {
       console.error('EventSource error:', error);
       setLoading(false);
-      setIsProcessing(false); // Clear processing flag even on error
-      newEventSource.close();
+      setIsProcessing(false);
+      if (newEventSource) newEventSource.close();
       eventSourceRef.current = null;
+
+      setResponses(prev => {
+        const erroredResponses = {};
+        selectedModels.forEach(modelId => {
+          erroredResponses[modelId] = {
+            text: prev[modelId]?.text || '',
+            error: 'Connection error with the server.',
+            loading: false,
+            streaming: false,
+            done: true
+          };
+        });
+        return erroredResponses;
+      });
+
+      setHistory(prevHist => {
+        const updatedHist = [...prevHist];
+        const currentEntryIndex = updatedHist.findIndex(entry => entry.id === conversationId);
+        if (currentEntryIndex !== -1) {
+          selectedModels.forEach(modelId => {
+            if (!updatedHist[currentEntryIndex].responses[modelId]) {
+              updatedHist[currentEntryIndex].responses[modelId] = {};
+            }
+            updatedHist[currentEntryIndex].responses[modelId] = {
+              ...updatedHist[currentEntryIndex].responses[modelId],
+              text: updatedHist[currentEntryIndex].responses[modelId]?.text || '',
+              error: 'Connection error with the server.',
+              loading: false,
+              streaming: false,
+              done: true
+            };
+          });
+        }
+        return updatedHist;
+      });
     };
 
-    // after setting the new history item
     setTimeout(() => {
       const mainContent = document.querySelector('main');
       if (mainContent) {
