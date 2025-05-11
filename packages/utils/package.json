@@ -1,0 +1,13 @@
+{
+  "name": "@quicke/utils",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.js",
+  "dependencies": {
+    "sharp": "^0.33.5",
+    "pdf-parse": "^1.1.1",
+    "adm-zip": "^0.5.16",
+    "xml2js": "^0.6.2",
+    "pdfjs-dist": "^2.16.105"
+  }
+} 

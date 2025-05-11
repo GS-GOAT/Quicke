@@ -1,0 +1,42 @@
+# Quicke/.dockerignore
+
+# Node modules
+node_modules
+apps/*/node_modules
+apps/node_modules
+packages/*/node_modules
+
+# Next.js build artifacts (for web app, not directly for worker but good to have)
+apps/web/.next
+apps/web/out
+.next
+
+# Logs
+*.log
+logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Docker
+Dockerfile # If the Dockerfile itself is in the root and you don't want it copied if context is a subdir
+docker-compose.yml
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# IDE/Editor specific
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test files
+coverage/

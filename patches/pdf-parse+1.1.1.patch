@@ -1,0 +1,20 @@
+diff --git a/node_modules/pdf-parse/index.js b/node_modules/pdf-parse/index.js
+index e9fc367..064dc4b 100644
+--- a/node_modules/pdf-parse/index.js
++++ b/node_modules/pdf-parse/index.js
+@@ -11,7 +11,7 @@ let isDebugMode = !module.parent;
+ //for testing purpose
+ if (isDebugMode) {
+ 
+-    let PDF_FILE = './test/data/05-versions-space.pdf';
++/*    let PDF_FILE = './test/data/05-versions-space.pdf';
+     let dataBuffer = Fs.readFileSync(PDF_FILE);
+     Pdf(dataBuffer).then(function(data) {
+         Fs.writeFileSync(`${PDF_FILE}.txt`, data.text, {
+@@ -22,5 +22,5 @@ if (isDebugMode) {
+     }).catch(function(err) {
+         debugger;
+     });
+-
++*/
+ }

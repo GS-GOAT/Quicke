@@ -42,3 +42,5 @@ coverage/
 # Miscellaneous
 *.lock # Lock files (package-lock.json or yarn.lock if not used consistently)
 uploads/pdfs/
+.env.docker
+.vercel

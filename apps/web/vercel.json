@@ -1,0 +1,16 @@
+{
+  "rewrites": [
+    { 
+      "source": "/api/stream", 
+      "destination": "https://quicke-api-worker-389815666244.asia-south1.run.app/api/stream" 
+    },
+    { 
+      "source": "/api/summarize", 
+      "destination": "https://quicke-api-worker-389815666244.asia-south1.run.app/api/summarize" 
+    },
+    { 
+      "source": "/api/upload", 
+      "destination": "https://quicke-api-worker-389815666244.asia-south1.run.app/api/upload" 
+    }
+  ]
+} 
