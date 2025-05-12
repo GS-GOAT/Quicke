@@ -181,7 +181,7 @@ const geminiModels = {
     name: 'Gemini 2.0 Flash'
   },
   'gemini-pro': {
-    id: 'gemini-2.0-pro-exp-02-05',
+    id: 'gemini-2.0-pro-preview-05-06',
     name: 'Gemini 2.0 Pro'
   },
   'gemini-thinking': {

@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]";
-import contextTracker from '../../../utils/contextTracker';
+// import contextTracker from 'quicke/packages/utils/contextTracker';
 
 export default async function handler(req, res) {
   // Ensure the user is authenticated

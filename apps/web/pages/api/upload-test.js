@@ -1,5 +1,5 @@
 import { IncomingForm } from 'formidable';
-import { extractTextFromPDF } from '../../utils/pdfProcessor';
+// import { extractTextFromPDF } from '../../utils/pdfProcessor';
 import fs from 'fs';
 
 export const config = {

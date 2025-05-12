@@ -3,7 +3,8 @@ import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import bcrypt from "bcrypt";
-const prisma = require('@quicke/db');
+const { PrismaClient } = require('../../../node_modules/.prisma/client');
+const prisma = new PrismaClient();
 
 const jose = require('jose');
 const crypto = require('crypto');
