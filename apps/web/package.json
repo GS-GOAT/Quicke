@@ -7,7 +7,7 @@
     "build": "prisma generate && npm rebuild bcrypt --build-from-source && next build",
     "start": "next start",
     "lint": "next lint",
-    "prisma:generate": "prisma generate"
+    "prisma:generate": "prisma generate --schema=./prisma/schema.prisma"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.12.0",

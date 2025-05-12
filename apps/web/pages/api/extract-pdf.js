@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "./auth/[...nextauth]";
-const { PrismaClient } = require('../../node_modules/.prisma/client');
+const { PrismaClient } = require('../../prisma/generated-client');
 const prisma = new PrismaClient();
 
 export default async function handler(req, res) {

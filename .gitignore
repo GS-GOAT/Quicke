@@ -44,4 +44,4 @@ uploads/pdfs/
 .env.docker
 .vercel
 
-apps/web/prisma-client-generated/
+apps/web/prisma/generated-client

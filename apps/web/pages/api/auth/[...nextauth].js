@@ -3,7 +3,7 @@ import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import bcrypt from "bcrypt";
-const { PrismaClient } = require('../../../node_modules/.prisma/client');
+const { PrismaClient } = require('../../../prisma/generated-client');
 const prisma = new PrismaClient();
 
 const jose = require('jose');
