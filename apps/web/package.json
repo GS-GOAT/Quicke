@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "npm rebuild bcrypt --build-from-source && next build",
+    "build": "prisma generate && npm rebuild bcrypt --build-from-source && next build",
     "start": "next start",
     "lint": "next lint",
     "prisma:generate": "prisma generate"
@@ -41,12 +41,13 @@
     "remark-parse": "^10.0.2"
   },
   "devDependencies": {
-    "prisma": "^6.7.0",
     "autoprefixer": "^10.4.20",
+    "copy-webpack-plugin": "^13.0.0",
     "eslint": "^8.56.0",
     "eslint-config-next": "^14.0.4",
     "next": "^14.2.28",
     "postcss": "^8.5.3",
+    "prisma": "^6.7.0",
     "tailwindcss": "^3.4.17"
   }
 }

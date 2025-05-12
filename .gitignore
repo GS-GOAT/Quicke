@@ -12,7 +12,6 @@ dist/
 .env.development.local
 .env.test.local
 .env.production.local
-
 # Logs
 logs/
 *.log
@@ -44,3 +43,5 @@ coverage/
 uploads/pdfs/
 .env.docker
 .vercel
+
+apps/web/prisma-client-generated/
