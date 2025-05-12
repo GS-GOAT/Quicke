@@ -17,6 +17,16 @@ export default function ModelSelector({ isOpen, setIsOpen, models, selectedModel
         icon: '🧠',
         badge: 'Free',
       },
+      {
+        id: 'gemini-flash-2.5',
+        name: 'Gemini 2.5 Flash',
+        provider: 'Google',
+        description: 'Latest Flash model with improved speed and capabilities',
+        context: 0,
+        color: 'from-yellow-400 to-yellow-600',
+        icon: '⚡',
+        badge: 'Free',
+      },
       { 
         id: 'gemini-flash',
         name: 'Gemini 2.0 Flash',
@@ -28,8 +38,8 @@ export default function ModelSelector({ isOpen, setIsOpen, models, selectedModel
         badge: 'Free',
       },
       {
-        id: 'gemini-pro',
-        name: 'Gemini 2.0 Pro',
+        id: 'gemini-lite',
+        name: 'Gemini Lite',
         provider: 'Google',
         description: 'Full-featured model with enhanced capabilities',
         context: 0,
@@ -237,6 +247,86 @@ export default function ModelSelector({ isOpen, setIsOpen, models, selectedModel
           badge: 'Free',
           color: 'from-rose-400 to-rose-600',
           icon: '⚡'
+        },
+        {
+          id: 'deepseek/deepseek-prover-v2:free',
+          name: 'DeepSeek Prover V2',
+          provider: 'OpenRouter',
+          description: 'Advanced mathematical and logical proof verification model',
+          context: '32K',
+          badge: 'Free',
+          color: 'from-blue-400 to-blue-600',
+          icon: '🔍'
+        },
+        {
+          id: 'qwen/qwen3-30b-a3b:free',
+          name: 'Qwen3 30B A3B',
+          provider: 'OpenRouter',
+          description: 'Advanced 30B parameter model with enhanced capabilities',
+          context: '32K',
+          badge: 'Free',
+          color: 'from-green-400 to-green-600',
+          icon: '🌟'
+        },
+        {
+          id: 'qwen/qwen3-235b-a22b:free',
+          name: 'Qwen3 235B A22B',
+          provider: 'OpenRouter',
+          description: 'Ultra-large 235B parameter model for complex tasks',
+          context: '32K',
+          badge: 'Free',
+          color: 'from-purple-400 to-purple-600',
+          icon: '🚀'
+        },
+        {
+          id: 'microsoft/mai-ds-r1:free',
+          name: 'Microsoft MAI DS R1',
+          provider: 'OpenRouter',
+          description: 'Specialized data science and analysis model',
+          context: '32K',
+          badge: 'Free',
+          color: 'from-blue-500 to-blue-700',
+          icon: '📊'
+        },
+        {
+          id: 'tngtech/deepseek-r1t-chimera:free',
+          name: 'TNG DeepSeek R1T Chimera',
+          provider: 'OpenRouter',
+          description: 'Hybrid model combining multiple specialized capabilities',
+          context: '32K',
+          badge: 'Free',
+          color: 'from-indigo-400 to-indigo-600',
+          icon: '🐉'
+        },
+        {
+          id: 'qwen/qwen3-0.6b-04-28:free',
+          name: 'Qwen3 0.6B',
+          provider: 'OpenRouter',
+          description: 'Efficient compact model optimized for quick responses',
+          context: '32K',
+          badge: 'Free',
+          color: 'from-cyan-400 to-cyan-600',
+          icon: '⚡'
+        },
+        {
+          id: 'microsoft/phi-4-reasoning:free',
+          name: 'Phi 4 Reasoning',
+          provider: 'OpenRouter',
+          description: 'Advanced reasoning and problem-solving model',
+          context: '32K',
+          badge: 'Free',
+          color: 'from-violet-400 to-violet-600',
+          icon: '🧠'
+        },
+        {
+          id: 'microsoft/phi-4-reasoning-plus:free',
+          name: 'Phi 4 Reasoning Plus',
+          provider: 'OpenRouter',
+          description: 'Enhanced version of Phi 4 with improved reasoning capabilities',
+          context: '32K',
+          badge: 'Free',
+          color: 'from-rose-400 to-rose-600',
+          icon: '🎯'
         }
     ],
     OpenAI: [

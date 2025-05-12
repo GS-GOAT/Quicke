@@ -42,7 +42,8 @@ const providerMap = {
   'gpt-4o-mini-or': 'openrouter',
   // Google
   'gemini-flash': 'google',
-  'gemini-pro': 'google',
+  'gemini-flash-2.5': 'google',
+  'gemini-lite': 'google',
   'gemini-thinking': 'google',
   'gemini-2.5-pro': 'google',
   // Official DeepSeek models
@@ -172,6 +173,38 @@ const openRouterModels = {
   'deepseek/deepseek-r1-zero:free': {
     id: 'deepseek/deepseek-r1-zero:free',
     name: 'DeepSeek R1 Zero'
+  },
+  'deepseek/deepseek-prover-v2:free': {
+    id: 'deepseek/deepseek-prover-v2:free',
+    name: 'DeepSeek Prover V2'
+  },
+  'qwen/qwen3-30b-a3b:free': {
+    id: 'qwen/qwen3-30b-a3b:free',
+    name: 'Qwen3 30B A3B'
+  },
+  'qwen/qwen3-235b-a22b:free': {
+    id: 'qwen/qwen3-235b-a22b:free',
+    name: 'Qwen3 235B A22B'
+  },
+  'microsoft/mai-ds-r1:free': {
+    id: 'microsoft/mai-ds-r1:free',
+    name: 'Microsoft MAI DS R1'
+  },
+  'tngtech/deepseek-r1t-chimera:free': {
+    id: 'tngtech/deepseek-r1t-chimera:free',
+    name: 'TNG DeepSeek R1T Chimera'
+  },
+  'qwen/qwen3-0.6b-04-28:free': {
+    id: 'qwen/qwen3-0.6b-04-28:free',
+    name: 'Qwen3 0.6B'
+  },
+  'microsoft/phi-4-reasoning:free': {
+    id: 'microsoft/phi-4-reasoning:free',
+    name: 'Phi 4 Reasoning'
+  },
+  'microsoft/phi-4-reasoning-plus:free': {
+    id: 'microsoft/phi-4-reasoning-plus:free',
+    name: 'Phi 4 Reasoning Plus'
   }
 };
 
@@ -180,8 +213,12 @@ const geminiModels = {
     id: 'gemini-2.0-flash',
     name: 'Gemini 2.0 Flash'
   },
-  'gemini-pro': {
-    id: 'gemini-2.0-pro-preview-05-06',
+  'gemini-flash-2.5': {
+    id: 'gemini-2.5-flash-preview-04-17',
+    name: 'Gemini 2.5 Flash'
+  },
+  'gemini-lite': {
+    id: 'gemini-2.0-flash-lite',
     name: 'Gemini 2.0 Pro'
   },
   'gemini-thinking': {
@@ -189,7 +226,7 @@ const geminiModels = {
     name: 'Gemini 2.0 Flash Thinking'
   },
   'gemini-2.5-pro': {
-    id: 'gemini-2.5-pro-preview-05-06',
+    id: 'gemini-2.5-pro-exp-03-25',
     name: 'Gemini 2.5 Pro'
   }
 };
