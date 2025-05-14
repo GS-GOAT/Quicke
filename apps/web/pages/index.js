@@ -18,7 +18,7 @@ export default function Home() {
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState([]);
-  const [selectedModels, setSelectedModels] = useState(['gemini-flash-2.5','deepseek-v3-0324']);
+  const [selectedModels, setSelectedModels] = useLocalStorage('selectedModels', ['gemini-flash-2.5','deepseek-v3-0324']);
   const [error, setError] = useState(null);
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [showApiKeyManager, setShowApiKeyManager] = useState(false);

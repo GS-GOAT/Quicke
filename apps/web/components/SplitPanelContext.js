@@ -5,9 +5,8 @@ const SplitPanelContext = createContext();
 
 export const useSplitPanel = () => useContext(SplitPanelContext);
 
-export const SplitPanelProvider = ({ children }) => {
-  const [sidePanelContent, setSidePanelContent] = useState(null);
-  const [splitPosition, setSplitPosition] = useLocalStorage('splitPosition', 70); // Default 70% main panel
+export const SplitPanelProvider = ({ children }) => {  const [sidePanelContent, setSidePanelContent] = useState(null);
+  const [splitPosition, setSplitPosition] = useLocalStorage('splitPosition', 50); // Default 50-50 split
 
   const openSidePanel = useCallback((content) => {
     // Check if the same panel content is already open, if so, close it
