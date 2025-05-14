@@ -10,6 +10,7 @@ import remarkGfm from 'remark-gfm';
 import React from 'react';
 import { useSplitPanel } from './SplitPanelContext';
 import { TableWrapper, TableRow, TableCell, MarkdownComponents } from './MarkdownComponents';
+import SkeletonLoader from './SkeletonLoader';
 
 // Model display names mapping
 const modelDisplayNames = {
@@ -764,24 +765,30 @@ export default function ResponseColumn({
         }`}
         style={{ 
           padding: isCollapsed ? '0' : '1.5rem',
-          minHeight: isCollapsed ? "0" : "200px", 
+          // Adjust minHeight based on whether skeleton is shown
+          minHeight: isCollapsed ? "0" : (
+            (response?.loading === true && !displayedText && !response?.error) ? "140px" : "auto" // Or "200px" if that's preferred when text is present
+          ), 
           maxHeight: "600px",
           pointerEvents: isCollapsed ? 'none' : 'auto',
           transform: `scale(${isCollapsed ? '0.95' : '1'})`,
           transformOrigin: 'top'
         }}
       >
-        {/* Content rendering with increased text size */}
-        {hasText && (
+        {/* Conditional Skeleton Loader */}
+        {(response?.loading === true && !displayedText && !response?.error) ? (
+          <SkeletonLoader />
+        ) : (displayedText || response?.error) ? ( // Only render markdown if there's text or an error
           <div className="prose prose-lg prose-invert max-w-none">
             <ReactMarkdown {...markdownConfig}>
-              {processMathInText(displayedText || response.text)}
+              {processMathInText(displayedText || (response?.error ? `Error: ${response.error}` : response?.text || ''))}
             </ReactMarkdown>
-            {isActive && (
+            {/* Ensure isActive is defined and used correctly from your original logic */}
+            {(response?.loading || (streaming && !response?.done)) && !response?.error && (
               <span className="typing-cursor text-lg">|</span>
             )}
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

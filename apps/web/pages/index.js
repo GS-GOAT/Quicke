@@ -34,7 +34,7 @@ export default function Home() {
   const [visibleSuggestions, setVisibleSuggestions] = useState([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
-  const [responseLayout, setResponseLayout] = useLocalStorage('responseLayout', 'grid');
+  const [responseLayout, setResponseLayout] = useLocalStorage('responseLayout', 'stack');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [threads, setThreads] = useState([]);
   const [activeThreadId, setActiveThreadId] = useState(null);
