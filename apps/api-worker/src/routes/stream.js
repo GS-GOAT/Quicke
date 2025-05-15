@@ -10,7 +10,6 @@ const {
   streamUtils, 
   errorService, 
   handleUnifiedModelStream, 
-  contextTracker, 
   getConversationContext,
   formatMessagesWithMedia
 } = require('@quicke/utils');
@@ -70,6 +69,15 @@ const providerMap = {
   'deepseek/deepseek-r1-zero:free': 'openrouter',
   'meta-llama/llama-3.2-11b-vision-instruct:free': 'openrouter',
   'meta-llama/llama-3.1-8b-instruct:free': 'openrouter',
+  // New OpenRouter models
+  'deepseek/deepseek-prover-v2:free': 'openrouter',
+  'qwen/qwen3-30b-a3b:free': 'openrouter',
+  'qwen/qwen3-235b-a22b:free': 'openrouter',
+  'microsoft/mai-ds-r1:free': 'openrouter', 
+  'tngtech/deepseek-r1t-chimera:free': 'openrouter',
+  'qwen/qwen3-0.6b-04-28:free': 'openrouter',
+  'microsoft/phi-4-reasoning:free': 'openrouter',
+  'microsoft/phi-4-reasoning-plus:free': 'openrouter',
   // Anthropic
   'claude-3-7': 'anthropic',
   'claude-3-5': 'anthropic',
@@ -796,8 +804,88 @@ Format your response as a clear, concise analysis.`;
           streaming: false
         });
 
-        // Get formatted messages for this model
-        const formattedMessages = formatMessagesWithMedia(prompt, [], modelId);
+        // Retrieve file data if fileId or fileIds are provided
+        let fileDataArray = [];
+        if (fileId || (fileIds && fileIds.length > 0)) {
+          try {
+            const fileIdsToFetch = fileIds ? fileIds.split(',') : (fileId ? [fileId] : []);
+            
+            if (fileIdsToFetch.length > 0) {
+              const files = await prisma.uploadedFile.findMany({
+                where: {
+                  id: { in: fileIdsToFetch },
+                  userId
+                },
+                select: {
+                  id: true,
+                  fileName: true,
+                  fileType: true,
+                  content: true,
+                  documentType: true
+                }
+              });
+              
+              fileDataArray = files.map(file => {
+                const isImage = file.fileType.startsWith('image/');
+                const isPdf = file.fileType === 'application/pdf';
+                const isText = file.fileType === 'text/plain' || file.fileType === 'text/markdown';
+                const isPpt = file.fileType.includes('presentation');
+                
+                return {
+                  id: file.id,
+                  fileName: file.fileName,
+                  fileType: file.fileType,
+                  content: file.content,
+                  isImage,
+                  isPdf,
+                  isText,
+                  isPpt
+                };
+              });
+              
+              console.log(`Retrieved ${fileDataArray.length} files for prompt`);
+            }
+          } catch (fileError) {
+            console.error('Error retrieving file data:', fileError);
+          }
+        }
+
+        // Get formatted messages for this model with file data
+        const formattedMessages = formatMessagesWithMedia(prompt, fileDataArray, modelId);
+
+        // Get conversation context if enabled
+        if (useContext === 'true' && (threadId || conversationId)) {
+          try {
+            console.log(`[${modelId}] Retrieving conversation context for ${threadId || conversationId}`);
+            
+            // Get previous conversation context
+            const contextMessages = await getConversationContext(prisma, conversationId, threadId);
+            
+            if (contextMessages && contextMessages.length > 0) {
+              console.log(`[${modelId}] Retrieved ${contextMessages.length} context messages`);
+              
+              // For Gemini models, we need special handling because of their unique message format
+              if (modelId && modelId.startsWith('gemini')) {
+                // First message is already in the correct format with the current prompt
+                const currentPromptMessage = formattedMessages[0];
+                
+                // Convert context messages to Gemini format and add them
+                const geminiContextMessages = contextMessages.map(msg => ({
+                  role: msg.role === 'assistant' ? 'model' : 'user',
+                  parts: [{ text: msg.content }]
+                }));
+                
+                // Replace formatted messages with context + current message
+                formattedMessages.splice(0, formattedMessages.length, ...geminiContextMessages, currentPromptMessage);
+              } else {
+                // For other models (OpenAI, Anthropic, etc.), prepend context to the formatted messages
+                formattedMessages.unshift(...contextMessages);
+              }
+            }
+          } catch (contextError) {
+            console.error(`[${modelId}] Error retrieving context:`, contextError);
+          }
+        }
 
         // Process based on model type
         if (openAIModels[modelId]) {

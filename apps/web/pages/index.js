@@ -926,8 +926,7 @@ export default function Home() {
       
       // Create a new EventSource
       const newEventSource = new EventSource(
-        `/api
-        ?prompt=${encodeURIComponent(conversation.prompt)}&models=${encodeURIComponent(modelId)}`
+        `/api/stream?prompt=${encodeURIComponent(conversation.prompt)}&models=${encodeURIComponent(modelId)}`
       );
       
       newEventSource.onmessage = (event) => {
@@ -1118,7 +1117,7 @@ export default function Home() {
 
   // Function to delete the oldest thread and its conversations
   const deleteOldestThread = async () => {
-    if (!session) return;
+    if (!session) return { success: false };
     try {
       const response = await fetch(`/api/threads/delete-oldest`, {
         method: 'DELETE'
@@ -1126,6 +1125,9 @@ export default function Home() {
       if (response.ok) {
         // Refetch threads after deletion
         fetchThreads();
+        return { success: true };
+      } else {
+        return { success: false };
       }
     } catch (error) {
       console.error('Error deleting oldest thread:', error);
@@ -1179,17 +1181,33 @@ export default function Home() {
   const handleNewThread = async () => {
     // If we already have 10 threads, delete the oldest one first
     if (threads.length >= 10) {
-      const deleteResult = await deleteOldestThread();
-      if (!deleteResult.success) {
-        console.error('Failed to delete oldest thread before creating a new one');
-        // Continue anyway
+      try {
+        const deleteResult = await deleteOldestThread();
+        if (!deleteResult || !deleteResult.success) {
+          console.error('Failed to delete oldest thread before creating a new one');
+          // Continue anyway
+        }
+      } catch (error) {
+        console.error('Error during thread deletion:', error);
+        // Continue with new thread creation anyway
       }
     }
     
-    // Clear the current conversation
+    // Reset the conversation state
     setHistory([]);
     setActiveThreadId(null);
     setSidebarOpen(false);
+    setHasInteracted(false);
+    
+    // Restart the animation if it was stopped
+    if (starfieldRef.current) {
+      starfieldRef.current.startAnimation();
+    }
+    
+    // Clear any responses in the current state
+    setResponses({});
+    setCurrentPromptId(null);
+    setPrompt('');
     
     // Dispatch a custom event to clear any persistent file references
     window.dispatchEvent(new Event('clearFileReferences'));

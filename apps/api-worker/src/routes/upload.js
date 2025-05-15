@@ -119,8 +119,8 @@ router.post('/', async (req, res) => {
               fileSize: file.size,
               filePath: null,
               content: content || '',
-              threadId: fields.threadId || null,
-              conversationId: fields.conversationId || null,
+              threadId: fields.threadId ? (Array.isArray(fields.threadId) ? fields.threadId[0] : fields.threadId) : null,
+              conversationId: fields.conversationId ? (Array.isArray(fields.conversationId) ? fields.conversationId[0] : fields.conversationId) : null,
               documentType: fileType,
             }
           });

@@ -1,6 +1,9 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]";
-// import contextTracker from 'quicke/packages/utils/contextTracker';
+import { PrismaClient } from "../../../prisma/generated-client";
+import { getConversationContext } from "@quicke/utils";
+
+const prisma = new PrismaClient();
 
 export default async function handler(req, res) {
   // Ensure the user is authenticated
@@ -20,8 +23,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Get the context from the tracker
-    const context = contextTracker.getContext(threadId, conversationId);
+    // Get the context using the database approach from contextManager
+    const context = await getConversationContext(prisma, conversationId, threadId);
 
     // Return the context data
     return res.status(200).json({
@@ -30,9 +33,10 @@ export default async function handler(req, res) {
       key: threadId || conversationId,
       context: context.map(msg => ({
         role: msg.role,
-        content: msg.content.substring(0, 100) + (msg.content.length > 100 ? '...' : ''),
-        timestamp: new Date(msg.timestamp).toISOString(),
-        conversationId: msg.conversationId
+        content: typeof msg.content === 'string' 
+          ? msg.content.substring(0, 100) + (msg.content.length > 100 ? '...' : '')
+          : '[Complex content]',
+        model: msg.model || 'unknown'
       }))
     });
   } catch (error) {

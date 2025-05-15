@@ -320,9 +320,22 @@ export default function ResponseColumn({
   const previousResponseRef = useRef('');
   const currentConversationRef = useRef(conversationId);
   const [isExpanded, setIsExpanded] = useState(false);
-  const [elapsedTime, setElapsedTime] = useState(null);
+  
+  // Timer state and refs - use a static value to ensure it's preserved across render contexts
+  // Static value stores the latest elapsed time for this response in a memoized value that persists 
+  // even when the component is remounted (e.g., when moved to side panel)
+  const responseKey = `${model}-${conversationId}`;
+  const [elapsedTime, setElapsedTime] = useState('0.0');
   const timerRef = useRef(null);
   const startTimeRef = useRef(null);
+  
+  // Use a memo to store timer data that persists even when component rerenders or moves to side panel
+  const timerData = React.useMemo(() => ({
+    startTime: null,
+    duration: null,
+    isActive: false,
+    responseKey: `${model}-${conversationId}`
+  }), [model, conversationId]);
 
   // Handle column double click for opening side panel
   const handleColumnDoubleClick = (e) => {
@@ -330,6 +343,14 @@ export default function ResponseColumn({
     if (e.target.closest('button')) return;
     
     if (!isInSidePanel) {
+      // Before opening in side panel, ensure timer state is preserved
+      if (startTimeRef.current) {
+        timerData.startTime = startTimeRef.current;
+      }
+      if (elapsedTime && elapsedTime !== '0.0') {
+        timerData.duration = elapsedTime;
+      }
+      
       openSidePanel({
         model,
         conversationId,
@@ -431,42 +452,62 @@ export default function ResponseColumn({
     }
   }, [displayedText, streaming]);
 
-  // Timer effect
+  // TIMER IMPLEMENTATION WITH SIDE PANEL PRESERVATION
+  // Effect to initialize and update the timer
   useEffect(() => {
-    // Clear existing timer
+    // First, prioritize any saved duration from the response object
+    if (response?.duration) {
+      setElapsedTime(response.duration);
+      timerData.duration = response.duration;
+      return;
+    }
+
+    // Clean up any existing timer
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
-
-    // For historical responses, use stored duration
-    if (response?.duration) {
-      setElapsedTime(response.duration);
-      return;
-    }
-
-    // Start timer for new responses
-    if (response?.loading) {
-      startTimeRef.current = Date.now();
-      timerRef.current = setInterval(() => {
-        const elapsed = ((Date.now() - startTimeRef.current) / 1000).toFixed(1);
-        setElapsedTime(elapsed);
-      }, 100);
-    }
-
-    // Stop timer and save duration when response is complete or manually stopped
-    if (response?.done || (!response?.loading && !streaming)) {
-      const duration = ((Date.now() - (startTimeRef.current || Date.now())) / 1000).toFixed(1);
-      setElapsedTime(duration);
-      if (response && typeof response === 'object') {
-        response.duration = duration;
+    
+    // If loading starts and we're not already timing
+    if (response?.loading && !timerData.isActive) {
+      // Initialize start time if not set yet
+      if (!timerData.startTime) {
+        timerData.startTime = Date.now();
       }
+      
+      // Set timer active flag
+      timerData.isActive = true;
+      
+      // Create interval to update timer display
+      timerRef.current = setInterval(() => {
+        const elapsed = ((Date.now() - timerData.startTime) / 1000).toFixed(1);
+        setElapsedTime(elapsed);
+        timerData.duration = elapsed;
+      }, 100);
+    } 
+    // If loading stops and timer is active, finalize the timer
+    else if (!response?.loading && timerData.isActive) {
+      const finalDuration = ((Date.now() - timerData.startTime) / 1000).toFixed(1);
+      setElapsedTime(finalDuration);
+      timerData.duration = finalDuration;
+      timerData.isActive = false;
+      
+      // Store in response object
+      if (response && typeof response === 'object') {
+        response.duration = finalDuration;
+      }
+      
+      // Clean up timer
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
     }
-
+    // If we have a duration but no display value, use the stored duration
+    else if (timerData.duration && elapsedTime === '0.0') {
+      setElapsedTime(timerData.duration);
+    }
+    
     // Cleanup
     return () => {
       if (timerRef.current) {
@@ -474,16 +515,23 @@ export default function ResponseColumn({
         timerRef.current = null;
       }
     };
-  }, [response?.loading, response?.done, streaming, response?.duration]);
-
-  // Clean up timer when component unmounts
+  }, [response?.loading, response?.duration, timerData]);
+  
+  // Initial setup - set the elapsed time when component mounts
   useEffect(() => {
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    };
+    // When component mounts, if we have a duration but no display value, use it
+    if (timerData.duration && elapsedTime === '0.0') {
+      setElapsedTime(timerData.duration);
+    }
+    // If the timer should be active but isn't running, restart it
+    else if (response?.loading && timerData.startTime && !timerRef.current) {
+      timerRef.current = setInterval(() => {
+        const elapsed = ((Date.now() - timerData.startTime) / 1000).toFixed(1);
+        setElapsedTime(elapsed);
+        timerData.duration = elapsed;
+      }, 100);
+      timerData.isActive = true;
+    }
   }, []);
 
   // Timer display component
@@ -494,7 +542,7 @@ export default function ResponseColumn({
         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .27.144.518.378.651l3.5 2a.75.75 0 00.744-1.302L11 9.677V5z" clipRule="evenodd" />
       </svg>
       <span className="text-xs font-medium text-gray-300 tabular-nums">
-        {time || '—'}s
+        {time}s
       </span>
     </div>
   );
@@ -618,11 +666,34 @@ export default function ResponseColumn({
   const isLoading = response?.loading === true;
   const hasText = (displayedText && displayedText.length > 0) || 
                  (response?.text && response.text.length > 0);
+  const hasError = response?.error ? true : false;
 
   // special styling for summary
   const columnClassName = `${className} ${isSummary ? 
     'col-span-full bg-gradient-to-b from-gray-900/60 to-gray-800/40 border-t border-purple-500/20 mt-6 backdrop-blur-sm shadow-2xl rounded-2xl overflow-hidden' 
     : ''}`;
+
+  // Custom error container component
+  const ErrorContainer = ({ errorMessage }) => (
+    <div className="rounded-lg overflow-hidden backdrop-blur-sm mt-2 mb-4">
+      <div className="p-4 bg-yellow-800/20 border border-yellow-700/30 rounded-lg">
+        <div className="flex items-start">
+          <div className="flex-shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" 
+                className="w-5 h-5 text-yellow-500 mt-0.5">
+              <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+            </svg>
+          </div>
+          <div className="ml-3">
+            <h3 className="text-sm font-medium text-yellow-300">Error</h3>
+            <div className="mt-2 text-sm text-yellow-200">
+              {errorMessage}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div 
@@ -660,7 +731,7 @@ export default function ResponseColumn({
             </div>
           ) : (
             <div className="flex items-center space-x-2">
-              <div className="w-2 h-2 rounded-full bg-primary-500"></div>
+              <div className={`w-2 h-2 rounded-full ${hasError ? 'bg-yellow-500' : 'bg-primary-500'}`}></div>
               <div className="flex items-center">
                 <h3 className="text-xl font-medium text-gray-200 flex items-center gap-1.5">
                   {modelDisplayName}
@@ -671,7 +742,8 @@ export default function ResponseColumn({
                     {getDisplayProvider(providerMap[model])}
                   </span>
                 </h3>
-                {elapsedTime && renderTimer(elapsedTime)}
+                {/* Always show timer when we have a value */}
+                {(elapsedTime && elapsedTime !== '0.0') && renderTimer(elapsedTime)}
                 {isLoading && renderThinkingState()}
               </div>
             </div>
@@ -778,10 +850,12 @@ export default function ResponseColumn({
         {/* Conditional Skeleton Loader */}
         {(response?.loading === true && !displayedText && !response?.error) ? (
           <SkeletonLoader />
-        ) : (displayedText || response?.error) ? ( // Only render markdown if there's text or an error
+        ) : response?.error ? (
+          <ErrorContainer errorMessage={response.error} />
+        ) : (displayedText) ? ( // Only render markdown if there's text
           <div className="prose prose-lg prose-invert max-w-none">
             <ReactMarkdown {...markdownConfig}>
-              {processMathInText(displayedText || (response?.error ? `Error: ${response.error}` : response?.text || ''))}
+              {processMathInText(displayedText)}
             </ReactMarkdown>
             {/* Ensure isActive is defined and used correctly from your original logic */}
             {(response?.loading || (streaming && !response?.done)) && !response?.error && (
