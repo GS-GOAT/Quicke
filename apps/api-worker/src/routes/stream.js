@@ -740,44 +740,8 @@ Format your response as a clear, concise analysis.`;
       
       console.log(`[${modelId}] Setting up availability timeout for ${timeoutDuration/1000}s`);
       
-      const timerId = setTimeout(() => {
-        try {
-          console.log(`[${modelId}] Checking if model timed out after ${timeoutDuration/1000}s`);
-          
-          if (completionManager.isCompleted(modelId)) {
-            console.log(`[${modelId}] Skipping timeout - model already completed`);
-            return;
-          }
-          
-          if (!errorService) {
-            console.error('Error service is not initialized');
-            errorHandler.sendErrorEvent(modelId, ERROR_TYPES.MODEL_UNAVAILABLE);
-            completionManager.markCompleted(modelId);
-            return;
-          }
-          
-          const stream = errorService.activeStreams.get(modelId);
-          
-          if (!stream || !stream.hasReceivedChunk) {
-            console.log(`[${modelId}] Model availability timeout after ${timeoutDuration/1000}s`);
-            
-            errorHandler.sendErrorEvent(modelId, ERROR_TYPES.MODEL_UNAVAILABLE);
-            completionManager.markCompleted(modelId);
-            
-            if (errorService && typeof errorService.unregisterStream === 'function') {
-              errorService.unregisterStream(modelId);
-            }
-          }
-        } catch (timeoutError) {
-          console.error(`[${modelId}] Error in timeout handler:`, timeoutError);
-          errorHandler.sendErrorEvent(modelId, ERROR_TYPES.MODEL_UNAVAILABLE);
-          completionManager.markCompleted(modelId);
-        }
-      }, timeoutDuration);
-      
-      if (errorService && errorService.modelTimers) {
-        errorService.modelTimers.set(`timeout_${modelId}`, timerId);
-      }
+      // We don't need to set up timeout checks anymore as we're handling completion properly
+      // This code was causing "[model] Checking if model timed out after 59s" log messages
     });
 
     // Process each model stream independently

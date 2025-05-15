@@ -321,68 +321,17 @@ export default function ResponseColumn({
   const currentConversationRef = useRef(conversationId);
   const [isExpanded, setIsExpanded] = useState(false);
   
-  // Timer state and refs - use a static value to ensure it's preserved across render contexts
-  // Static value stores the latest elapsed time for this response in a memoized value that persists 
-  // even when the component is remounted (e.g., when moved to side panel)
+  // Timer state and refs
   const responseKey = `${model}-${conversationId}`;
   const [elapsedTime, setElapsedTime] = useState('0.0');
   const timerRef = useRef(null);
   const startTimeRef = useRef(null);
   
-  // Use a memo to store timer data that persists even when component rerenders or moves to side panel
-  const timerData = React.useMemo(() => ({
-    startTime: null,
-    duration: null,
-    isActive: false,
-    responseKey: `${model}-${conversationId}`
-  }), [model, conversationId]);
-
-  // Handle column double click for opening side panel
-  const handleColumnDoubleClick = (e) => {
-    // Don't trigger when clicking buttons
-    if (e.target.closest('button')) return;
-    
-    if (!isInSidePanel) {
-      // Before opening in side panel, ensure timer state is preserved
-      if (startTimeRef.current) {
-        timerData.startTime = startTimeRef.current;
-      }
-      if (elapsedTime && elapsedTime !== '0.0') {
-        timerData.duration = elapsedTime;
-      }
-      
-      openSidePanel({
-        model,
-        conversationId,
-        response,
-        streaming
-      });
-    }
-  };
-
-  // escape key handler for closing side panel
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && isInSidePanel) {
-        closeSidePanel();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isInSidePanel, closeSidePanel]);
-
-  // Get the display name for the model
-  const modelDisplayName = modelDisplayNames[model] || model;
-
-  // Clear timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (processingTimeoutRef.current) {
-        clearTimeout(processingTimeoutRef.current);
-      }
-    };
-  }, []);
+  // Global static registry to persist timer info across component instances
+  // This allows us to maintain timer state even when switching between main view and side panel
+  if (!window.timerRegistry) {
+    window.timerRegistry = new Map();
+  }
 
   // Reset state when conversation changes
   useEffect(() => {
@@ -419,7 +368,6 @@ export default function ResponseColumn({
   // Handle streaming updates only for active responses in current conversation
   useEffect(() => {
     if (!response || !streaming || currentConversationRef.current !== conversationId) {
-      setIsActive(false);
       return;
     }
 
@@ -452,86 +400,125 @@ export default function ResponseColumn({
     }
   }, [displayedText, streaming]);
 
-  // TIMER IMPLEMENTATION WITH SIDE PANEL PRESERVATION
-  // Effect to initialize and update the timer
+  // Initialize timer data from registry or create new entry
   useEffect(() => {
-    // First, prioritize any saved duration from the response object
-    if (response?.duration) {
-      setElapsedTime(response.duration);
-      timerData.duration = response.duration;
-      return;
-    }
-
-    // Clean up any existing timer
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
+    const registryKey = `timer-${model}-${conversationId}`;
+    const existingData = window.timerRegistry.get(registryKey);
     
-    // If loading starts and we're not already timing
-    if (response?.loading && !timerData.isActive) {
-      // Initialize start time if not set yet
-      if (!timerData.startTime) {
-        timerData.startTime = Date.now();
+    if (existingData) {
+      // Restore from registry
+      if (existingData.finalDuration) {
+        // Timer already completed, just show the final time
+        setElapsedTime(existingData.finalDuration);
+      } else if (existingData.startTime) {
+        // Timer is running, continue from stored start time
+        startTimeRef.current = existingData.startTime;
+        
+        // Start the timer interval
+        if (!timerRef.current && (response?.loading || streaming)) {
+          timerRef.current = setInterval(() => {
+            const elapsed = ((Date.now() - startTimeRef.current) / 1000).toFixed(1);
+            setElapsedTime(elapsed);
+          }, 100);
+        }
       }
+    } else if (response?.loading || streaming) {
+      // No existing timer data but we need to start a timer
+      startTimeRef.current = Date.now();
       
-      // Set timer active flag
-      timerData.isActive = true;
+      // Register this timer
+      window.timerRegistry.set(registryKey, {
+        startTime: startTimeRef.current,
+        finalDuration: null,
+        modelId: model,
+        conversationId
+      });
       
-      // Create interval to update timer display
+      // Start the timer interval
       timerRef.current = setInterval(() => {
-        const elapsed = ((Date.now() - timerData.startTime) / 1000).toFixed(1);
+        const elapsed = ((Date.now() - startTimeRef.current) / 1000).toFixed(1);
         setElapsedTime(elapsed);
-        timerData.duration = elapsed;
       }, 100);
-    } 
-    // If loading stops and timer is active, finalize the timer
-    else if (!response?.loading && timerData.isActive) {
-      const finalDuration = ((Date.now() - timerData.startTime) / 1000).toFixed(1);
-      setElapsedTime(finalDuration);
-      timerData.duration = finalDuration;
-      timerData.isActive = false;
-      
-      // Store in response object
-      if (response && typeof response === 'object') {
-        response.duration = finalDuration;
-      }
-      
-      // Clean up timer
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    }
-    // If we have a duration but no display value, use the stored duration
-    else if (timerData.duration && elapsedTime === '0.0') {
-      setElapsedTime(timerData.duration);
     }
     
-    // Cleanup
+    // Cleanup on unmount
     return () => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
     };
-  }, [response?.loading, response?.duration, timerData]);
+  }, [model, conversationId, response?.loading, streaming]);
   
-  // Initial setup - set the elapsed time when component mounts
+  // Handle timer completion when response is done
   useEffect(() => {
-    // When component mounts, if we have a duration but no display value, use it
-    if (timerData.duration && elapsedTime === '0.0') {
-      setElapsedTime(timerData.duration);
+    const registryKey = `timer-${model}-${conversationId}`;
+    
+    // If response is no longer loading or streaming, and we have an active timer
+    if ((!response?.loading && !streaming) && startTimeRef.current) {
+      // Calculate final duration
+      const finalDuration = ((Date.now() - startTimeRef.current) / 1000).toFixed(1);
+      
+      // Update registry with final duration
+      const existingData = window.timerRegistry.get(registryKey) || {};
+      window.timerRegistry.set(registryKey, {
+        ...existingData,
+        finalDuration
+      });
+      
+      // Update UI
+      setElapsedTime(finalDuration);
+      
+      // Stop timer
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
     }
-    // If the timer should be active but isn't running, restart it
-    else if (response?.loading && timerData.startTime && !timerRef.current) {
-      timerRef.current = setInterval(() => {
-        const elapsed = ((Date.now() - timerData.startTime) / 1000).toFixed(1);
-        setElapsedTime(elapsed);
-        timerData.duration = elapsed;
-      }, 100);
-      timerData.isActive = true;
+  }, [response?.loading, streaming, model, conversationId]);
+  
+  // Handle side panel opening - ensure timer state is preserved
+  const handleColumnDoubleClick = (e) => {
+    // Don't trigger when clicking buttons
+    if (e.target.closest('button')) return;
+    
+    if (!isInSidePanel) {
+      // Timer state is already preserved in window.timerRegistry
+      
+      // Deep clone the response to avoid sharing state
+      const responseClone = response ? { ...response } : null;
+      
+      openSidePanel({
+        model,
+        conversationId,
+        response: responseClone,
+        streaming
+      });
     }
+  };
+
+  // escape key handler for closing side panel
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && isInSidePanel) {
+        closeSidePanel();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isInSidePanel, closeSidePanel]);
+
+  // Get the display name for the model
+  const modelDisplayName = modelDisplayNames[model] || model;
+
+  // Clear timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (processingTimeoutRef.current) {
+        clearTimeout(processingTimeoutRef.current);
+      }
+    };
   }, []);
 
   // Timer display component

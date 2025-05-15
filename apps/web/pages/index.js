@@ -445,11 +445,17 @@ export default function Home() {
           error: data.error || null,
           loading: data.loading !== false,
           streaming: data.streaming !== false,
-          done: data.done === true
+          done: data.done === true,
+          duration: data.duration || null  // Include duration from the stream event
         };
 
         if (update.done && !update.error) {
-          finalModelTextsToSave[data.model] = { text: update.text, timestamp: Date.now() };
+          finalModelTextsToSave[data.model] = { 
+            text: update.text, 
+            timestamp: Date.now(),
+            streaming: false,
+            done: true
+          };
         }
 
         setResponses(prev => ({
@@ -1249,61 +1255,65 @@ export default function Home() {
             </div>
           </div>
           
-          <div className="p-4">
-            {/* New Thread Button with enhanced hover */}
-            <button
-              onClick={onNewThread}
-              className="flex items-center justify-center w-full px-3 py-2 mb-6 text-sm font-medium text-white rounded-lg shadow-lg transition-all duration-200 hover:bg-gray-700/90 hover:transform hover:scale-[1.02] active:scale-[0.98]"
-              style={{
-                backgroundColor: 'rgba(45, 45, 50, 0.7)',
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
-              }}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 mr-2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-              </svg>
-              <span>New Thread</span>
-            </button>
+          <div className="flex flex-col h-[calc(100%-60px)]">
+            <div className="p-4">
+              {/* New Thread Button with enhanced hover */}
+              <button
+                onClick={onNewThread}
+                className="flex items-center justify-center w-full px-3 py-2 mb-6 text-sm font-medium text-white rounded-lg shadow-lg transition-all duration-200 hover:bg-gray-700/90 hover:transform hover:scale-[1.02] active:scale-[0.98]"
+                style={{
+                  backgroundColor: 'rgba(45, 45, 50, 0.7)',
+                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
+                }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 mr-2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                <span>New Thread</span>
+              </button>
+            </div>
             
-            {/* Thread List with purple accent border */}
-            <div className="space-y-2">
-              {threads.length === 0 ? (
-                <div className="text-center py-8 text-gray-400" style={{ backgroundColor: 'rgba(40, 40, 45, 0.3)', borderRadius: '0.5rem' }}>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 mx-auto mb-2 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                  </svg>
-                  <p className="text-sm font-medium">No threads yet</p>
-                  <p className="text-xs mt-1">Start a new conversation</p>
-                </div>
-              ) : (
-                threads.map(thread => (
-                  <div 
-                    key={thread.id}
-                    onClick={() => onThreadSelect(thread.id)}
-                    className="transition-all duration-200 mb-2"
-                  >
-                    <div
-                      className={`p-3 rounded-lg cursor-pointer transition-all duration-150 border-l-2 ${
-                        activeThreadId === thread.id 
-                          ? 'bg-gray-700/70 border-purple-400' 
-                          : 'bg-gray-800/40 border-transparent hover:bg-gray-700/50 hover:border-gray-500'
-                      }`}
-                      style={{
-                        transition: "all 0.15s ease",
-                        transform: `scale(${activeThreadId === thread.id ? '1.02' : '1'})`,
-                        borderLeftColor: activeThreadId === thread.id 
-                          ? 'rgba(167, 139, 250, 0.8)'  // Purplish color for the left border
-                          : 'transparent',
-                      }}
-                    >
-                      <h3 className="text-sm font-medium text-gray-200 truncate">{thread.title}</h3>
-                      <p className="text-xs text-gray-400 mt-1">
-                        {new Date(thread.updatedAt).toLocaleDateString()}
-                      </p>
-                    </div>
+            {/* Thread List with purple accent border - now scrollable */}
+            <div className="px-4 pb-4 overflow-y-auto flex-1">
+              <div className="space-y-2">
+                {threads.length === 0 ? (
+                  <div className="text-center py-8 text-gray-400" style={{ backgroundColor: 'rgba(40, 40, 45, 0.3)', borderRadius: '0.5rem' }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 mx-auto mb-2 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                    <p className="text-sm font-medium">No threads yet</p>
+                    <p className="text-xs mt-1">Start a new conversation</p>
                   </div>
-                ))
-              )}
+                ) : (
+                  threads.map(thread => (
+                    <div 
+                      key={thread.id}
+                      onClick={() => onThreadSelect(thread.id)}
+                      className="transition-all duration-200 mb-2"
+                    >
+                      <div
+                        className={`p-3 rounded-lg cursor-pointer transition-all duration-150 border-l-2 ${
+                          activeThreadId === thread.id 
+                            ? 'bg-gray-700/70 border-purple-400' 
+                            : 'bg-gray-800/40 border-transparent hover:bg-gray-700/50 hover:border-gray-500'
+                        }`}
+                        style={{
+                          transition: "all 0.15s ease",
+                          transform: `scale(${activeThreadId === thread.id ? '1.02' : '1'})`,
+                          borderLeftColor: activeThreadId === thread.id 
+                            ? 'rgba(167, 139, 250, 0.8)'  // Purplish color for the left border
+                            : 'transparent',
+                        }}
+                      >
+                        <h3 className="text-sm font-medium text-gray-200 truncate">{thread.title}</h3>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {new Date(thread.updatedAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
         </div>
