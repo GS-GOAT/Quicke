@@ -1,6 +1,7 @@
 // Quicke/apps/web/pages/api/auth/[...nextauth].js
 import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import GoogleProvider from "next-auth/providers/google";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import bcrypt from "bcrypt";
 const { PrismaClient } = require('../../../prisma/generated-client');
@@ -26,6 +27,17 @@ if (!effectiveNextAuthSecret) {
 export const authOptions = {
   adapter: PrismaAdapter(prisma),
   providers: [
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      authorization: {
+        params: {
+          prompt: "consent",
+          access_type: "offline",
+          response_type: "code"
+        }
+      }
+    }),
     CredentialsProvider({
       name: "Email and Password",
       credentials: {
@@ -110,23 +122,22 @@ export const authOptions = {
   },
   // +++ END JWT BLOCK +++
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
       if (user) {
         token.id = user.id;
-        // if (user.name) token.name = user.name; 
-        // if (user.email) token.email = user.email;
+      }
+      if (account?.provider === "google") {
+        token.accessToken = account.access_token;
       }
       return token;
     },
     async session({ session, token }) {
       if (token && session.user) {
         session.user.id = token.id;
-        // if (token.name) session.user.name = token.name;
-        // if (token.email) session.user.email = token.email;
+        session.user.accessToken = token.accessToken;
       } else if (token) { // If session.user is undefined, create it
         session.user = { id: token.id };
-        // if (token.name) session.user.name = token.name;
-        // if (token.email) session.user.email = token.email;
+        session.user.accessToken = token.accessToken;
       }
       return session;
     },
