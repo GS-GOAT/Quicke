@@ -2,8 +2,11 @@ import { useState } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { Fragment } from 'react';
 
-export default function ModelSelector({ isOpen, setIsOpen, models, selectedModels, setSelectedModels }) {
+export default function ModelSelector({ isOpen, setIsOpen, models, selectedModels, setSelectedModels, isGuest = false }) {
   const [activeCategory, setActiveCategory] = useState('all');
+
+  // Define allowed models for guest mode
+  const GUEST_ALLOWED_MODELS = ['gemini-flash', 'gemini-flash-2.5'];
 
   const modelCategories = {
     Google: [
@@ -458,6 +461,10 @@ export default function ModelSelector({ isOpen, setIsOpen, models, selectedModel
     : modelCategories[activeCategory] || [];
 
   const toggleModel = (modelId) => {
+    if (isGuest && !GUEST_ALLOWED_MODELS.includes(modelId)) {
+      return;
+    }
+
     if (selectedModels.includes(modelId)) {
       setSelectedModels(selectedModels.filter(id => id !== modelId));
     } else {
@@ -522,61 +529,86 @@ export default function ModelSelector({ isOpen, setIsOpen, models, selectedModel
                     <div key={category} className="space-y-2">
                       <h3 className="text-lg font-medium text-gray-300 px-1">{category}</h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3">
-                        {modelCategories[category].map(model => (
-                          <div 
-                            key={model.id}
-                            onClick={() => toggleModel(model.id)}
-                            className={`relative group cursor-pointer border border-gray-700 rounded-lg p-2 sm:p-3 transition-all ${
-                              selectedModels.includes(model.id) 
-                                ? 'bg-primary-900/40 border-primary-700 shadow-lg shadow-primary-900/20' 
-                                : 'bg-gray-800/50 hover:bg-gray-800 hover:shadow-lg'
-                            }`}
-                          >
-                            <div className="flex items-start space-x-2 sm:space-x-3">
-                              <div className={`flex-shrink-0 w-6 h-6 sm:w-8 sm:h-8 rounded-md flex items-center justify-center bg-gradient-to-br ${model.color || 'from-gray-500 to-gray-700'}`}>
-                                <span className="text-white text-xs sm:text-sm">{model.icon || '🤖'}</span>
-                              </div>
-                              
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-start justify-between">
-                                  <h4 className="font-medium text-xs sm:text-sm text-white mb-1 truncate pr-6">{model.name}</h4>
-                                  {selectedModels.includes(model.id) && (
-                                    <div className="absolute top-2 right-2 text-primary-400">
-                                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 sm:w-4 sm:h-4">
-                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
-                                      </svg>
-                                    </div>
-                                  )}
+                        {modelCategories[category].map(model => {
+                          const isDisabled = isGuest && !GUEST_ALLOWED_MODELS.includes(model.id);
+                          const isDisabledVisual = isDisabled;
+                          const isSelected = selectedModels.includes(model.id);
+                          const isHighlighted = model.highlighted;
+                          return (
+                            <div 
+                              key={model.id}
+                              onClick={() => !isDisabledVisual && toggleModel(model.id)}
+                              className={`relative group border border-gray-700 rounded-lg p-2 sm:p-3 transition-all ${
+                                isDisabledVisual
+                                  ? 'opacity-50 cursor-not-allowed filter grayscale'
+                                  : 'cursor-pointer hover:bg-gray-800 hover:shadow-lg'
+                              } ${
+                                isSelected
+                                  ? 'bg-primary-900/40 border-primary-700 shadow-lg shadow-primary-900/20'
+                                  : !isDisabledVisual && isHighlighted
+                                    ? 'bg-gray-800/80 border-sky-700/50 shadow-md'
+                                    : !isDisabledVisual
+                                      ? 'bg-gray-800/50'
+                                      : ''
+                              }`}
+                            >
+                              <div className="flex items-start space-x-2 sm:space-x-3">
+                                <div className={`flex-shrink-0 w-6 h-6 sm:w-8 sm:h-8 rounded-md flex items-center justify-center bg-gradient-to-br ${model.color || 'from-gray-500 to-gray-700'}`}>
+                                  <span className="text-white text-xs sm:text-sm">{model.icon || '🤖'}</span>
                                 </div>
                                 
-                                <div className="flex items-center flex-wrap gap-1 sm:gap-2 mt-1">
-                                  <span className="inline-flex items-center px-1 py-0.5 rounded text-[10px] sm:text-xs font-medium bg-gray-700 text-gray-300">
-                                    {model.provider}
-                                  </span>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-start justify-between">
+                                    <h4 className="font-medium text-xs sm:text-sm text-white mb-1 truncate pr-6">{model.name}</h4>
+                                    {selectedModels.includes(model.id) && (
+                                      <div className="absolute top-2 right-2 text-primary-400">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 sm:w-4 sm:h-4">
+                                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+                                        </svg>
+                                      </div>
+                                    )}
+                                  </div>
                                   
-                                  {model.badge && (
-                                    <span className={`inline-flex items-center px-1 py-0.5 rounded text-[10px] sm:text-xs font-medium ${
-                                      model.badge === 'Free' 
-                                        ? 'bg-green-900/30 text-green-400 border border-green-800/30' 
-                                        : 'bg-purple-900/30 text-purple-400 border border-purple-800/30'
-                                    }`}>
-                                      {model.badge}
+                                  <div className="flex items-center flex-wrap gap-1 sm:gap-2 mt-1">
+                                    <span className="inline-flex items-center px-1 py-0.5 rounded text-[10px] sm:text-xs font-medium bg-gray-700 text-gray-300">
+                                      {model.provider}
                                     </span>
-                                  )}
-                                </div>
-                                
-                                {model.description && (
+                                    
+                                    {model.badge && (
+                                      <span className={`inline-flex items-center px-1 py-0.5 rounded text-[10px] sm:text-xs font-medium ${
+                                        (model.badge === 'Free' || (isGuest && GUEST_ALLOWED_MODELS.includes(model.id) && model.badge !== 'Paid'))
+                                          ? 'bg-green-900/30 text-green-400 border border-green-800/30'
+                                          : 'bg-purple-900/30 text-purple-400 border border-purple-800/30'
+                                      }`}>
+                                        {isGuest && GUEST_ALLOWED_MODELS.includes(model.id) && model.badge !== 'Paid' ? 'Free Trial' : model.badge}
+                                      </span>
+                                    )}
+                                  </div>
+                                  
                                   <div className="mt-1 sm:mt-2 text-[10px] sm:text-xs text-gray-400 line-clamp-2 sm:line-clamp-1 group-hover:text-gray-300 transition-colors">
-                                    {model.description}
                                     <div className="absolute invisible group-hover:visible z-10 w-64 p-2 mt-2 text-xs bg-gray-800 border border-gray-700 rounded-md shadow-xl text-gray-300 top-full left-0">
-                                      {model.description}
+                                      {isDisabledVisual ? (
+                                        <div className="text-center p-1">
+                                          <p className="text-sm text-white font-medium">Login to use all the models</p>
+                                          {/* <p className="text-xs text-gray-300 mt-1">Available for registered users</p> */}
+                                        </div>
+                                      ) : (
+                                        model.description
+                                      )}
                                     </div>
                                   </div>
-                                )}
+                                </div>
                               </div>
+                              {isDisabledVisual && (
+                                <div className="absolute top-1.5 right-1.5 p-0.5 bg-gray-700/80 rounded-full shadow">
+                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3 text-yellow-300">
+                                    <path fillRule="evenodd" d="M8 1a3.5 3.5 0 00-3.5 3.5V7A1.5 1.5 0 003 8.5v5A1.5 1.5 0 004.5 15h7A1.5 1.5 0 0013 13.5v-5A1.5 1.5 0 0011.5 7V4.5A3.5 3.5 0 008 1zm2 6V4.5a2 2 0 10-4 0V7h4z" clipRule="evenodd" />
+                                  </svg>
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   ))}

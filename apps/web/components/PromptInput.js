@@ -10,7 +10,9 @@ export default function PromptInput({
   preserveOnFocus = true,
   threadId,
   onStopStreaming = () => {},
-  selectedModels
+  selectedModels,
+  isGuest = false,
+  onTriggerLoginPrompt = () => {}
 }) {
   const textareaRef = useRef(null);
   const [uploadedFiles, setUploadedFiles] = useState([]);
@@ -19,6 +21,7 @@ export default function PromptInput({
   const [persistentFiles, setPersistentFiles] = useState([]);
   const fileInputRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [showUploadTooltip, setShowUploadTooltip] = useState(false);
   
   useEffect(() => {
     if (textareaRef.current) {
@@ -92,7 +95,13 @@ export default function PromptInput({
 
   const handleSubmit = () => {
     // If disabled (except when processing), don't proceed
-    if (disabled && !isProcessing) return;
+    if (disabled && !isProcessing) {
+      // If it's a guest and they are disabled (likely quota), trigger the prompt
+      if (isGuest) {
+        onTriggerLoginPrompt("Your free trial limit is reached. Please sign up or log in to continue.");
+      }
+      return;
+    }
     
     // If currently streaming, we need to stop it first
     if (isProcessing) {
@@ -103,44 +112,53 @@ export default function PromptInput({
     // Check if prompt is valid before proceeding
     if (!prompt || !prompt.trim()) return;
     
-    if (isPdfProcessing) {
-      alert('Please wait for file processing to complete');
+    if (!isGuest && isPdfProcessing) {
+      toast.error('Please wait for file processing to complete');
       return;
     }
     
     // Prepare the context data with the file information
-    const fileInfo = persistentFiles.map(file => ({
-      id: file.id,
-      name: file.name,
-      type: file.type,
-      documentType: file.documentType
-    }));
-    
     const contextData = {
       prompt,
-      files: fileInfo,
-      fileIds: persistentFiles.map(file => file.id) || [],
-      fileNames: persistentFiles.map(file => file.name) || [],
-      pdfContext
+      // Only include file info for non-guests
+      ...(!isGuest && {
+        files: persistentFiles.map(file => ({
+          id: file.id,
+          name: file.name,
+          type: file.type,
+          documentType: file.documentType
+        })),
+        fileIds: persistentFiles.map(file => file.id) || [],
+        fileNames: persistentFiles.map(file => file.name) || [],
+        pdfContext
+      })
     };
     
     // Submit the message with the context data
     onSubmit(contextData);
     
     // Clear both the displayed file and the persistent reference after submission
-    // This follows industry practice where files are only attached to the message they're sent with
-    setUploadedFiles([]);
-    setPersistentFiles([]);
-    setPdfContext('');
+    if (!isGuest) {
+      setUploadedFiles([]);
+      setPersistentFiles([]);
+      setPdfContext('');
+    }
   };
 
   const handleFileInputClick = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.multiple = true;
-    input.accept = 'application/pdf,image/jpeg,image/jpg,image/png,image/webp,text/plain,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation';
-    input.onchange = (e) => handleFileChange(e);
-    input.click();
+    if (isGuest) {
+      // For guests, show tooltip instead of opening file dialog
+      setShowUploadTooltip(true);
+      return;
+    }
+
+    // For logged-in users, proceed if not disabled for other reasons
+    if ((disabled && !isProcessing) || isProcessing || isPdfProcessing) return;
+
+    // Use the ref to trigger the hidden file input
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
   };
 
   // direct handler for the stop button to ensure it works
@@ -154,33 +172,41 @@ export default function PromptInput({
   useEffect(() => {
     // Setup document-wide drag and drop handlers
     const handleDocDragEnter = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setIsDragging(true);
+      if (!isGuest) {
+        e.preventDefault();
+        setIsDragging(true);
+      }
     };
 
     const handleDocDragOver = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setIsDragging(true);
+      if (!isGuest) {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(true);
+      }
     };
 
     const handleDocDragLeave = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      
-      // Only set to false if we're leaving the document
-      if (!e.relatedTarget || e.relatedTarget.nodeName === 'HTML') {
-        setIsDragging(false);
+      if (!isGuest) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!e.relatedTarget || e.relatedTarget.nodeName === 'HTML') {
+          setIsDragging(false);
+        }
       }
     };
 
     const handleDocDrop = (e) => {
       e.preventDefault();
       e.stopPropagation();
+      
+      if (isGuest) {
+        onTriggerLoginPrompt("Please sign up or log in to upload files.");
+        return;
+      }
+
       setIsDragging(false);
       
-      // Only prevent uploads when actively processing a PDF
       if (isPdfProcessing) return;
       
       const files = e.dataTransfer.files;
@@ -202,7 +228,7 @@ export default function PromptInput({
       document.removeEventListener('dragleave', handleDocDragLeave);
       document.removeEventListener('drop', handleDocDrop);
     };
-  }, [disabled, isPdfProcessing]);
+  }, [isGuest, isPdfProcessing, onTriggerLoginPrompt]);
 
   // Process single file compatibility wrapper
   const processFile = (file) => {
@@ -429,50 +455,37 @@ export default function PromptInput({
 
   // Handle clipboard paste
   const handlePaste = async (e) => {
+    if (isGuest) {
+      const items = e.clipboardData?.items;
+      if (items && Array.from(items).some(item => item.kind === 'file')) {
+        e.preventDefault();
+        onTriggerLoginPrompt("Please sign up or log in to paste files.");
+        return;
+      }
+      // Allow text paste for guests
+      return;
+    }
+
     try {
       const clipboardData = e.clipboardData;
-      
-      // Check if the paste event has files (including images)
       const hasFiles = clipboardData.files && clipboardData.files.length > 0;
       
-      // If there are files, process them
       if (hasFiles) {
-        e.preventDefault(); // Prevent the default paste behavior
-
+        e.preventDefault();
         const files = Array.from(clipboardData.files);
-        
-        // Rename screenshot files to a generic name
         const processedFiles = files.map(file => {
           if (file.type.startsWith('image/')) {
-            // Create a new file object with a generic name
-            const fileExtension = file.name.split('.').pop();
+            const fileExtension = file.name.split('.').pop() || 'png';
             const newFileName = `screenshot_${Date.now()}.${fileExtension}`;
             return new File([file], newFileName, { type: file.type });
           }
           return file;
         });
-        
-        // Use the existing processFiles function to handle files
         processFiles(processedFiles);
-      }
-      
-      // Continue with text paste handling (if no files, or alongside files)
-      const pastedText = clipboardData.getData('text');
-      
-      // Only handle text if there's actual text content
-      if (pastedText && !hasFiles) {
-        // Let the default paste behavior handle text pasting
-        // The editor will handle this automatically
       }
     } catch (error) {
       console.error("Error handling paste:", error);
-      toast({
-        title: "Paste error",
-        description: "There was an error processing your pasted content.",
-        status: "error",
-        duration: 3000,
-        isClosable: true,
-      });
+      toast.error("Error processing pasted content.");
     }
   };
   
@@ -494,7 +507,7 @@ export default function PromptInput({
   return (
     <div className="space-y-4">
       {/* File attachment display area (shown above the prompt area) */}
-      {uploadedFiles.length > 0 && (
+      {!isGuest && uploadedFiles.length > 0 && (
         <div className="relative mb-2 bg-gray-50/80 dark:bg-gray-800/50 rounded-xl border border-gray-200/50 dark:border-gray-700/50 p-3">
           {uploadedFiles.length > 1 && (
             <div className="absolute -top-2 -right-2 bg-primary-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
@@ -562,7 +575,7 @@ export default function PromptInput({
       )}
 
       {/* Global drop zone indicator */}
-      {isDragging && (
+      {!isGuest && isDragging && (
         <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/40 backdrop-blur-sm">
           <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border-2 border-dashed border-primary-500 shadow-xl">
             <div className="text-center">
@@ -593,10 +606,10 @@ export default function PromptInput({
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={handleKeyDown}
-              disabled={false}
+              disabled={disabled || isProcessing}
               style={{ maxHeight: '200px' }}
               onFocus={() => {
-                if (!preserveOnFocus) {
+                if (!preserveOnFocus && !isProcessing) {
                   setPrompt('');
                 }
               }}
@@ -607,28 +620,41 @@ export default function PromptInput({
             
             {/* Action buttons */}
             <div className="absolute right-3 bottom-3 flex items-center space-x-2">
-              <button
-                onClick={handleFileInputClick}
-                className={`p-1.5 rounded-full transition-colors ${
-                  uploadedFiles.length > 0 
-                    ? 'text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300 hover:bg-primary-50 dark:hover:bg-primary-900/20' 
-                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}
-                title={uploadedFiles.length > 0 ? `${uploadedFiles.length} file(s) attached` : "Upload files"}
-                disabled={isPdfProcessing}
-              >
-                {uploadedFiles.length > 0 ? (
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
-                  </svg>
-                ) : (
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                  </svg>
+              {/* Upload Button with tooltip */}
+              <div className="relative">
+                <button
+                  onClick={handleFileInputClick}
+                  onMouseEnter={() => isGuest && setShowUploadTooltip(true)}
+                  onMouseLeave={() => isGuest && setShowUploadTooltip(false)}
+                  className={`p-1.5 rounded-full transition-colors ${
+                    isGuest
+                      ? 'text-gray-500 dark:text-gray-600 cursor-default'
+                      : uploadedFiles.length > 0
+                        ? 'text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300 hover:bg-primary-50 dark:hover:bg-primary-900/20'
+                        : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  } ${!isGuest && (isPdfProcessing || (disabled && !isProcessing) || isProcessing) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  title={isGuest ? "Login to attach files" : (isPdfProcessing ? "Processing file..." : uploadedFiles.length > 0 ? `${uploadedFiles.length} file(s) attached` : "Attach files")}
+                  disabled={!isGuest && (isPdfProcessing || (disabled && !isProcessing) || isProcessing)}
+                >
+                  {uploadedFiles.length > 0 && !isGuest ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
+                    </svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                    </svg>
+                  )}
+                </button>
+                {isGuest && showUploadTooltip && (
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs text-white bg-gray-900 border border-gray-700 rounded-md shadow-lg whitespace-nowrap z-10">
+                    Please login to attach files
+                  </div>
                 )}
-              </button>
+              </div>
               
-              {prompt && (
+              {/* Clear button */}
+              {prompt && !isProcessing && (
                 <button
                   onClick={() => setPrompt('')}
                   className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
@@ -644,15 +670,15 @@ export default function PromptInput({
               {isPdfProcessing ? (
                 <button
                   disabled
-                  className="p-2 rounded-full transition-all duration-200 text-gray-400 dark:text-gray-600 cursor-not-allowed bg-gray-100 dark:bg-gray-800"
-                  title="Processing PDF..."
+                  className="p-2 rounded-full text-gray-400 dark:text-gray-600 cursor-not-allowed bg-gray-100 dark:bg-gray-800"
+                  title="Processing file..."
                 >
                   <div className="animate-spin h-5 w-5 border-2 border-gray-500 border-t-transparent rounded-full" />
                 </button>
               ) : isProcessing ? (
                 <button
                   onClick={handleStopClick}
-                  className="p-2 rounded-full transition-all duration-200 text-white bg-red-600 hover:bg-red-700 shadow-md hover:shadow-lg cursor-pointer"
+                  className="p-2 rounded-full text-white bg-red-600 hover:bg-red-700 shadow-md hover:shadow-lg"
                   title="Stop generating"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
@@ -662,10 +688,10 @@ export default function PromptInput({
               ) : (
                 <button
                   onClick={handleSubmit}
-                  disabled={!prompt.trim() || (selectedModels && selectedModels.length === 0)}
+                  disabled={disabled || !prompt.trim() || (!isGuest && selectedModels && selectedModels.length === 0)}
                   className={`p-2 rounded-full transition-all duration-200 ${
-                    !prompt.trim() || (selectedModels && selectedModels.length === 0)
-                      ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed bg-gray-100 dark:bg-gray-800' 
+                    (disabled || !prompt.trim() || (!isGuest && selectedModels && selectedModels.length === 0))
+                      ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed bg-gray-100 dark:bg-gray-800'
                       : 'text-white bg-primary-600 hover:bg-primary-700 shadow-md hover:shadow-lg'
                   }`}
                   title="Send message"
@@ -681,14 +707,16 @@ export default function PromptInput({
       </div>
 
       {/* Hidden file input */}
-      <input
-        type="file"
-        className="hidden"
-        accept="application/pdf,image/jpeg,image/jpg,image/png,image/webp,text/plain,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
-        onChange={handleFileChange}
-        ref={fileInputRef}
-        multiple
-      />
+      {!isGuest && (
+        <input
+          type="file"
+          className="hidden"
+          accept="application/pdf,image/jpeg,image/jpg,image/png,image/webp,text/plain,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+          onChange={handleFileChange}
+          ref={fileInputRef}
+          multiple
+        />
+      )}
     </div>
   );
 }

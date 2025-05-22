@@ -14,6 +14,9 @@ const {
   formatMessagesWithMedia
 } = require('@quicke/utils');
 
+// Define models guests can use on the backend for validation
+const GUEST_ALLOWED_MODELS_BACKEND = ['gemini-flash', 'gemini-flash-2.5'];
+
 // Remove MAX_RETRIES_EXCEEDED from error types since we're removing automatic retries
 const FALLBACK_ERROR_TYPES = {
   API_KEY_MISSING: 'API_KEY_MISSING',
@@ -23,7 +26,8 @@ const FALLBACK_ERROR_TYPES = {
   RATE_LIMIT: 'RATE_LIMIT',
   NETWORK_ERROR: 'NETWORK_ERROR',
   UNKNOWN_ERROR: 'UNKNOWN_ERROR',
-  INSUFFICIENT_QUOTA: 'INSUFFICIENT_QUOTA'
+  INSUFFICIENT_QUOTA: 'INSUFFICIENT_QUOTA',
+  AUTH_REQUIRED: 'AUTH_REQUIRED'
 };
 
 // Use the imported values with a fallback if needed
@@ -548,24 +552,41 @@ router.get('/', async (req, res) => {
     'Connection': 'keep-alive',
   });
 
+  const { isGuest: isGuestQuery } = req.query; // string 'true' or undefined
+  const isGuestRequest = isGuestQuery === 'true';
+
   // Handle summarizer requests
   if (req.query.isSummarizer === 'true') {
+    // Guests cannot use the summarizer
+    if (isGuestRequest || !req.user || !req.user.id) {
+      console.warn('[Summary] Attempted by unauthenticated user or guest.');
+      res.write(`data: ${JSON.stringify({
+        model: 'summary',
+        error: 'Login required to use the summarizer feature.',
+        errorType: ERROR_TYPES.AUTH_REQUIRED,
+        loading: false,
+        streaming: false,
+        done: true
+      })}\n\n`);
+      return res.end();
+    }
+
     try {
-      console.log('[Summary] Starting summary generation');
-      const responses = JSON.parse(req.query.responses);
-      
-      console.log('[Summary] Input responses:', Object.keys(responses).length);
-      
+      console.log('[Summary] Starting summary generation for user:', req.user.id);
+      const responsesData = JSON.parse(req.query.responses);
+
       const userId = req.user.id;
-      const apiKey = await prisma.apiKey.findFirst({
+      const apiKeyEntry = await prisma.apiKey.findFirst({
         where: { userId, provider: 'google' },
         select: { encryptedKey: true }
       });
 
-      if (!apiKey) {
-        console.error('[Summary] Missing Google API key');
+      if (!apiKeyEntry) {
+        console.error('[Summary] Missing Google API key for user:', userId);
         res.write(`data: ${JSON.stringify({
-          error: 'Google API key required',
+          model: 'summary',
+          error: 'Google API key required for summarization.',
+          errorType: ERROR_TYPES.API_KEY_MISSING,
           loading: false,
           streaming: false,
           done: true
@@ -573,276 +594,212 @@ router.get('/', async (req, res) => {
         return res.end();
       }
 
-      const genAI = new GoogleGenerativeAI(apiKey.encryptedKey);
-      const model = genAI.getGenerativeModel({ 
+      const genAIClient = new GoogleGenerativeAI(apiKeyEntry.encryptedKey);
+      const modelInstance = genAIClient.getGenerativeModel({
         model: 'gemini-2.0-flash',
         api_version: 'v1alpha'
       });
 
-      // Format the responses in a more structured way
-      const formattedResponses = Object.entries(responses)
-        .map(([model, text]) => `${model}:\n${text}\n`)
+      const formattedResponsesText = Object.entries(responsesData)
+        .map(([modelKey, textVal]) => `${modelKey}:\n${textVal}\n`)
         .join('\n---\n');
 
-      const prompt = `Compare these AI responses and provide a concise synthesis highlighting key similarities and differences:
+      const summaryPrompt = `Compare these AI responses and provide a concise synthesis highlighting key similarities and differences:\n\n${formattedResponsesText}\n\nFormat your response as a clear, concise analysis.`;
 
-${formattedResponses}
+      console.log('[Summary] Sending request to Gemini');
+      res.write(`data: ${JSON.stringify({ model: 'summary', text: '', loading: true, streaming: true })}\n\n`);
 
-Format your response as a clear, concise analysis.`;
+      const resultStream = await modelInstance.generateContentStream({
+        contents: [{ role: 'user', parts: [{ text: summaryPrompt }] }],
+        generationConfig: { temperature: 0.7, topK: 40, topP: 0.8, maxOutputTokens: 1000 },
+      });
 
-      try {
-        console.log('[Summary] Sending request to Gemini');
-        
-        // Send initial state immediately
-        res.write(`data: ${JSON.stringify({
-          text: '',
-          loading: true,
-          streaming: true
-        })}\n\n`);
-
-        const result = await model.generateContentStream({
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.7,
-            topK: 40,
-            topP: 0.8,
-            maxOutputTokens: 1000,
-          },
-        });
-
-        console.log('[Summary] Stream started');
-        let accumulatedText = '';
-
-        // Process the stream
-        for await (const chunk of result.stream) {
-          if (res.writableEnded) {
-            console.log('[Summary] Response ended early');
-            break;
-          }
-          
-          const content = chunk.text();
-          if (content) {
-            accumulatedText += content;
-            
-            res.write(`data: ${JSON.stringify({
-              text: accumulatedText,
-              loading: false,
-              streaming: true
-            })}\n\n`);
-          }
-        }
-
-        // Send completion
-        console.log('[Summary] Stream complete, sending final update');
-        if (!res.writableEnded) {
-          res.write(`data: ${JSON.stringify({
-            text: accumulatedText,
-            loading: false,
-            streaming: false,
-            done: true
-          })}\n\n`);
-          res.end();
-        }
-
-      } catch (streamError) {
-        console.error('[Summary] Stream processing error:', streamError);
-        if (!res.writableEnded) {
-          res.write(`data: ${JSON.stringify({
-            error: 'Summary generation failed: ' + streamError.message,
-            loading: false,
-            streaming: false,
-            done: true
-          })}\n\n`);
-          res.end();
+      let accumulatedSummaryText = '';
+      for await (const chunk of resultStream.stream) {
+        if (res.writableEnded) break;
+        const contentPart = chunk.text();
+        if (contentPart) {
+          accumulatedSummaryText += contentPart;
+          res.write(`data: ${JSON.stringify({ model: 'summary', text: accumulatedSummaryText, loading: false, streaming: true })}\n\n`);
         }
       }
 
-      return;
+      if (!res.writableEnded) {
+        res.write(`data: ${JSON.stringify({ model: 'summary', text: accumulatedSummaryText, loading: false, streaming: false, done: true })}\n\n`);
+        res.end();
+      }
     } catch (error) {
       console.error('[Summary] Fatal error:', error);
-      res.write(`data: ${JSON.stringify({
-        error: 'Summary generation failed: ' + error.message,
-        loading: false,
-        streaming: false,
-        done: true
-      })}\n\n`);
-      return res.end();
+      if (!res.writableEnded) {
+        res.write(`data: ${JSON.stringify({ model: 'summary', error: 'Summary generation failed: ' + error.message, loading: false, streaming: false, done: true })}\n\n`);
+        res.end();
+      }
     }
+    return;
   }
 
+  // Main streaming logic
   try {
-    const userId = req.user.id;
-    const { prompt, models, fileId, fileIds, threadId, conversationId, useContext } = req.query;
+    const userId = req.user?.id;
+    const { prompt, models, fileId, fileIds, threadId, conversationId, useContext: useContextQuery } = req.query;
     const modelArray = models ? models.split(',') : [];
-    
-    // Initialize safe event sender and completion manager
+
     const sendEvent = createSafeEventSender(res);
     const completionManager = createCompletionManager(modelArray.length, sendEvent, res);
     const errorHandler = createErrorHandler(completionManager, sendEvent);
 
-    // Get user's API keys from database
-    const userApiKeys = {};
-    try {
-      const apiKeysRes = await prisma.apiKey.findMany({
-        where: { userId },
-        select: { provider: true, encryptedKey: true }
+    let effectiveApiKeys = {};
+    let genAI;
+
+    if (isGuestRequest) {
+      console.log("API WORKER STREAM: Processing GUEST request.");
+      const systemGeminiKey = process.env.SYSTEM_GEMINI_API_KEY;
+      if (!systemGeminiKey) {
+        console.error('Guest Access Error: SYSTEM_GEMINI_API_KEY is not set in environment.');
+        modelArray.forEach(modelId => {
+          errorHandler.sendErrorEvent(modelId, ERROR_TYPES.API_KEY_MISSING, "System configuration error prevents guest access.");
+          completionManager.markCompleted(modelId);
+        });
+        if (!res.writableEnded) {
+          sendEvent({ error: 'Guest access is currently misconfigured. Please try again later.', done: true, allComplete: true });
+          res.end();
+        }
+        return;
+      }
+      effectiveApiKeys.google = systemGeminiKey;
+      genAI = new GoogleGenerativeAI(effectiveApiKeys.google);
+      console.log("API WORKER STREAM: Guest using SYSTEM_GEMINI_API_KEY.");
+    } else if (userId) {
+      console.log(`API WORKER STREAM: Processing request for user: ${userId}`);
+      try {
+        const apiKeysRes = await prisma.apiKey.findMany({
+          where: { userId },
+          select: { provider: true, encryptedKey: true }
+        });
+        apiKeysRes.forEach(({ provider, encryptedKey }) => {
+          effectiveApiKeys[provider] = encryptedKey;
+        });
+        if (effectiveApiKeys.google) {
+          genAI = new GoogleGenerativeAI(effectiveApiKeys.google);
+        }
+      } catch (dbError) {
+        console.error('Error fetching user API keys:', dbError);
+        modelArray.forEach(modelId => {
+          errorHandler.sendErrorEvent(modelId, ERROR_TYPES.UNKNOWN_ERROR, "Failed to retrieve API key settings.");
+          completionManager.markCompleted(modelId);
+        });
+        if (!res.writableEnded) {
+          sendEvent({ error: 'Could not load your API keys.', done: true, allComplete: true });
+          res.end();
+        }
+        return;
+      }
+    } else {
+      console.error('Stream Error: Critical authentication state. Not a guest, but no user ID found.');
+      modelArray.forEach(modelId => {
+        errorHandler.sendErrorEvent(modelId, ERROR_TYPES.API_KEY_MISSING, "User authentication failed.");
+        completionManager.markCompleted(modelId);
       });
-      
-      apiKeysRes.forEach(({ provider, encryptedKey }) => {
-        userApiKeys[provider] = encryptedKey;
-      });
-    } catch (error) {
-      console.error('Error fetching user API keys:', error);
       if (!res.writableEnded) {
-        res.write(`data: ${JSON.stringify({
-          error: 'Failed to fetch API keys',
-          done: true,
-          allComplete: true
-        })}\n\n`);
-        return res.end();
+        sendEvent({ error: 'Authentication error. Please log in again.', done: true, allComplete: true });
+        res.end();
       }
       return;
     }
 
-    // Initialize API clients only if keys exist
-    let openai, anthropic, genAI, openRouter, deepseek;
-
-    if (userApiKeys.openai) {
-      openai = new OpenAI({ apiKey: userApiKeys.openai });
-    }
-    if (userApiKeys.anthropic) {
-      anthropic = new Anthropic({ apiKey: userApiKeys.anthropic });
-    }
-    if (userApiKeys.google) {
-      genAI = new GoogleGenerativeAI(userApiKeys.google);
-    }
-    if (userApiKeys.openrouter) {
-      openRouter = new OpenAI({
-        baseURL: 'https://openrouter.ai/api/v1',
-        apiKey: userApiKeys.openrouter,
-        defaultQuery: { transforms: ['middle'] },
-        defaultHeaders: {
-          'HTTP-Referer': process.env.NEXT_PUBLIC_URL || 'http://localhost:3000',
-          'X-Title': 'Quicke - The AI ChatHub'
-        }
-      });
-    }
-    if (userApiKeys.deepseek) {
-      deepseek = new OpenAI({
-        baseURL: 'https://api.deepseek.com/v1',
-        apiKey: userApiKeys.deepseek
-      });
+    // Initialize other API clients for logged-in users
+    let openai, anthropic, openRouter, deepseek;
+    if (!isGuestRequest) {
+      if (effectiveApiKeys.openai) openai = new OpenAI({ apiKey: effectiveApiKeys.openai });
+      if (effectiveApiKeys.anthropic) anthropic = new Anthropic({ apiKey: effectiveApiKeys.anthropic });
+      if (effectiveApiKeys.openrouter) {
+        openRouter = new OpenAI({
+          baseURL: 'https://openrouter.ai/api/v1',
+          apiKey: effectiveApiKeys.openrouter,
+          defaultQuery: { transforms: ['middle'] },
+          defaultHeaders: {
+            'HTTP-Referer': process.env.NEXT_PUBLIC_URL || 'http://localhost:3000',
+            'X-Title': 'Quicke - The AI ChatHub'
+          }
+        });
+      }
+      if (effectiveApiKeys.deepseek) {
+        deepseek = new OpenAI({
+          baseURL: 'https://api.deepseek.com/v1',
+          apiKey: effectiveApiKeys.deepseek
+        });
+      }
     }
 
-    // Set up timeouts for each model
-    modelArray.forEach(modelId => {
-      const timeoutDuration = TIMEOUT_SETTINGS.INITIAL_RESPONSE;
-      
-      console.log(`[${modelId}] Setting up availability timeout for ${timeoutDuration/1000}s`);
-      
-      // We don't need to set up timeout checks anymore as we're handling completion properly
-      // This code was causing "[model] Checking if model timed out after 59s" log messages
-    });
-
-    // Process each model stream independently
     const modelPromises = modelArray.map(async (modelId) => {
       try {
-        // Skip if this model was already marked as unavailable
-        if (completionManager.isCompleted(modelId)) {
-          return;
-        }
-        
-        // Verify if user has the required API key
+        if (completionManager.isCompleted(modelId)) return;
+
         const provider = providerMap[modelId];
-        if (!userApiKeys[provider]) {
-          errorHandler.sendErrorEvent(modelId, ERROR_TYPES.API_KEY_MISSING);
-          completionManager.markCompleted(modelId);
-          return;
+
+        if (isGuestRequest) {
+          if (!GUEST_ALLOWED_MODELS_BACKEND.includes(modelId)) {
+            errorHandler.sendErrorEvent(modelId, ERROR_TYPES.MODEL_UNAVAILABLE, "This model is not available for guest access.");
+            completionManager.markCompleted(modelId);
+            return;
+          }
+          if (provider !== 'google') {
+            errorHandler.sendErrorEvent(modelId, ERROR_TYPES.API_KEY_MISSING, "Guest access is restricted for this model provider.");
+            completionManager.markCompleted(modelId);
+            return;
+          }
+        } else {
+          if (!effectiveApiKeys[provider]) {
+            errorHandler.sendErrorEvent(modelId, ERROR_TYPES.API_KEY_MISSING);
+            completionManager.markCompleted(modelId);
+            return;
+          }
         }
 
-        // Initial state for each model
-        sendEvent({
-          model: modelId,
-          text: '',
-          loading: true,
-          streaming: false
-        });
+        sendEvent({ model: modelId, text: '', loading: true, streaming: false });
 
-        // Retrieve file data if fileId or fileIds are provided
         let fileDataArray = [];
-        if (fileId || (fileIds && fileIds.length > 0)) {
+        if (!isGuestRequest && userId && (fileId || (fileIds && fileIds.length > 0))) {
           try {
             const fileIdsToFetch = fileIds ? fileIds.split(',') : (fileId ? [fileId] : []);
-            
             if (fileIdsToFetch.length > 0) {
               const files = await prisma.uploadedFile.findMany({
-                where: {
-                  id: { in: fileIdsToFetch },
-                  userId
-                },
-                select: {
-                  id: true,
-                  fileName: true,
-                  fileType: true,
-                  content: true,
-                  documentType: true
-                }
+                where: { id: { in: fileIdsToFetch }, userId },
+                select: { id: true, fileName: true, fileType: true, content: true, documentType: true }
               });
-              
-              fileDataArray = files.map(file => {
-                const isImage = file.fileType.startsWith('image/');
-                const isPdf = file.fileType === 'application/pdf';
-                const isText = file.fileType === 'text/plain' || file.fileType === 'text/markdown';
-                const isPpt = file.fileType.includes('presentation');
-                
-                return {
-                  id: file.id,
-                  fileName: file.fileName,
-                  fileType: file.fileType,
-                  content: file.content,
-                  isImage,
-                  isPdf,
-                  isText,
-                  isPpt
-                };
-              });
-              
-              console.log(`Retrieved ${fileDataArray.length} files for prompt`);
+              fileDataArray = files.map(file => ({
+                id: file.id,
+                fileName: file.fileName,
+                fileType: file.fileType,
+                content: file.content,
+                isImage: file.documentType === 'image' || file.fileType.startsWith('image/'),
+                isPdf: file.documentType === 'pdf' || file.fileType === 'application/pdf',
+                isText: file.documentType === 'text' || file.fileType.startsWith('text/'),
+                isPpt: file.documentType === 'ppt' || file.fileType.includes('presentation')
+              }));
+              console.log(`Retrieved ${fileDataArray.length} files for prompt for user ${userId}`);
             }
           } catch (fileError) {
             console.error('Error retrieving file data:', fileError);
           }
         }
 
-        // Get formatted messages for this model with file data
         const formattedMessages = formatMessagesWithMedia(prompt, fileDataArray, modelId);
 
-        // Get conversation context if enabled
-        if (useContext === 'true' && (threadId || conversationId)) {
+        if (!isGuestRequest && userId && useContextQuery === 'true' && (threadId || conversationId)) {
           try {
-            console.log(`[${modelId}] Retrieving conversation context for ${threadId || conversationId}`);
-            
-            // Get previous conversation context
+            console.log(`[${modelId}] Retrieving conversation context for ${threadId || conversationId} for user ${userId}`);
             const contextMessages = await getConversationContext(prisma, conversationId, threadId);
-            
             if (contextMessages && contextMessages.length > 0) {
               console.log(`[${modelId}] Retrieved ${contextMessages.length} context messages`);
-              
-              // For Gemini models, we need special handling because of their unique message format
               if (modelId && modelId.startsWith('gemini')) {
-                // First message is already in the correct format with the current prompt
                 const currentPromptMessage = formattedMessages[0];
-                
-                // Convert context messages to Gemini format and add them
                 const geminiContextMessages = contextMessages.map(msg => ({
                   role: msg.role === 'assistant' ? 'model' : 'user',
                   parts: [{ text: msg.content }]
                 }));
-                
-                // Replace formatted messages with context + current message
                 formattedMessages.splice(0, formattedMessages.length, ...geminiContextMessages, currentPromptMessage);
               } else {
-                // For other models (OpenAI, Anthropic, etc.), prepend context to the formatted messages
                 formattedMessages.unshift(...contextMessages);
               }
             }
@@ -851,57 +808,25 @@ Format your response as a clear, concise analysis.`;
           }
         }
 
-        // Process based on model type
-        if (openAIModels[modelId]) {
-          await handleOpenAIStream(modelId, formattedMessages, sendEvent, openai);
-        } else if (claudeModels[modelId]) {
-          await handleClaudeStream(modelId, formattedMessages, sendEvent, anthropic);
-        } else if (geminiModels[modelId]) {
-          console.log(`[DEBUG Gemini Payload for ${modelId}]: Preparing to send 'contents':`);
-          if (!Array.isArray(formattedMessages)) {
-            console.error("  ERROR: finalMessagesForModel IS NOT AN ARRAY!", formattedMessages);
-          } else {
-            formattedMessages.forEach((msg, index) => {
-              console.log(`  [Msg ${index}] Role: ${msg.role}`);
-              if (msg.parts && Array.isArray(msg.parts)) {
-                console.log(`    Parts Array (${msg.parts.length} items):`);
-                msg.parts.forEach((part, pIndex) => {
-                  if (part.text !== undefined) {
-                    console.log(`      Part ${pIndex}: text (length ${part.text.length})`);
-                  } else if (part.inlineData) {
-                    console.log(`      Part ${pIndex}: inlineData (mime ${part.inlineData.mimeType}, data snippet ${part.inlineData.data ? part.inlineData.data.substring(0,10)+'...' : 'N/A'})`);
-                  }
-                });
-              } else if (msg.content !== undefined) {
-                console.error("    ERROR: Message has 'content' field instead of 'parts'!", msg);
-              } else {
-                console.warn("    WARN: Message has NEITHER 'parts' NOR 'content':", msg);
-              }
-            });
-          }
-
-          // Ensure proper role alternation
+        if (geminiModels[modelId] && genAI) {
           const validatedMessages = [];
           let lastRole = null;
-          
           formattedMessages.forEach(msg => {
-            if (msg.role === lastRole) {
-              // Merge with previous message if same role
+            if (msg.role === lastRole && validatedMessages.length > 0) {
               const prevMsg = validatedMessages[validatedMessages.length - 1];
               if (prevMsg.parts && msg.parts) {
                 msg.parts.forEach(part => {
                   if (part.text && prevMsg.parts.some(p => p.text)) {
-                    // Merge text parts
                     const textPart = prevMsg.parts.find(p => p.text);
                     textPart.text += '\n' + part.text;
                   } else {
-                    // Add non-text parts as is
                     prevMsg.parts.push(part);
                   }
                 });
+              } else if (prevMsg.content && typeof prevMsg.content === 'string' && msg.content && typeof msg.content === 'string') {
+                prevMsg.content += '\n' + msg.content;
               }
             } else {
-              // Ensure message has parts structure
               const validatedMsg = {
                 role: msg.role,
                 parts: msg.parts || (msg.content ? [{ text: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content) }] : [{ text: '' }])
@@ -910,81 +835,55 @@ Format your response as a clear, concise analysis.`;
               lastRole = msg.role;
             }
           });
-
-          console.log('Validated and merged messages:', 
-            validatedMessages.map(m => ({
-              role: m.role,
-              partTypes: m.parts.map(p => Object.keys(p)[0])
-            }))
-          );
-
           await handleGeminiStream(modelId, validatedMessages, sendEvent, genAI, geminiModels);
-        } else if (deepseekModels[modelId]) {
+        } else if (openAIModels[modelId] && openai && !isGuestRequest) {
+          await handleOpenAIStream(modelId, formattedMessages, sendEvent, openai);
+        } else if (claudeModels[modelId] && anthropic && !isGuestRequest) {
+          await handleClaudeStream(modelId, formattedMessages, sendEvent, anthropic);
+        } else if (deepseekModels[modelId] && deepseek && !isGuestRequest) {
           await handleDeepSeekStream(modelId, formattedMessages, sendEvent, deepseek);
-        } else if (openRouterModels[modelId]) {
+        } else if (openRouterModels[modelId] && openRouter && !isGuestRequest) {
           await handleOpenRouterStream(modelId, formattedMessages, sendEvent, openRouter, openRouterModels);
-        }
-
-        // Always mark as completed
-        completionManager.markCompleted(modelId);
-      } catch (error) {
-        // Handle errors for individual models without affecting others
-        console.error(`Error with ${modelId}:`, error);
-        errorHandler.sendErrorEvent(modelId, ERROR_TYPES.UNKNOWN_ERROR);
-        completionManager.markCompleted(modelId);
-      }
-    });
-
-    // Process all streams concurrently
-    await Promise.all(modelPromises);
-
-    // final check to make sure all models were marked as completed
-    modelArray.forEach(modelId => {
-      if (!completionManager.isCompleted(modelId)) {
-        console.log(`[${modelId}] Was not marked as completed - forcing completion`);
-        completionManager.markCompleted(modelId);
-      }
-    });
-    
-    // Make sure to clear timeouts at the end of processing
-    try {
-      modelArray.forEach(modelId => {
-        if (errorService && errorService.modelTimers) {
-          const timerId = errorService.modelTimers.get(`timeout_${modelId}`);
-          if (timerId) {
-            clearTimeout(timerId);
-            errorService.modelTimers.delete(`timeout_${modelId}`);
+        } else {
+          if (isGuestRequest && !GUEST_ALLOWED_MODELS_BACKEND.includes(modelId)) {
+            errorHandler.sendErrorEvent(modelId, ERROR_TYPES.MODEL_UNAVAILABLE, "Model not available for guests.");
+          } else {
+            errorHandler.sendErrorEvent(modelId, ERROR_TYPES.API_KEY_MISSING, `API client for ${modelId} is not available or key is missing.`);
           }
         }
-      });
-    } catch (cleanupError) {
-      console.error('Error during timeout cleanup:', cleanupError);
-    }
-    
-    // Clean up the completion manager
+        completionManager.markCompleted(modelId);
+      } catch (error) {
+        console.error(`Error with ${modelId} (Guest=${isGuestRequest}):`, error);
+        const classifiedError = streamUtils.handleStreamError(error, modelId, providerMap[modelId]);
+        errorHandler.sendErrorEvent(modelId, classifiedError.errorType, classifiedError.errorMessage);
+        completionManager.markCompleted(modelId);
+      }
+    });
+
+    await Promise.all(modelPromises);
+
+    modelArray.forEach(modelId => {
+      if (!completionManager.isCompleted(modelId)) {
+        console.warn(`[${modelId}] Was not marked as completed - forcing completion at the end.`);
+        completionManager.markCompleted(modelId);
+      }
+    });
+
     if (completionManager.cleanup) {
       completionManager.cleanup();
     }
-    
-    // If we get here and still haven't ended the response, do it now
+
     if (!res.writableEnded) {
-      console.log('Forcing response completion');
-      sendEvent({
-        done: true,
-        allComplete: true
-      });
+      console.log('Forcing response completion at the very end of the route.');
+      sendEvent({ done: true, allComplete: true });
       res.end();
     }
 
   } catch (error) {
-    console.error('[SSE Stream] Fatal error:', error);
-    
+    console.error('[SSE Stream] Fatal error in main try block:', error);
     if (!res.writableEnded) {
-      res.write(`data: ${JSON.stringify({ 
-        error: 'Stream processing failed', 
-        done: true, 
-        allComplete: true 
-      })}\n\n`);
+      const safeSender = createSafeEventSender(res);
+      safeSender({ error: 'Stream processing failed due to an internal error.', done: true, allComplete: true });
       res.end();
     }
   }

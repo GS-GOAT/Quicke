@@ -7,18 +7,55 @@ import ApiKeyManager from '../components/ApiKeyManager';
 import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useLocalStorage } from '../hooks/useLocalStorage'; 
+import { useLocalStorage } from '../hooks/useLocalStorage';
 import StarfieldBackground from '../components/StarfieldBackground';
 import { useSplitPanel } from '../components/SplitPanelContext';
 import SplitPanelLayout from '../components/SplitPanelLayout';
+import { toast } from 'react-hot-toast';
+
+// Guest mode configuration
+const GUEST_ALLOWED_MODELS = ['gemini-flash', 'gemini-flash-2.5'];
+const GUEST_CONVERSATION_LIMIT = 300;
+
+// Model display names for UI elements
+const modelDisplayNames = {
+  'gemini-flash': 'Gemini 2.0 Flash',
+  'gemini-flash-2.5': 'Gemini 2.5 Flash',
+  'summary': 'Summarizer'
+};
 
 export default function Home() {
   const router = useRouter();
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState([]);
-  const [selectedModels, setSelectedModels] = useLocalStorage('selectedModels', ['gemini-flash-2.5','deepseek-v3-0324']);
+
+
+  const defaultInitialModels = ['gemini-flash-2.5', 'gemini-flash'];
+  const [selectedModels, setSelectedModels] = useState(defaultInitialModels);
+
+  // Guest mode state
+  const [isGuest, setIsGuest] = useState(true);
+  const [guestConversationCount, setGuestConversationCount] = useLocalStorage('quicke_guest_convo_count', 0);
+
+  // Load saved model selection only for logged-in users
+  useEffect(() => {
+    if (!isGuest) {
+      const savedModels = localStorage.getItem('selectedModels');
+      if (savedModels) {
+        try {
+          const parsedModels = JSON.parse(savedModels);
+          if (Array.isArray(parsedModels) && parsedModels.length > 0) {
+            setSelectedModels(parsedModels);
+          }
+        } catch (e) {
+          console.error('Error parsing saved models:', e);
+        }
+      }
+    }
+  }, [isGuest]);
+
   const [error, setError] = useState(null);
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [showApiKeyManager, setShowApiKeyManager] = useState(false);
@@ -26,7 +63,6 @@ export default function Home() {
   const eventSourceRef = useRef(null);
   const modelButtonRef = useRef(null);
   const modelSelectorRef = useRef(null);
-  const [responses, setResponses] = useState({});
   const [responseModels, setResponseModels] = useState({});
   const [isProcessing, setIsProcessing] = useState(false); 
   const [currentPromptId, setCurrentPromptId] = useState(null);
@@ -43,6 +79,9 @@ export default function Home() {
   const starfieldRef = useRef(null);
   const [contextEnabled, setContextEnabled] = useState(true);
   const [isCreatingThread, setIsCreatingThread] = useState(false);
+  const [activeThreadTitle, setActiveThreadTitle] = useState("New Chat");
+  const [hasMoreConversations, setHasMoreConversations] = useState(true);
+  const [isClient, setIsClient] = useState(false); // New state to track client mount
 
   const [predefinedSuggestions] = useState([
     "Explain quantum computing in simple terms",
@@ -324,35 +363,48 @@ export default function Home() {
   };
 
   const handleSubmit = async (contextData) => {
-    if (loading || isCreatingThread) return;
+    const currentPromptText = contextData.prompt || contextData.text || prompt;
 
-    if (!session) {
-      router.push('/auth/signin');
+    if (loading || isCreatingThread || !currentPromptText || !currentPromptText.trim()) {
+      setLoading(false);
       return;
     }
 
-    const promptText = contextData.prompt || contextData.text;
-    if (!promptText || !promptText.trim()) {
+    const modelsToSubmit = isGuest
+      ? selectedModels.filter(m => GUEST_ALLOWED_MODELS.includes(m))
+      : selectedModels;
+
+    if (modelsToSubmit.length === 0) {
+      triggerLoginPrompt(isGuest ? `Please select ${GUEST_ALLOWED_MODELS.map(m => modelDisplayNames[m] || m).join(' or ')} to chat.` : "Please select at least one model.");
+      setLoading(false);
+      return;
+    }
+
+    if (isGuest) {
+      if (guestConversationCount >= GUEST_CONVERSATION_LIMIT) {
+        triggerLoginPrompt("You've reached your free conversation limit. Please sign up or log in to continue.");
+        setLoading(false);
+        return;
+      }
+    } else if (!session) {
+      triggerLoginPrompt("Please sign in to continue.");
       setLoading(false);
       return;
     }
 
     setIsProcessing(true);
-    setLoading(true);
     setHasInteracted(true);
-    if (starfieldRef.current) {
-      starfieldRef.current.stopAnimation();
-    }
+    if (starfieldRef.current) starfieldRef.current.stopAnimation();
 
-    let currentThreadId = activeThreadId;
-    let newThreadJustCreated = false;
+    const conversationId = `conv-${isGuest ? 'guest' : (session?.user?.id?.slice(-5) || 'user')}-${Date.now()}`;
+    setCurrentPromptId(conversationId);
 
-    // Create Thread if it's a new one
-    if (!currentThreadId) {
+    let currentThreadIdForAPI = activeThreadId;
+
+    if (!isGuest && !currentThreadIdForAPI) {
       setIsCreatingThread(true);
       try {
-        const tentativeTitle = promptText.split(' ').slice(0, 10).join(' ') + (promptText.split(' ').length > 10 ? '...' : '');
-        
+        const tentativeTitle = currentPromptText.substring(0, 50) + (currentPromptText.length > 50 ? '...' : '');
         const threadRes = await fetch('/api/threads/manage', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -365,14 +417,14 @@ export default function Home() {
         }
 
         const newThread = await threadRes.json();
-        currentThreadId = newThread.id;
+        currentThreadIdForAPI = newThread.id;
         setActiveThreadId(newThread.id);
+        setActiveThreadTitle(newThread.title);
+        router.push(`/?threadId=${newThread.id}`, undefined, { shallow: true });
         fetchThreads();
-        newThreadJustCreated = true;
       } catch (err) {
         console.error('Error creating thread:', err);
-        setError(`Failed to start a new chat: ${err.message}`);
-        setLoading(false);
+        setError(`Failed to start new chat: ${err.message}`);
         setIsProcessing(false);
         setIsCreatingThread(false);
         return;
@@ -381,188 +433,91 @@ export default function Home() {
       }
     }
 
-    // Continue with conversation setup
-    const conversationId = `conv-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    setCurrentPromptId(conversationId);
-
-    const firstFileId = contextData.fileId || (contextData.fileIds && contextData.fileIds[0]) || null;
-    const fileIds = contextData.fileIds || (contextData.fileId ? [contextData.fileId] : []);
+    const firstFileId = !isGuest && (contextData.fileId || (contextData.fileIds && contextData.fileIds[0])) || null;
+    const fileIds = !isGuest && (contextData.fileIds || (contextData.fileId ? [contextData.fileId] : [])) || [];
 
     const initialResponses = {};
-    selectedModels.forEach(model => {
-      initialResponses[model] = {
-        text: '',
-        loading: true,
-        error: null,
-        streaming: true
-      };
+    modelsToSubmit.forEach(model => {
+      initialResponses[model] = { text: '', loading: true, error: null, streaming: true, done: false };
     });
 
-    // Update history with the new conversation
     setHistory(prev => [...prev, {
       id: conversationId,
-      prompt: promptText,
+      prompt: currentPromptText,
       responses: initialResponses,
-      activeModels: [...selectedModels],
+      activeModels: [...modelsToSubmit],
       timestamp: new Date(),
       isHistorical: false,
       fileId: firstFileId,
       fileIds: fileIds,
-      fileName: contextData?.fileName || null,
-      fileNames: contextData?.fileNames || [],
-      threadId: currentThreadId
+      fileName: !isGuest ? (contextData?.fileName || null) : null,
+      fileNames: !isGuest ? (contextData?.fileNames || []) : [],
+      threadId: isGuest ? null : currentThreadIdForAPI,
     }]);
 
     setPrompt('');
-    setResponses(initialResponses);
 
-    // Set up EventSource with thread ID
     const queryParams = new URLSearchParams({
-      prompt: promptText,
-      models: selectedModels.join(','),
-      fileId: firstFileId || '',
+      prompt: currentPromptText,
+      models: modelsToSubmit.join(','),
       conversationId,
-      threadId: currentThreadId,
-      useContext: contextEnabled.toString()
     });
 
-    if (fileIds && fileIds.length > 0) {
-      queryParams.append('fileIds', fileIds.join(','));
+    if (isGuest) {
+      queryParams.append('isGuest', "true");
+    } else {
+      if (currentThreadIdForAPI) queryParams.append('threadId', currentThreadIdForAPI);
+      if (contextEnabled) queryParams.append('useContext', "true");
+      if (firstFileId) queryParams.append('fileId', firstFileId);
+      if (fileIds.length > 0) queryParams.append('fileIds', fileIds.join(','));
     }
 
     const newEventSource = new EventSource(`/api/stream?${queryParams.toString()}`);
     eventSourceRef.current = newEventSource;
 
-    // Track final responses for saving
+    if (isGuest) setGuestConversationCount(prev => prev + 1);
+
     const finalModelTextsToSave = {};
 
-    newEventSource.onmessage = async (event) => {
+    newEventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
-
-      if (data.model) {
+      if (data.model && modelsToSubmit.includes(data.model)) {
         const update = {
-          text: data.text || '',
+          text: data.text !== undefined ? data.text : '',
           error: data.error || null,
-          loading: data.loading !== false,
-          streaming: data.streaming !== false,
+          loading: data.loading !== undefined ? data.loading : false,
+          streaming: data.streaming !== undefined ? data.streaming : false,
           done: data.done === true,
-          duration: data.duration || null  // Include duration from the stream event
+          duration: data.duration || null
         };
 
-        if (update.done && !update.error) {
-          finalModelTextsToSave[data.model] = { 
-            text: update.text, 
-            timestamp: Date.now(),
-            streaming: false,
-            done: true
-          };
+        if (update.done && !update.error && !isGuest) {
+          finalModelTextsToSave[data.model] = { text: update.text, timestamp: Date.now() };
         }
-
-        setResponses(prev => ({
-          ...prev,
-          [data.model]: update
-        }));
 
         setHistory(prevHist => {
           const updatedHist = [...prevHist];
-          const currentEntryIndex = updatedHist.findIndex(entry => entry.id === conversationId);
-          if (currentEntryIndex !== -1) {
-            if (!updatedHist[currentEntryIndex].responses[data.model]) {
-              updatedHist[currentEntryIndex].responses[data.model] = {};
-            }
-            updatedHist[currentEntryIndex].responses[data.model] = {
-              ...updatedHist[currentEntryIndex].responses[data.model],
-              ...update
-            };
+          const idx = updatedHist.findIndex(e => e.id === conversationId);
+          if (idx !== -1) {
+            if (!updatedHist[idx].responses[data.model]) updatedHist[idx].responses[data.model] = {};
+            updatedHist[idx].responses[data.model] = { ...updatedHist[idx].responses[data.model], ...update };
           }
           return updatedHist;
         });
       }
-
-      if (data.allComplete) {
-        newEventSource.close();
-        eventSourceRef.current = null;
-        setLoading(false);
-        setIsProcessing(false);
-        setCurrentPromptId(null);
-
-        // Save conversation with thread ID
-        if (Object.keys(finalModelTextsToSave).length > 0) {
-          try {
-            const saveResponse = await fetch('/api/conversations/save', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                id: conversationId,
-                prompt: promptText,
-                responses: finalModelTextsToSave,
-                threadId: currentThreadId,
-                fileId: firstFileId,
-                fileIds: fileIds
-              }),
-            });
-
-            if (!saveResponse.ok) {
-              throw new Error(`Failed to save conversation: ${saveResponse.statusText}`);
-            }
-          } catch (error) {
-            console.error('Error saving conversation:', error);
-          }
-        }
-      }
     };
 
-    newEventSource.onerror = (error) => {
-      console.error('EventSource error:', error);
-      setLoading(false);
-      setIsProcessing(false);
-      if (newEventSource) newEventSource.close();
+    newEventSource.onerror = (err) => {
+      console.error('EventSource error:', err);
+      newEventSource.close();
       eventSourceRef.current = null;
-
-      setResponses(prev => {
-        const erroredResponses = {};
-        selectedModels.forEach(modelId => {
-          erroredResponses[modelId] = {
-            text: prev[modelId]?.text || '',
-            error: 'Connection error with the server.',
-            loading: false,
-            streaming: false,
-            done: true
-          };
-        });
-        return erroredResponses;
-      });
-
-      setHistory(prevHist => {
-        const updatedHist = [...prevHist];
-        const currentEntryIndex = updatedHist.findIndex(entry => entry.id === conversationId);
-        if (currentEntryIndex !== -1) {
-          selectedModels.forEach(modelId => {
-            if (!updatedHist[currentEntryIndex].responses[modelId]) {
-              updatedHist[currentEntryIndex].responses[modelId] = {};
-            }
-            updatedHist[currentEntryIndex].responses[modelId] = {
-              ...updatedHist[currentEntryIndex].responses[modelId],
-              text: updatedHist[currentEntryIndex].responses[modelId]?.text || '',
-              error: 'Connection error with the server.',
-              loading: false,
-              streaming: false,
-              done: true
-            };
-          });
-        }
-        return updatedHist;
-      });
+      setIsProcessing(false);
+      setCurrentPromptId(null);
+      // setError('Connection error. Please try again.');
     };
 
     setTimeout(() => {
-      const mainContent = document.querySelector('main');
-      if (mainContent) {
-        mainContent.scrollTo({
-          top: mainContent.scrollHeight,
-          behavior: 'smooth'
-        });
-      }
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, 100);
   };
 
@@ -579,7 +534,6 @@ export default function Home() {
     setPrompt('');
     setHistory([]);
     setError(null);
-    setResponses({});
     setIsProcessing(false);
     setCurrentPromptId(null);
     setShowContinueButton(true);
@@ -767,23 +721,10 @@ export default function Home() {
       : 'flex flex-col space-y-6';
   };
 
+  // Update renderConversationHistory to use history state directly
   const renderConversationHistory = () => {
     return (
-      <div className="space-y-10 pb-24 pt-4">
-        {/* Load More button */}
-        {history.some(entry => entry.isHistorical) && hasMore && (
-          <button
-            onClick={handleLoadMore}
-            className="flex items-center justify-center space-x-1 mx-auto px-3 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 bg-white dark:bg-gray-800 rounded-full shadow-sm hover:shadow transition-all duration-200 border border-gray-200 dark:border-gray-700 group"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 rotate-180">
-              <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-            </svg>
-            <span>Load more</span>
-          </button>
-        )}
-
-        {/* Render all conversations in a single mapping */}
+      <div className="space-y-6">
         {history.map((entry, index) => (
           <div key={entry.id || `entry-${index}`} className="space-y-6">
             {/* File attachment display */}
@@ -822,8 +763,8 @@ export default function Home() {
                   key={`${entry.id}-${model}`}
                   model={model}
                   conversationId={entry.id}
-                  response={currentPromptId === entry.id ? responses[model] : entry.responses?.[model]}
-                  streaming={currentPromptId === entry.id && responses[model]?.streaming}
+                  response={entry.responses?.[model]}
+                  streaming={currentPromptId === entry.id && entry.responses?.[model]?.streaming}
                   className="light-response-column"
                   onRetry={handleModelRetry}
                 />
@@ -1046,37 +987,15 @@ export default function Home() {
     });
   }, [responseLayout]);
 
-  // a function to stop streaming
+  // Update handleStopStreaming to work with history state
   const handleStopStreaming = () => {
     console.log('Stopping stream');
     
-    // Close the EventSource connection
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
       eventSourceRef.current = null;
     }
     
-    // Cancel any ongoing streaming for all models
-    setResponses(prevResponses => {
-      const updatedResponses = { ...prevResponses };
-      
-      // Mark all streaming responses as completed
-      Object.keys(updatedResponses).forEach(model => {
-        if (updatedResponses[model]?.streaming || updatedResponses[model]?.loading) {
-          updatedResponses[model] = {
-            ...updatedResponses[model],
-            streaming: false,
-            loading: false, // Ensure loading is set to false for all models, including OpenRouter models
-            text: updatedResponses[model].text ? updatedResponses[model].text + " [stopped]" : "[stopped]",
-            done: true // Explicitly mark as done to stop timers
-          };
-        }
-      });
-      
-      return updatedResponses;
-    });
-
-    // Update the history entries as well
     setHistory(prev => {
       return prev.map(entry => {
         if (entry.id === currentPromptId) {
@@ -1087,9 +1006,9 @@ export default function Home() {
               updatedResponses[model] = {
                 ...updatedResponses[model],
                 streaming: false,
-                loading: false, // Ensure loading is set to false
+                loading: false,
                 text: updatedResponses[model].text ? updatedResponses[model].text + " [stopped]" : "[stopped]",
-                done: true // Explicitly mark as done to stop timers
+                done: true
               };
             }
           });
@@ -1100,9 +1019,8 @@ export default function Home() {
       });
     });
     
-    // Reset all states that might be disabling the prompt bar
     setIsProcessing(false);
-    setLoading(false); // Critical: Reset the loading state to re-enable the prompt bar
+    setLoading(false);
     setCurrentPromptId(null);
   };
 
@@ -1142,38 +1060,16 @@ export default function Home() {
   };
 
   // Function to handle thread selection
-  const handleThreadSelect = async (threadId) => {
-    if (threadId === activeThreadId) return;
+  const handleThreadSelect = (threadId) => {
+    if (isGuest || !session) return;
     
-    try {
-      setLoading(true);
-      const response = await fetch(`/api/threads/retrieve?id=${threadId}`);
-      
-      if (!response.ok) throw new Error('Failed to load thread');
-      
-      const data = await response.json();
-      setHistory(data.conversations);
-      setActiveThreadId(threadId);
+    if (threadId === activeThreadId && history.length > 0) {
       setSidebarOpen(false);
-      
-      // Dispatch a custom event to clear any persistent file references
-      window.dispatchEvent(new Event('clearFileReferences'));
-      
-      // smooth scrolling to bottom
-      setTimeout(() => {
-        const mainContent = document.querySelector('main');
-        if (mainContent) {
-          mainContent.scrollTo({
-            top: mainContent.scrollHeight,
-            behavior: 'smooth'
-          });
-        }
-      }, 100);
-    } catch (error) {
-      console.error('Error loading thread:', error);
-    } finally {
-      setLoading(false);
+      return;
     }
+    
+    router.push(`/?threadId=${threadId}`, undefined, { shallow: false }); // Changed shallow: true to false
+    setSidebarOpen(false);
   };
 
   // Fetch threads on component mount
@@ -1185,37 +1081,26 @@ export default function Home() {
 
   // Function to handle new thread creation
   const handleNewThread = async () => {
-    // If we already have 10 threads, delete the oldest one first
-    if (threads.length >= 10) {
-      try {
-        const deleteResult = await deleteOldestThread();
-        if (!deleteResult || !deleteResult.success) {
-          console.error('Failed to delete oldest thread before creating a new one');
-          // Continue anyway
-        }
-      } catch (error) {
-        console.error('Error during thread deletion:', error);
-        // Continue with new thread creation anyway
-      }
+    if (isGuest) {
+      triggerLoginPrompt("Please sign up or log in to create and save chat threads.");
+      return;
     }
     
-    // Reset the conversation state
+    if (!session) return;
+
     setHistory([]);
     setActiveThreadId(null);
+    setActiveThreadTitle("New Chat");
+    router.push('/', undefined, { shallow: false }); // Changed shallow: true to false
     setSidebarOpen(false);
     setHasInteracted(false);
     
-    // Restart the animation if it was stopped
     if (starfieldRef.current) {
       starfieldRef.current.startAnimation();
     }
     
-    // Clear any responses in the current state
-    setResponses({});
     setCurrentPromptId(null);
     setPrompt('');
-    
-    // Dispatch a custom event to clear any persistent file references
     window.dispatchEvent(new Event('clearFileReferences'));
   };
 
@@ -1331,11 +1216,190 @@ export default function Home() {
     );
   };
 
+  // --- Session, Guest, and Thread Loading Logic ---
+  useEffect(() => {
+    setIsClient(true); // Set isClient to true after first render on client
+
+    if (sessionStatus === 'loading') {
+      setLoading(true);
+      return;
+    }
+    setLoading(false);
+
+    const currentIsGuest = !session;
+    setIsGuest(currentIsGuest);
+    const queryThreadId = router.query.threadId;
+
+    if (currentIsGuest) {
+      // Guest mode handling
+      setHistory([]);
+      setActiveThreadId(null);
+      setActiveThreadTitle("New Chat");
+      setThreads([]);
+      setContextEnabled(false);
+      
+      // If guest was on a thread URL, redirect them to the base URL
+      if (queryThreadId) {
+        router.replace('/', undefined, { shallow: true });
+      }
+    } else {
+      // Logged-in user handling
+      fetchThreads(); // Fetch available threads for the sidebar
+      
+      if (queryThreadId) {
+        // A specific thread is in the URL
+        if (queryThreadId !== activeThreadId || history.length === 0) {
+          loadThreadConversations(queryThreadId, 0, true);
+        }
+      } else {
+        // No threadId in URL, means it's a "new chat" or base page
+        if (activeThreadId || history.length > 0) {
+          setHistory([]);
+          setActiveThreadId(null);
+          setActiveThreadTitle("New Chat");
+        }
+      }
+    }
+  }, [session, sessionStatus, router.query.threadId]);
+
+  const loadThreadConversations = async (threadIdToLoad, skipCount = 0, initialLoad = false) => {
+    if (isGuest || !session || !threadIdToLoad) return;
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const response = await fetch(`/api/threads/retrieve?id=${threadIdToLoad}&skip=${skipCount}`);
+      
+      if (!response.ok) {
+        if (response.status === 404) {
+          setError("Thread not found or you don't have access.");
+          router.replace('/', undefined, { shallow: true });
+          setActiveThreadId(null);
+          setActiveThreadTitle("New Chat");
+          setHistory([]);
+          return;
+        }
+        throw new Error('Failed to load thread');
+      }
+
+      const data = await response.json();
+      const newConversations = data.conversations || [];
+
+      if (initialLoad) {
+        setHistory(newConversations.reverse());
+      } else {
+        setHistory(prev => [...newConversations.reverse(), ...prev]);
+      }
+
+      setActiveThreadId(threadIdToLoad);
+      setActiveThreadTitle(data.thread?.title || "Chat");
+      setHasMoreConversations(data.hasMore || false);
+      setSidebarOpen(false);
+      window.dispatchEvent(new Event('clearFileReferences'));
+
+      // Scroll handling
+      setTimeout(() => {
+        const mainContent = document.querySelector('main div div.h-full.overflow-y-auto');
+        if (mainContent) {
+          if (initialLoad) {
+            mainContent.scrollTop = mainContent.scrollHeight;
+          } else {
+            const oldScrollHeight = mainContent.dataset.oldScrollHeight || 0;
+            mainContent.scrollTop = mainContent.scrollHeight - oldScrollHeight;
+            mainContent.dataset.oldScrollHeight = mainContent.scrollHeight;
+          }
+        }
+      }, 100);
+
+    } catch (error) {
+      console.error('Error loading thread:', error);
+      setError(error.message || 'Failed to retrieve thread conversations.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --- Welcome Screen Logic ---
+  const renderWelcomeOrSuggestions = () => {
+    // Only render guest-specific message on client after hydration
+    if (isGuest && !isClient) {
+      return null; // Or a placeholder if needed
+    }
+
+    if (activeThreadId && history.length > 0) return null;
+    if (history.length > 0 && !isGuest) return null;
+    if (isProcessing) return null;
+
+    if (isGuest && isClient && guestConversationCount >= GUEST_CONVERSATION_LIMIT) { // Add isClient check
+      return (
+        <div className="flex flex-col items-center justify-center h-full text-center px-4">
+          <h2 className="text-2xl font-bold mb-4">Free Trial Limit Reached</h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-6">
+            You've used all {GUEST_CONVERSATION_LIMIT} free conversations. Sign up to continue chatting!
+          </p>
+          <button
+            onClick={() => signIn()}
+            className="px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+          >
+            Sign Up Now
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-center px-4">
+        {renderSuggestions()}
+        {isGuest && isClient ? ( // Conditionally render guest message only on client
+          <p className="text-xl text-gray-600 dark:text-gray-400 mb-8 max-w-2xl">
+            Try out our AI models with {GUEST_CONVERSATION_LIMIT - guestConversationCount} free conversations.
+          </p>
+        ) : !isGuest ? ( // Render for logged-in users always
+          <p className="text-xl text-gray-600 dark:text-gray-400 mb-8 max-w-2xl">
+            Start a new conversation or select a thread from your library.
+          </p>
+        ) : null} {/* Don't render anything for guest on server */}
+      </div>
+    );
+  };
+
+  // Login prompt function
+  const triggerLoginPrompt = (message) => {
+    toast.error(
+      (t) => (
+        <div className="flex flex-col items-center text-center p-2">
+          <span className="text-sm mb-3">{message}</span>
+          <div className="flex gap-3">
+            <button
+              onClick={() => { router.push('/auth/signin'); toast.dismiss(t.id); }}
+              className="px-4 py-2 text-xs font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-md shadow-md"
+            >
+              Sign In
+            </button>
+            <button
+              onClick={() => { router.push('/auth/signup'); toast.dismiss(t.id); }}
+              className="px-4 py-2 text-xs font-semibold text-gray-800 bg-gray-200 hover:bg-gray-300 rounded-md shadow-md"
+            >
+              Sign Up
+            </button>
+            <button onClick={() => toast.dismiss(t.id)} className="p-1">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400 hover:text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      ),
+      { duration: 10000, position: 'top-center', style: { background: '#1F2937', color: '#F3F4F6', border: '1px solid #374151', maxWidth: '450px', borderRadius: '8px' } }
+    );
+  };
+
   return (
     <div className="relative z-[2] flex flex-col min-h-screen">
       <StarfieldBackground ref={starfieldRef} />
       
-      {/* a dark overlay that fades out when hasInteracted is true */}
+      {/* Dark overlay */}
       <div 
         className="fixed inset-0 bg-black transition-opacity duration-1000 pointer-events-none z-[1]"
         style={{ 
@@ -1343,7 +1407,7 @@ export default function Home() {
         }}
       />
 
-      {/* Wrap all content in a relative container with z-index */}
+      {/* Main content wrapper */}
       <div className="relative z-[2] flex flex-col h-screen">
         <Head>
           <title>Quicke - The AI ChatHub</title>
@@ -1588,11 +1652,12 @@ export default function Home() {
         </header>
 
         {/* Model Selector */}
-        <ModelSelector 
+        <ModelSelector
           isOpen={showModelSelector}
           setIsOpen={setShowModelSelector}
-          selectedModels={selectedModels} 
-          setSelectedModels={setSelectedModels} 
+          selectedModels={selectedModels}
+          setSelectedModels={setSelectedModels}
+          isGuest={isGuest}
         />
 
         <ApiKeyManager 
@@ -1611,9 +1676,9 @@ export default function Home() {
           </div>
         )}
         
-        <main className="flex-1 h-screen flex flex-col overflow-hidden">
+        {/* Main content area */}
+        <main className="flex-1 overflow-y-auto relative">
           {history.length === 0 ? (
-            // Welcome screen
             <div className="flex-1 flex items-center justify-center">
               <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
                 <div className="max-w-3xl w-full space-y-8">
@@ -1626,57 +1691,24 @@ export default function Home() {
                     </p>
                   </div>
 
-                  {renderSuggestions()}
-
-                  {/* Quick start section */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-8">
-                    {/* more quick start cards */}
-                  </div>
+                  {renderWelcomeOrSuggestions()}
                 </div>
               </div>
             </div>
           ) : (
-            // Main conversation history with side panel support
-            <div className="flex-1 overflow-hidden">
-              <div className="h-full overflow-y-auto">
-                {isSidePanelOpen ? (
-                  <SplitPanelLayout
-                    leftContent={
-                      <div className="px-2 sm:px-4 py-2 pb-[120px] sm:pb-2">
-                        <div className="max-w-7xl mx-auto">
-                          {renderConversationHistory()}
-                          <div ref={messagesEndRef} />
-                        </div>
-                      </div>
-                    }
-                    rightContent={
-                      sidePanelContent && (
-                        <ResponseColumn
-                          {...sidePanelContent}
-                          isInSidePanel={true}
-                          onCloseSidePanel={closeSidePanel}
-                          onOpenInSidePanel={handleOpenInSidePanel}
-                          onRetry={handleModelRetry}
-                        />
-                      )
-                    }
-                  />
-                ) : (
-                  <div className="px-2 sm:px-4 py-2 pb-[120px] sm:pb-2">
-                    <div className="max-w-7xl mx-auto">
-                      {renderConversationHistory()}
-                      <div ref={messagesEndRef} />
-                    </div>
-                  </div>
-                )}
+            <div className="px-2 sm:px-4 py-2 pb-32">
+              <div className="max-w-7xl mx-auto">
+                {renderConversationHistory()}
+                <div ref={messagesEndRef} />
               </div>
             </div>
           )}
         </main>
-        
+
+        {/* Footer with prompt bar */}
         <footer className="px-2 sm:px-4 py-2 sm:py-4 bg-transparent relative sm:relative z-[40] safe-area-bottom">
           <div className="relative max-w-4xl mx-auto">
-            {/* glass effect container for prompt */}
+            {/* This div is the main "glass" container for the prompt bar */}
             <div className="relative rounded-2xl backdrop-blur-md bg-white/10 dark:bg-gray-900/20 border border-gray-200/20 dark:border-gray-700/20 shadow-lg overflow-hidden">
               <div className="flex items-center gap-3 p-2">
                 {history.length > 0 && (
@@ -1685,8 +1717,7 @@ export default function Home() {
                     className="p-2.5 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 hover:bg-red-50/20 dark:hover:bg-red-900/20 rounded-lg transition-all duration-200 group"
                     title="Clear screen"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" 
-                      className="w-5 h-5 transform group-hover:scale-110 transition-transform duration-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 transform group-hover:scale-110 transition-transform duration-200">
                       <path fillRule="evenodd" d="M16.5 4.478v.227a48.816 48.816 0 013.878.512.75.75 0 11-.256 1.478l-.209-.035-1.005 13.07a3 3 0 01-2.991 2.77H8.084a3 3 0 01-2.991-2.77L4.087 6.66l-.209.035a.75.75 0 01-.256-1.478A48.567 48.567 0 017.5 4.705v-.227c0-1.564 1.213-2.9 2.816-2.951a52.662 52.662 0 013.369 0c1.603.051 2.815 1.387 2.815 2.951zm-6.136-1.452a51.196 51.196 0 013.273 0C14.39 3.05 15 3.684 15 4.478v.113a49.488 49.488 0 00-6 0v-.113c0-.794.609-1.428 1.364-1.452zm-.355 5.945a.75.75 0 10-1.5.058l.347 9a.75.75 0 101.499-.058l-.346-9zm5.48.058a.75.75 0 10-1.498-.058l-.347 9a.75.75 0 001.5.058l.345-9z" clipRule="evenodd" />
                     </svg>
                   </button>
@@ -1701,19 +1732,26 @@ export default function Home() {
                       }
                       handleSubmit(e);
                     }}
-                    onClear={handleClear}
-                    disabled={!isProcessing && (loading || selectedModels.length === 0)}  
+                    disabled={
+                      (isGuest && guestConversationCount >= GUEST_CONVERSATION_LIMIT) || // Guest quota
+                      isProcessing || // Stream active
+                      loading || // General loading (e.g., thread creation)
+                      (!isGuest && selectedModels.length === 0) // Logged in but no models selected
+                    }
                     isProcessing={isProcessing}
                     preserveOnFocus={true}
                     onStopStreaming={handleStopStreaming}
                     threadId={activeThreadId}
                     selectedModels={selectedModels}
+                    isGuest={isGuest} // Pass isGuest
+                    onTriggerLoginPrompt={triggerLoginPrompt} // Pass handler
                   />
                 </div>
               </div>
             </div>
           </div>
         </footer>
+
         <ThreadSidebar 
           isOpen={sidebarOpen}
           onClose={() => setSidebarOpen(false)}

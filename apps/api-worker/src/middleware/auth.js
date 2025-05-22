@@ -7,7 +7,7 @@ let JWE_CEK_SECRET = null;
 
 if (!NEXTAUTH_SECRET_STRING) {
   console.error("FATAL ERROR (api-worker/auth.js): NEXTAUTH_SECRET environment variable is not set!");
-  process.exit(1); // Or handle more gracefully if some routes are public
+  // process.exit(1); // Consider if all routes truly need auth or if some can proceed without req.user
 } else {
   // console.log("Auth Middleware (api-worker): Raw NEXTAUTH_SECRET_STRING from env:", `"${NEXTAUTH_SECRET_STRING}"`);
   const hashedSecret = crypto.createHash('sha256').update(NEXTAUTH_SECRET_STRING, 'utf8').digest();
@@ -16,6 +16,14 @@ if (!NEXTAUTH_SECRET_STRING) {
 }
 
 module.exports = async (req, res, next) => {
+  // Check for guest flag specifically for /api/stream (or any other guest-allowed route)
+  if (req.originalUrl.startsWith('/api/stream') && req.query.isGuest === 'true') {
+    console.log("API WORKER AUTH: Guest request to /api/stream. Bypassing token validation.");
+    // req.user will remain undefined for guests. stream.js will handle this.
+    return next();
+  }
+
+  // Existing authentication logic for non-guest users
   if (!JWE_CEK_SECRET) {
       console.error("API WORKER AUTH: CRITICAL - JWE_CEK_SECRET not derived. NEXTAUTH_SECRET issue at module load.");
       return res.status(500).json({ error: 'Internal Server Authentication Configuration Error' });
@@ -49,7 +57,7 @@ module.exports = async (req, res, next) => {
   }
 
   if (!tokenString) {
-    console.warn(`API WORKER AUTH: No valid token string found from any source for ${req.originalUrl}. Headers:`, JSON.stringify(req.headers.cookie || req.headers.authorization || "No relevant headers"));
+    console.warn(`API WORKER AUTH: No valid token for non-guest user for ${req.originalUrl}.`);
     return res.status(401).json({ error: 'Unauthorized: No token provided to worker' });
   }
 
@@ -65,42 +73,34 @@ module.exports = async (req, res, next) => {
           jweProtectedHeader = JSON.parse(Buffer.from(jweHeaderParts[0], 'base64url').toString('utf8'));
           // console.log("API WORKER AUTH: Parsed JWE Protected Header from incoming token:", jweProtectedHeader);
       } else {
-          console.error("API WORKER AUTH: Incoming token does not have 5 parts, not a standard compact JWE. Parts found:", jweHeaderParts.length);
+          console.error("API WORKER AUTH: Malformed token structure (parts). Parts found:", jweHeaderParts.length);
           return res.status(401).json({ error: 'Unauthorized: Malformed token structure (parts)' });
       }
   } catch (e) {
-      console.warn("API WORKER AUTH: Could not parse JWE header from token. Error:", e.message, "Token snippet:", tokenString.substring(0, 50));
+      console.warn("API WORKER AUTH: Could not parse JWE header. Error:", e.message);
       return res.status(401).json({ error: 'Unauthorized: Malformed token header (parsing)' });
   }
 
   // Double check header values before attempting decryption
   if (!jweProtectedHeader || jweProtectedHeader.alg !== 'dir' || jweProtectedHeader.enc !== 'A256GCM') {
-      console.error("API WORKER AUTH: Incoming token's JWE header does not match expected alg ('dir') or enc ('A256GCM'). Header:", jweProtectedHeader);
+      console.error("API WORKER AUTH: Token JWE header mismatch. Header:", jweProtectedHeader);
       return res.status(401).json({ error: 'Unauthorized: Token algorithm mismatch' });
   }
 
   try {
-    console.log("API WORKER AUTH: Attempting JWE decryption with derived key...");
+    console.log("API WORKER AUTH: Attempting JWE decryption...");
     const { payload } = await jwtDecrypt(tokenString, JWE_CEK_SECRET);
 
     if (!payload || !payload.sub) {
       console.error("API WORKER AUTH: JWE Decrypted but 'sub' (user ID) is missing. Payload:", payload);
-      return res.status(401).json({ error: 'Unauthorized: Invalid token payload content (no sub)' });
+      return res.status(401).json({ error: 'Unauthorized: Invalid token payload (no sub)' });
     }
 
-    req.user = { id: payload.sub };
-    console.log("API WORKER AUTH: Token DECRYPTED and VERIFIED for user:", req.user.id);
+    req.user = { id: payload.sub }; // Set req.user for authenticated users
+    console.log("API WORKER AUTH: Token DECRYPTED for user:", req.user.id);
     next();
   } catch (err) {
-    console.error("API WORKER AUTH: JWE Decryption FAILED. Path:", req.originalUrl);
-    console.error("Error Name:", err.name, "Error Message:", err.message);
-    if (err.code) console.error("Error Code:", err.code);
-    console.error("Hashed Secret used for decryption (first 5 hex bytes):", JWE_CEK_SECRET.slice(0, 5).toString('hex'));
-
-    let errorMessage = 'Unauthorized: Invalid or expired token (worker processing)';
-    if (err.code === 'ERR_JWE_DECRYPTION_FAILED') {
-        errorMessage = 'Unauthorized: Token decryption failed (LIKELY NEXTAUTH_SECRET MISMATCH or corrupted token)';
-    } // ... (other error code mappings)
-    return res.status(401).json({ error: errorMessage });
+    console.error("API WORKER AUTH: JWE Decryption FAILED. Path:", req.originalUrl, "Error:", err.message);
+    return res.status(401).json({ error: 'Unauthorized: Invalid or expired token (worker processing)' });
   }
 };
