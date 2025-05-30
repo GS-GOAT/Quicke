@@ -299,7 +299,8 @@ export default function ResponseColumn({
   className = '',
   onRetry,
   conversationId,
-  isSummary = false
+  isSummary = false,
+  onOpenInSidePanel
 }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const contentRef = useRef(null);
@@ -479,21 +480,24 @@ export default function ResponseColumn({
   
   // Handle side panel opening - ensure timer state is preserved
   const handleColumnDoubleClick = (e) => {
-    // Don't trigger when clicking buttons
     if (e.target.closest('button')) return;
-    
     if (!isInSidePanel) {
-      // Timer state is already preserved in window.timerRegistry
-      
-      // Deep clone the response to avoid sharing state
       const responseClone = response ? { ...response } : null;
-      
-      openSidePanel({
-        model,
-        conversationId,
-        response: responseClone,
-        streaming
-      });
+      if (typeof onOpenInSidePanel === 'function') {
+        onOpenInSidePanel({
+          model,
+          conversationId,
+          response: responseClone,
+          streaming
+        });
+      } else {
+        openSidePanel({
+          model,
+          conversationId,
+          response: responseClone,
+          streaming
+        });
+      }
     }
   };
 
@@ -549,12 +553,21 @@ export default function ResponseColumn({
     if (isInSidePanel) {
       closeSidePanel();
     } else {
-      openSidePanel({
-        model,
-        conversationId,
-        response,
-        streaming
-      });
+      if (typeof onOpenInSidePanel === 'function') {
+        onOpenInSidePanel({
+          model,
+          conversationId,
+          response,
+          streaming
+        });
+      } else {
+        openSidePanel({
+          model,
+          conversationId,
+          response,
+          streaming
+        });
+      }
     }
   };
 

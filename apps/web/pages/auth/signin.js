@@ -19,6 +19,7 @@ export default function SignIn() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [showGooglePopup, setShowGooglePopup] = useState(false);
   const router = useRouter();
   const { error: queryError, callbackUrl } = router.query;
 
@@ -58,13 +59,22 @@ export default function SignIn() {
   const handleGoogleSignIn = async () => {
     setIsGoogleLoading(true);
     setError('');
+    setShowGooglePopup(true);
     try {
-      await signIn('google', { 
-        callbackUrl: callbackUrl || '/'
-      });
+      const result = await signIn('google', { callbackUrl: callbackUrl || '/' });
+      // Simulate backend check for first time user (replace with real check)
+      const isFirstTime = result?.url?.includes('firstTime=true');
+      if (isFirstTime) {
+        router.push('/onboarding');
+      } else if (result?.url) {
+        router.push(result.url);
+      } else {
+        router.push(callbackUrl || '/');
+      }
     } catch (error) {
       setIsGoogleLoading(false);
       setError('Failed to connect to Google. Please try again.');
+      setShowGooglePopup(false);
     }
   };
 
@@ -185,6 +195,41 @@ export default function SignIn() {
           </div>
         </div>
       </div>
+      {showGooglePopup && (
+        <div className="fixed top-0 right-0 z-50 w-96 max-w-full bg-white dark:bg-gray-900 shadow-2xl rounded-l-2xl border-l border-gray-200 dark:border-gray-800 p-6 flex flex-col items-center animate-slide-in-right">
+          <div className="flex items-center mb-4">
+            <GoogleIcon />
+            <span className="text-lg font-semibold ml-2">Continue with Google</span>
+          </div>
+          <p className="text-gray-600 dark:text-gray-300 mb-4 text-center">Sign in with your Google account to continue.</p>
+          <button
+            onClick={handleGoogleSignIn}
+            disabled={isGoogleLoading}
+            className="w-full px-4 py-3 flex items-center justify-center space-x-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all duration-200 border border-blue-700 relative"
+          >
+            {isGoogleLoading ? (
+              <span className="inline-flex items-center">
+                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Processing...
+              </span>
+            ) : (
+              <>
+                <GoogleIcon />
+                <span>Continue as Google</span>
+              </>
+            )}
+          </button>
+          <button
+            onClick={() => setShowGooglePopup(false)}
+            className="mt-4 text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 text-sm"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
     </>
   );
 }

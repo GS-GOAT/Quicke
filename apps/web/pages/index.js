@@ -83,6 +83,9 @@ export default function Home() {
   const [hasMoreConversations, setHasMoreConversations] = useState(true);
   const [isClient, setIsClient] = useState(false); // New state to track client mount
 
+  // Track which conversations have been saved to avoid duplicate saves
+  const savedConversationsRef = useRef(new Set());
+
   const [predefinedSuggestions] = useState([
     "Explain quantum computing in simple terms",
     "Write a short story about a robot learning to feel emotions",
@@ -504,6 +507,37 @@ export default function Home() {
           }
           return updatedHist;
         });
+
+        // After updating history, check if all models are done and save the conversation (for logged-in users only)
+        if (!isGuest) {
+          setTimeout(() => {
+            setHistory(prevHist => {
+              const updatedHist = [...prevHist];
+              const idx = updatedHist.findIndex(e => e.id === conversationId);
+              if (idx !== -1) {
+                const allDone = Object.values(updatedHist[idx].responses).every(r => r.done || r.error);
+                if (allDone && !savedConversationsRef.current.has(conversationId)) {
+                  savedConversationsRef.current.add(conversationId);
+                  // Save the conversation
+                  fetch('/api/conversations/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      id: conversationId,
+                      prompt: updatedHist[idx].prompt,
+                      responses: updatedHist[idx].responses,
+                      threadId: updatedHist[idx].threadId,
+                      summary: updatedHist[idx].summary || undefined
+                    })
+                  }).catch(err => {
+                    console.error('Failed to save conversation:', err);
+                  });
+                }
+              }
+              return updatedHist;
+            });
+          }, 0);
+        }
       }
     };
 
@@ -767,6 +801,7 @@ export default function Home() {
                   streaming={currentPromptId === entry.id && entry.responses?.[model]?.streaming}
                   className="light-response-column"
                   onRetry={handleModelRetry}
+                  onOpenInSidePanel={handleOpenInSidePanel}
                 />
               ))}
             </div>
@@ -1395,6 +1430,39 @@ export default function Home() {
     );
   };
 
+  // Add this helper function inside Home component
+  const renderMainContentArea = () => {
+    if (history.length === 0 && !isProcessing && !(activeThreadId && loading && !error)) {
+      return (
+        <div className="flex-1 flex items-center justify-center h-full">
+          <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
+            <div className="max-w-3xl w-full space-y-8">
+              <div className="space-y-4">
+                <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 dark:text-white">
+                  What can I help with?
+                </h1>
+                <p className="text-xl text-gray-600 dark:text-gray-400">
+                  Get instant responses from multiple AI models side by side
+                </p>
+              </div>
+              {renderWelcomeOrSuggestions()}
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div className="h-full overflow-y-auto scrollbar-thin">
+        <div className="px-2 sm:px-4 py-2 pb-32">
+          <div className="max-w-7xl mx-auto">
+            {renderConversationHistory()}
+            <div ref={messagesEndRef} />
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="relative z-[2] flex flex-col min-h-screen">
       <StarfieldBackground ref={starfieldRef} />
@@ -1677,31 +1745,24 @@ export default function Home() {
         )}
         
         {/* Main content area */}
-        <main className="flex-1 overflow-y-auto relative">
-          {history.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
-                <div className="max-w-3xl w-full space-y-8">
-                  <div className="space-y-4">
-                    <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 dark:text-white">
-                      What can I help with?
-                    </h1>
-                    <p className="text-xl text-gray-600 dark:text-gray-400">
-                      Get instant responses from multiple AI models side by side
-                    </p>
-                  </div>
-
-                  {renderWelcomeOrSuggestions()}
-                </div>
-              </div>
-            </div>
+        <main className="flex-1 overflow-hidden relative">
+          {isSidePanelOpen && sidePanelContent ? (
+            <SplitPanelLayout
+              leftContent={renderMainContentArea()}
+              rightContent={
+                sidePanelContent && (
+                  <ResponseColumn
+                    {...sidePanelContent}
+                    isInSidePanel={true}
+                    onCloseSidePanel={closeSidePanel}
+                    onOpenInSidePanel={handleOpenInSidePanel}
+                    onRetry={handleModelRetry}
+                  />
+                )
+              }
+            />
           ) : (
-            <div className="px-2 sm:px-4 py-2 pb-32">
-              <div className="max-w-7xl mx-auto">
-                {renderConversationHistory()}
-                <div ref={messagesEndRef} />
-              </div>
-            </div>
+            renderMainContentArea()
           )}
         </main>
 
