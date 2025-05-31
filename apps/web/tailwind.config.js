@@ -24,8 +24,6 @@ export default {
           900: '#0c4a6e',
           950: '#082f49',
         },
-        darkbg: '#1a1a1a',
-        darksurface: '#2a2a2a',
       },
       boxShadow: {
         'soft': '0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04)',

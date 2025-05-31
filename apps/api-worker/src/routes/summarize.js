@@ -8,7 +8,7 @@ const router = express.Router();
 // Main route handler
 router.post('/', async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user ? req.user.id : null;
     const { responses } = req.body;
 
     if (!responses) {
@@ -16,19 +16,34 @@ router.post('/', async (req, res) => {
     }
 
     // Get API key for Google
-    const apiKey = await prisma.apiKey.findFirst({
-      where: { 
-        userId,
-        provider: 'google'
-      },
-      select: { encryptedKey: true }
-    });
+    let googleApiKey = null;
 
-    if (!apiKey) {
-      return res.status(400).json({ error: 'Google API key required' });
+    if (userId) {
+      // Logged-in user: fetch their specific key
+      const apiKey = await prisma.apiKey.findFirst({
+        where: {
+          userId,
+          provider: 'google'
+        },
+        select: { encryptedKey: true }
+      });
+      if (apiKey) {
+        googleApiKey = apiKey.encryptedKey;
+      }
+    } else {
+      // Guest user: use the system-wide guest key
+      googleApiKey = process.env.SYSTEM_GEMINI_API_KEY; 
+      if (!googleApiKey) {
+         console.error('Guest Summarization Error: SYSTEM_GEMINI_API_KEY is not set in environment.');
+         return res.status(500).json({ error: 'System configuration error prevents guest summarization.' });
+      }
     }
 
-    const genAI = new GoogleGenerativeAI(apiKey.encryptedKey);
+    if (!googleApiKey) {
+      return res.status(400).json({ error: 'Google API key required for summarization.' });
+    }
+
+    const genAI = new GoogleGenerativeAI(googleApiKey);
     const model = genAI.getGenerativeModel({ 
       model: 'gemini-2.0-flash',
       tools: [{ 'google_search': {} }],

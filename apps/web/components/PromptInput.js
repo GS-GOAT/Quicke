@@ -592,7 +592,7 @@ export default function PromptInput({
         className="relative rounded-xl shadow-sm transition-all duration-200
           hover:shadow-md dark:hover:shadow-inner"
       >
-        <div className="relative border rounded-xl bg-white dark:bg-darksurface
+        <div className="relative border rounded-xl bg-white dark:bg-[#262626]
           transition-colors duration-200 border-gray-200 dark:border-gray-700 hover:border-primary-500/50 dark:hover:border-primary-500/50"
         >
           {/* Input area */}

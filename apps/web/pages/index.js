@@ -8,7 +8,6 @@ import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useLocalStorage } from '../hooks/useLocalStorage';
-import StarfieldBackground from '../components/StarfieldBackground';
 import { useSplitPanel } from '../components/SplitPanelContext';
 import SplitPanelLayout from '../components/SplitPanelLayout';
 import { toast } from 'react-hot-toast';
@@ -66,22 +65,18 @@ export default function Home() {
   const [responseModels, setResponseModels] = useState({});
   const [isProcessing, setIsProcessing] = useState(false); 
   const [currentPromptId, setCurrentPromptId] = useState(null);
-  const [showContinueButton, setShowContinueButton] = useState(true); 
   const [visibleSuggestions, setVisibleSuggestions] = useState([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [responseLayout, setResponseLayout] = useLocalStorage('responseLayout', 'stack');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [threads, setThreads] = useState([]);
   const [activeThreadId, setActiveThreadId] = useState(null);
-  const [hasInteracted, setHasInteracted] = useState(false);
-  const universeRef = useRef(null);
-  const starfieldRef = useRef(null);
   const [contextEnabled, setContextEnabled] = useState(true);
   const [isCreatingThread, setIsCreatingThread] = useState(false);
   const [activeThreadTitle, setActiveThreadTitle] = useState("New Chat");
   const [hasMoreConversations, setHasMoreConversations] = useState(true);
   const [isClient, setIsClient] = useState(false); // New state to track client mount
+  const [sidebarVisible, setSidebarVisible] = useState(true); // State to control sidebar visibility
 
   // Track which conversations have been saved to avoid duplicate saves
   const savedConversationsRef = useRef(new Set());
@@ -396,8 +391,9 @@ export default function Home() {
     }
 
     setIsProcessing(true);
-    setHasInteracted(true);
-    if (starfieldRef.current) starfieldRef.current.stopAnimation();
+    if (currentPromptId) {
+      handleStopStreaming();
+    }
 
     const conversationId = `conv-${isGuest ? 'guest' : (session?.user?.id?.slice(-5) || 'user')}-${Date.now()}`;
     setCurrentPromptId(conversationId);
@@ -529,6 +525,9 @@ export default function Home() {
                       threadId: updatedHist[idx].threadId,
                       summary: updatedHist[idx].summary || undefined
                     })
+                  }).then(() => {
+                    // After saving the conversation, refetch threads to update the list
+                    fetchThreads();
                   }).catch(err => {
                     console.error('Failed to save conversation:', err);
                   });
@@ -570,15 +569,6 @@ export default function Home() {
     setError(null);
     setIsProcessing(false);
     setCurrentPromptId(null);
-    setShowContinueButton(true);
-    
-    // Reset the animation state
-    setHasInteracted(false);
-    
-    // Restart the starfield animation
-    if (starfieldRef.current) {
-      starfieldRef.current.startAnimation();
-    }
   };
 
   // summary generation function
@@ -661,17 +651,6 @@ export default function Home() {
       setSummaryLoading(prev => ({ ...prev, [conversationId]: false }));
     }
   };
-
-  // separator component between conversations
-  const ConversationSeparator = () => (
-    <div className="flex items-center my-8">
-      <div className="flex-grow h-px bg-gradient-to-r from-transparent via-gray-300 dark:via-gray-600 to-transparent" />
-      <div className="mx-4 px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-xs text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
-        Previous Conversation
-      </div>
-      <div className="flex-grow h-px bg-gradient-to-r from-transparent via-gray-300 dark:via-gray-600 to-transparent" />
-    </div>
-  );
 
   // Replace the old suggestion rendering with continuous scroll
   const renderSuggestions = () => (
@@ -977,20 +956,6 @@ export default function Home() {
     }
   };
 
-  const handleFirstPrompt = () => {
-    setHasInteracted(true);
-    if (starfieldRef.current) {
-      starfieldRef.current.stopAnimation();
-    }
-  };
-
-  useEffect(() => {
-    // When the first message is sent, stop the animation
-    if (history.length > 0 && !hasInteracted) {
-      handleFirstPrompt();
-    }
-  }, [history.length, hasInteracted]);
-
   const renderContextToggle = () => (
     <div className="flex items-center space-x-2">
       <switch
@@ -1066,8 +1031,39 @@ export default function Home() {
       const response = await fetch(`/api/threads/list`);
       if (response.ok) {
         const data = await response.json();
-        // Display up to 10 threads
-        setThreads(data.threads);
+        // Process threads to group by date
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+        const thirtyDaysAgo = new Date(now);
+        thirtyDaysAgo.setDate(now.getDate() - 30);
+
+        const groupedThreads = { today: [], yesterday: [], past30Days: [], older: [] };
+
+        data.threads.forEach(thread => {
+          const threadDate = new Date(thread.updatedAt);
+          const threadDay = new Date(threadDate.getFullYear(), threadDate.getMonth(), threadDate.getDate());
+
+          if (threadDay >= today) {
+            groupedThreads.today.push(thread);
+          } else if (threadDay >= yesterday) {
+            groupedThreads.yesterday.push(thread);
+          } else if (threadDay >= thirtyDaysAgo) {
+            groupedThreads.past30Days.push(thread);
+          } else {
+            groupedThreads.older.push(thread);
+          }
+        });
+
+        // Sort each group by updatedAt descending
+        Object.keys(groupedThreads).forEach(key => {
+          groupedThreads[key].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+        });
+
+        setThreads(groupedThreads);
+
+      } else {
+        console.error('Failed to fetch threads:', response.status);
       }
     } catch (error) {
       console.error('Error fetching threads:', error);
@@ -1099,12 +1095,10 @@ export default function Home() {
     if (isGuest || !session) return;
     
     if (threadId === activeThreadId && history.length > 0) {
-      setSidebarOpen(false);
       return;
     }
     
     router.push(`/?threadId=${threadId}`, undefined, { shallow: false }); // Changed shallow: true to false
-    setSidebarOpen(false);
   };
 
   // Fetch threads on component mount
@@ -1127,128 +1121,10 @@ export default function Home() {
     setActiveThreadId(null);
     setActiveThreadTitle("New Chat");
     router.push('/', undefined, { shallow: false }); // Changed shallow: true to false
-    setSidebarOpen(false);
-    setHasInteracted(false);
-    
-    if (starfieldRef.current) {
-      starfieldRef.current.startAnimation();
-    }
     
     setCurrentPromptId(null);
     setPrompt('');
     window.dispatchEvent(new Event('clearFileReferences'));
-  };
-
-  const ThreadSidebar = ({ isOpen, onClose, threads, onNewThread, onThreadSelect, activeThreadId }) => {
-    return (
-      <>
-        {/* Glass overlay backdrop */}
-        {isOpen && (
-          <div 
-            className="fixed inset-0 bg-black/30 backdrop-blur-sm z-30"
-            onClick={onClose}
-          />
-        )}
-        
-        {/* Glass sidebar */}
-        <div 
-          className={`fixed top-0 left-0 w-64 h-full z-40 border-r border-gray-700/30 shadow-xl transform transition-transform duration-300 ease-in-out ${
-            isOpen ? 'translate-x-0' : '-translate-x-full'
-          }`}
-          style={{
-            backgroundColor: 'rgba(28, 28, 32, 0.75)',
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-          }}
-        >
-          <div className="p-4 border-b border-gray-700/30" style={{ backgroundColor: 'rgba(24, 24, 28, 0.6)' }}>
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-lg font-semibold text-gray-200">Library</h2>
-              <button 
-                onClick={onClose}
-                className="p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-800/50"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              </button>
-            </div>
-          </div>
-          
-          <div className="flex flex-col h-[calc(100%-60px)]">
-            <div className="p-4">
-              {/* New Thread Button with enhanced hover */}
-              <button
-                onClick={onNewThread}
-                className="flex items-center justify-center w-full px-3 py-2 mb-6 text-sm font-medium text-white rounded-lg shadow-lg transition-all duration-200 hover:bg-gray-700/90 hover:transform hover:scale-[1.02] active:scale-[0.98]"
-                style={{
-                  backgroundColor: 'rgba(45, 45, 50, 0.7)',
-                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
-                }}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 mr-2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                </svg>
-                <span>New Thread</span>
-              </button>
-            </div>
-            
-            {/* Thread List with purple accent border - now scrollable */}
-            <div className="px-4 pb-4 overflow-y-auto flex-1">
-              <div className="space-y-2">
-                {threads.length === 0 ? (
-                  <div className="text-center py-8 text-gray-400" style={{ backgroundColor: 'rgba(40, 40, 45, 0.3)', borderRadius: '0.5rem' }}>
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 mx-auto mb-2 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                    </svg>
-                    <p className="text-sm font-medium">No threads yet</p>
-                    <p className="text-xs mt-1">Start a new conversation</p>
-                  </div>
-                ) : (
-                  threads.map(thread => (
-                    <div 
-                      key={thread.id}
-                      onClick={() => onThreadSelect(thread.id)}
-                      className="transition-all duration-200 mb-2"
-                    >
-                      <div
-                        className={`p-3 rounded-lg cursor-pointer transition-all duration-150 border-l-2 ${
-                          activeThreadId === thread.id 
-                            ? 'bg-gray-700/70 border-purple-400' 
-                            : 'bg-gray-800/40 border-transparent hover:bg-gray-700/50 hover:border-gray-500'
-                        }`}
-                        style={{
-                          transition: "all 0.15s ease",
-                          transform: `scale(${activeThreadId === thread.id ? '1.02' : '1'})`,
-                          borderLeftColor: activeThreadId === thread.id 
-                            ? 'rgba(167, 139, 250, 0.8)'  // Purplish color for the left border
-                            : 'transparent',
-                        }}
-                      >
-                        <h3 className="text-sm font-medium text-gray-200 truncate">{thread.title}</h3>
-                        <p className="text-xs text-gray-400 mt-1">
-                          {new Date(thread.updatedAt).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        {/*  style tag to ensure the glass effect works */}
-        <style jsx>{`
-          @supports (backdrop-filter: blur(20px)) or (-webkit-backdrop-filter: blur(20px)) {
-            div[style*="backdrop-filter"] {
-              backdrop-filter: blur(20px) !important;
-              -webkit-backdrop-filter: blur(20px) !important;
-            }
-          }
-        `}</style>
-      </>
-    );
   };
 
   // --- Session, Guest, and Thread Loading Logic ---
@@ -1330,7 +1206,6 @@ export default function Home() {
       setActiveThreadId(threadIdToLoad);
       setActiveThreadTitle(data.thread?.title || "Chat");
       setHasMoreConversations(data.hasMore || false);
-      setSidebarOpen(false);
       window.dispatchEvent(new Event('clearFileReferences'));
 
       // Scroll handling
@@ -1362,9 +1237,10 @@ export default function Home() {
       return null; // Or a placeholder if needed
     }
 
-    if (activeThreadId && history.length > 0) return null;
-    if (history.length > 0 && !isGuest) return null;
-    if (isProcessing) return null;
+    // If there's history or processing, don't show the welcome screen unless it's a new thread view without history loaded yet
+    if (history.length > 0 && !activeThreadId) return null;
+    if (isProcessing && !activeThreadId) return null;
+    if (activeThreadId && history.length > 0 && !loading) return null; // Hide if in a thread with loaded history and not loading more
 
     if (isGuest && isClient && guestConversationCount >= GUEST_CONVERSATION_LIMIT) { // Add isClient check
       return (
@@ -1383,14 +1259,15 @@ export default function Home() {
       );
     }
 
+    // Default welcome screen (for guests before limit, or logged-in users with no history)
     return (
       <div className="flex flex-col items-center justify-center h-full text-center px-4">
         {renderSuggestions()}
-        {isGuest && isClient ? ( // Conditionally render guest message only on client
+        {(isGuest && isClient) ? ( // Conditionally render guest message only on client
           <p className="text-xl text-gray-600 dark:text-gray-400 mb-8 max-w-2xl">
             Try out our AI models with {GUEST_CONVERSATION_LIMIT - guestConversationCount} free conversations.
           </p>
-        ) : !isGuest ? ( // Render for logged-in users always
+        ) : session ? ( // Render for logged-in users with no history
           <p className="text-xl text-gray-600 dark:text-gray-400 mb-8 max-w-2xl">
             Start a new conversation or select a thread from your library.
           </p>
@@ -1452,7 +1329,7 @@ export default function Home() {
       );
     }
     return (
-      <div className="h-full overflow-y-auto scrollbar-thin">
+      <div className="h-full overflow-y-auto relative scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-[#1E1E1E]">
         <div className="px-2 sm:px-4 py-2 pb-32">
           <div className="max-w-7xl mx-auto">
             {renderConversationHistory()}
@@ -1464,364 +1341,209 @@ export default function Home() {
   };
 
   return (
-    <div className="relative z-[2] flex flex-col min-h-screen">
-      <StarfieldBackground ref={starfieldRef} />
-      
-      {/* Dark overlay */}
-      <div 
-        className="fixed inset-0 bg-black transition-opacity duration-1000 pointer-events-none z-[1]"
-        style={{ 
-          opacity: hasInteracted ? 0 : 0.3 
-        }}
-      />
+    <div className="flex h-screen w-screen overflow-hidden bg-[#0D0D0D]">
+      {/* Persistent Sidebar */}
+      {session && sidebarVisible && (
+        <div className="w-[260px] h-full bg-[#202124] flex flex-col flex-shrink-0 border-r border-gray-700">
+          {/* Sidebar Header: Logo + New Task Button */}
+          <div className="p-4 h-[60px] flex-shrink-0 flex items-center justify-between">
+            {/* Sidebar Toggle Button (in sidebar header when visible) */}
+            <button
+              onClick={() => setSidebarVisible(!sidebarVisible)}
+              className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors mr-3"
+              title={sidebarVisible ? 'Hide sidebar' : 'Show sidebar'}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path> {/* Hamburger icon */}
+              </svg>
+            </button>
+          </div>
+          {/* New Task Button */}
+          <div className="p-3 flex-shrink-0">
+            <button
+              onClick={handleNewThread}
+              className="w-full flex items-center justify-center px-3 py-2 text-sm font-medium text-white rounded-md bg-gray-700 hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 mr-2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              New task
+              <span className="ml-auto text-xs text-gray-400 border border-gray-500 px-1.5 py-0.5 rounded-sm">Ctrl K</span>
+            </button>
+          </div>
+          {/* Thread List */}
+          <div className="flex-grow overflow-y-auto p-3 space-y-1 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-[#202124]" >
+            {Object.keys(threads).map(groupKey => {
+              const groupedList = threads[groupKey];
+              if (groupedList.length === 0) return null;
 
-      {/* Main content wrapper */}
-      <div className="relative z-[2] flex flex-col h-screen">
-        <Head>
-          <title>Quicke - The AI ChatHub</title>
-          <meta name="description" content="Get responses from multiple LLMs side by side" />
-          <link rel="icon" href="/favicon.ico" />
-        </Head>
+              const groupTitle = groupKey === 'today' ? 'Today' : groupKey === 'yesterday' ? 'Yesterday' : groupKey === 'past30Days' ? 'Past 30 Days' : 'Older';
 
-        <header className="relative z-10 bg-white/80 dark:bg-darksurface/80 backdrop-blur-sm shadow-sm border-b border-gray-200 dark:border-gray-800 safe-area-top">
-          <div className="max-w-7xl mx-auto px-2 sm:px-6">
-            <div className="flex items-center justify-between h-[52px] sm:h-16">
-              {/* Logo & Brand */}
-              <div className="flex items-center space-x-2 sm:space-x-3">
-                <button 
-                  className="p-1.5 sm:p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 group relative"
-                  aria-label="Thread menu"
-                  onMouseEnter={() => setSidebarOpen(true)}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-                  </svg>
-                </button>
-                
-                <h1 className="text-xl sm:text-2xl font-bold quicke-text">
-                  Quicke
-                </h1>
-                
-                {/* Updated animation styles */}
-                <style jsx global>{`
-                  .quicke-text {
-                    position: relative;
-                    background: linear-gradient(90deg, 
-                      rgba(255, 255, 255, 0.95) 0%, 
-                      rgba(240, 240, 255, 0.9) 40%, 
-                      rgba(225, 225, 245, 0.85) 60%, 
-                      rgba(210, 210, 235, 0.8) 100%
-                    );
-                    background-size: 200% 100%;
-                    -webkit-background-clip: text;
-                    background-clip: text;
-                    color: transparent;
-                    -webkit-text-fill-color: transparent;
-                    letter-spacing: 1px;
-                  }
-                  
-                  /* Modify the wave effect to move in one direction only and slower */
-                  .quicke-text::before {
-                    content: 'Quicke';
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    background: linear-gradient(90deg, 
-                      transparent 0%,
-                      transparent 30%,
-                      rgba(255, 240, 220, 0.7) 50%, 
-                      transparent 70%,
-                      transparent 100%
-                    );
-                    background-size: 300% 100%;
-                    -webkit-background-clip: text;
-                    background-clip: text;
-                    color: transparent;
-                    -webkit-text-fill-color: transparent;
-                    animation: wave-through 12s linear infinite;
-                  }
-                  
-                  /* Animation that moves in one direction only: right to left - REVERSED */
-                  @keyframes wave-through {
-                    0% { background-position: 400% 0; }
-                    100% { background-position: -100% 0; }
-                  }
-                  
-                  /* Keep the subtle underline */
-                  .quicke-text::after {
-                    content: '';
-                    position: absolute;
-                    width: 100%;
-                    height: 1px;
-                    bottom: -2px;
-                    left: 0;
-                    background: linear-gradient(90deg, transparent, rgba(255, 220, 160, 0.5), transparent);
-                  }
-                `}</style>
-              </div>
-
-              {/* Center - Model Selector */}
-              <div className="flex-1 flex justify-center px-1 sm:px-4">
-                <button 
-                  ref={modelButtonRef}
-                  onClick={handleModelButtonClick}
-                  className="group px-2 sm:px-4 py-1 sm:py-2 rounded-lg bg-white hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 text-xs sm:text-sm font-medium transition-all duration-200 border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md"
-                >
-                  <div className="flex items-center space-x-1 sm:space-x-2">
-                    <span>{selectedModels.length} Model{selectedModels.length !== 1 ? 's' : ''}</span>
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 group-hover:text-primary-500 transition-colors">
-                      <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-                    </svg>
+              return (
+                <div key={groupKey} className="space-y-1">
+                  <h4 className="text-xs font-semibold text-gray-400 uppercase mt-4 mb-1 px-2">{groupTitle}</h4>
+                  {groupedList.map(thread => (
+                    <div
+                      key={thread.id}
+                      onClick={() => handleThreadSelect(thread.id)}
+                      className={`block w-full text-left p-2.5 rounded-md cursor-pointer group ${ activeThreadId === thread.id ? 'bg-gray-700 shadow-inner' : 'hover:bg-gray-700/60'}`}
+                    >
+                      <h3 className={`text-sm font-medium truncate ${activeThreadId === thread.id ? 'text-white' : 'text-gray-300 group-hover:text-white'}`}>
+                        {thread.title}
+                      </h3>
+                      <p className={`text-xs truncate mt-0.5 ${activeThreadId === thread.id ? 'text-gray-400' : 'text-gray-500 group-hover:text-gray-400'}`}>
+                        {thread.preview || "No preview available"}
+                        <span className="float-right">{new Date(thread.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+          {/* User Menu at the bottom */}
+          <div className="p-3">
+            {session?.user ? (
+              <div className="relative group">
+                <button className="flex items-center w-full space-x-3 rounded-md px-3 py-2 text-sm font-medium text-gray-300 hover:bg-gray-700 transition-colors">
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-white font-semibold text-xs shadow-md">
+                    {session.user.email.charAt(0).toUpperCase()}
                   </div>
+                  <span className="flex-1 text-left truncate">{session.user.name || session.user.email}</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400 group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826 3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                 </button>
-              </div>
-
-              {/* Right Actions */}
-              <div className="flex items-center space-x-4">
-                {/* layout toggle buttons outside of dropdown menu */}
-                <div className="hidden md:flex items-center space-x-2 mr-2 px-2 py-1 rounded-lg bg-gray-800/30">
+                {/* Dropdown for API Keys & Sign Out */}
+                <div className="absolute bottom-full left-0 mb-2 w-56 py-1 rounded-md shadow-lg bg-gray-700 ring-1 ring-black ring-opacity-5 focus:outline-none z-50 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all duration-150">
                   <button
-                    onClick={() => setResponseLayout('grid')}
-                    data-layout="grid"
-                    className={`layout-toggle-button flex items-center p-1.5 rounded-lg text-sm transition-colors ${
-                      responseLayout === 'grid'
-                        ? 'bg-primary-900/40 text-primary-400'
-                        : 'text-gray-400 hover:bg-gray-700/50 hover:text-gray-300'
-                    }`}
-                    title="Grid Layout"
+                    onClick={() => setShowApiKeyManager(true)}
+                    className="w-full text-left block px-4 py-2 text-sm text-gray-300 hover:bg-gray-600 hover:text-white transition-colors"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-                      <path d="M2 4.25A2.25 2.25 0 014.25 2h2.5A2.25 2.25 0 019 4.25v2.5A2.25 2.25 0 016.75 9h-2.5A2.25 2.25 0 012 6.75v-2.5zM2 13.25A2.25 2.25 0 014.25 11h2.5A2.25 2.25 0 019 13.25v2.5A2.25 2.25 0 016.75 18h-2.5A2.25 2.25 0 012 15.75v-2.5zM11 4.25A2.25 2.25 0 0113.25 2h2.5A2.25 2.25 0 0118 4.25v2.5A2.25 2.25 0 0115.75 9h-2.5A2.25 2.25 0 0111 6.75v-2.5zM11 13.25A2.25 2.25 0 0113.25 11h2.5A2.25 2.25 0 0118 13.25v2.5A2.25 2.25 0 0115.75 18h-2.5A2.25 2.25 0 0111 15.75v-2.5z" />
-                    </svg>
+                    API Keys
                   </button>
                   <button
-                    onClick={() => setResponseLayout('stack')}
-                    data-layout="stack"
-                    className={`layout-toggle-button flex items-center p-1.5 rounded-lg text-sm transition-colors ${
-                      responseLayout === 'stack'
-                        ? 'bg-primary-900/40 text-primary-400'
-                        : 'text-gray-400 hover:bg-gray-700/50 hover:text-gray-300'
-                    }`}
-                    title="Stack Layout"
+                    onClick={() => signOut()}
+                    className="w-full text-left block px-4 py-2 text-sm text-gray-300 hover:bg-gray-600 hover:text-white transition-colors"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-                      <path d="M2 4.25A2.25 2.25 0 014.25 2h11.5A2.25 2.25 0 0118 4.25v2.5A2.25 2.25 0 0115.75 9h-11.5A2.25 2.25 0 012 6.75v-2.5zM2 13.25A2.25 2.25 0 014.25 11h11.5A2.25 2.25 0 0118 13.25v2.5A2.25 2.25 0 0115.75 18h-11.5A2.25 2.25 0 012 15.75v-2.5z" />
-                    </svg>
+                    Sign out
                   </button>
                 </div>
-
-                {session?.user ? (
-                  <div className="relative group">
-                    <button className="flex items-center space-x-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-300 hover:bg-gray-700 transition-all duration-200">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#e6dfd3] via-[#f5efe7] to-[#d4cbbe] flex items-center justify-center text-gray-800 font-medium shadow-sm"
-                        style={{
-                          boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.5), inset 0 -2px 4px rgba(0,0,0,0.05)'
-                        }}>
-                        {session.user.email.charAt(0).toUpperCase()}
-                      </div>
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-gray-400">
-                        <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-                      </svg>
-                    </button>
-                    
-                    <div className="absolute right-0 mt-2 w-56 py-2 rounded-lg shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-50 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all duration-200"
-                      style={{
-                        backgroundColor: 'rgba(28, 28, 32, 0.75)',
-                        backdropFilter: 'blur(20px)',
-                        WebkitBackdropFilter: 'blur(20px)',
-                        borderRight: '1px solid rgba(75, 75, 80, 0.2)',
-                        boxShadow: '0 0 20px rgba(0, 0, 0, 0.4)'
-                      }}>
-                      <div className="px-4 py-2 border-b border-gray-700/30">
-                        <p className="text-sm text-gray-400">Signed in as</p>
-                        <p className="text-sm font-medium text-gray-200 truncate">{session.user.email}</p>
-                      </div>
-                      
-                      <button 
-                        onClick={() => setShowApiKeyManager(true)}
-                        className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700/50 flex items-center transition-colors"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 mr-2">
-                          <path fillRule="evenodd" d="M8 7a5 5 0 113.61 4.804l-1.903 1.903A1 1 0 019 14H8v1a1 1 0 01-1 1H6v1a1 1 0 01-1 1H3a1 1 0 01-1-1v-2a1 1 0 01.293-.707L8.196 8.39A5.002 5.002 0 018 7zm5-3a.75.75 0 000 1.5A1.5 1.5 0 0114.5 7 .75.75 0 0016 7a3 3 0 00-3-3z" clipRule="evenodd" />
-                        </svg>
-                        API Keys
-                      </button>
-                      
-                      <div className="border-t border-gray-700/30 mt-2 pt-2">
-                        <button 
-                          onClick={() => signOut()}
-                          className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 mr-2">
-                            <path fillRule="evenodd" d="M3 4.25A2.25 2.25 0 015.25 2h5.5A2.25 2.25 0 0113 4.25v2a.75.75 0 01-1.5 0v-2a.75.75 0 00-.75-.75h-5.5a.75.75 0 00-.75.75v11.5c0 .414.336.75.75.75h5.5a.75.75 0 00.75-.75v-2a.75.75 0 011.5 0v2A2.25 2.25 0 0110.75 18h-5.5A2.25 2.25 0 013 15.75V4.25z" clipRule="evenodd" />
-                            <path fillRule="evenodd" d="M19 10a.75.75 0 00-.75-.75H8.704l1.048-.943a.75.75 0 10-1.004-1.114l-2.5 2.25a.75.75 0 000 1.114l2.5 2.25a.75.75 0 101.004-1.114l-1.048-.943h9.546A.75.75 0 0019 10z" clipRule="evenodd" />
-                          </svg>
-                          Sign out
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center space-x-3">
-                    <Link href="/auth/signin" className="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400">
-                      Sign in
-                    </Link>
-                    <Link 
-                      href="/auth/signup"
-                      className="relative px-4 py-2 text-sm font-medium text-white rounded-lg transition-all duration-300 overflow-hidden group"
-                      style={{
-                        background: 'linear-gradient(165deg, rgba(79, 70, 229, 0.4) 0%, rgba(55, 48, 163, 0.4) 100%)',
-                        backdropFilter: 'blur(8px)',
-                        WebkitBackdropFilter: 'blur(8px)',
-                        border: '1px solid rgba(255, 255, 255, 0.2)',
-                        boxShadow: `
-                          0 2px 4px rgba(79, 70, 229, 0.1),
-                          0 4px 8px rgba(79, 70, 229, 0.1),
-                          inset 0 1px 1px rgba(255, 255, 255, 0.4),
-                          inset 0 -1px 1px rgba(0, 0, 0, 0.1)
-                        `
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = 'translateY(-1px)';
-                        e.currentTarget.style.boxShadow = `
-                          0 4px 8px rgba(79, 70, 229, 0.2),
-                          0 8px 16px rgba(79, 70, 229, 0.2),
-                          inset 0 1px 1px rgba(255, 255, 255, 0.4),
-                          inset 0 -1px 1px rgba(0, 0, 0, 0.1)
-                        `;
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = 'translateY(0)';
-                        e.currentTarget.style.boxShadow = `
-                          0 2px 4px rgba(79, 70, 229, 0.1),
-                          0 4px 8px rgba(79, 70, 229, 0.1),
-                          inset 0 1px 1px rgba(255, 255, 255, 0.4),
-                          inset 0 -1px 1px rgba(0, 0, 0, 0.1)
-                        `;
-                      }}
-                    >
-                      {/* Glass highlight effect */}
-                      <div 
-                        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                        style={{
-                          background: 'linear-gradient(165deg, rgba(255, 255, 255, 0.2) 0%, transparent 100%)',
-                          borderRadius: '7px'
-                        }}
-                      />
-                      <span className="relative z-10">Start Free</span>
-                    </Link>
-                  </div>
-                )}
               </div>
-            </div>
+            ) : null}
+          </div>
+        </div>
+      )}
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Header for main content area */}
+        <header className={`h-[60px] flex-shrink-0 bg-[#0D0D0D] flex items-center justify-between px-6`}>
+          {/* Left section: Quicke text and (conditionally) Sidebar Toggle */}
+          <div className="flex items-center">
+            {/* Sidebar Toggle Button, visible only when sidebar is hidden and session exists */}
+            {session && !sidebarVisible && (
+              <button
+                onClick={() => setSidebarVisible(!sidebarVisible)}
+                className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors mr-3"
+                title="Show sidebar"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path> {/* Hamburger icon */}
+                </svg>
+              </button>
+            )}
+            <h1 className="text-xl font-semibold text-white">Quicke</h1>
+          </div>
+
+          {/* Right section: Thread Title/Model Selector (Logged In) or Auth Buttons (Guest) */}
+          <div className="flex items-center space-x-4">
+            {session ? (
+              // Logged-in user header content
+              <>
+                <h1 className="text-lg font-medium text-gray-300">{activeThreadTitle}</h1>
+                <button
+                  ref={modelButtonRef}
+                  onClick={handleModelButtonClick}
+                  className="group px-3 py-1.5 rounded-md bg-gray-700/50 hover:bg-gray-600/50 text-gray-300 hover:text-white text-xs font-medium transition-colors border border-gray-600/50 shadow-sm"
+                >
+                  Models ({selectedModels.length}) <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 inline ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                </button>
+              </>
+            ) : (
+              // Guest user header content
+              <div className="flex items-center space-x-4">
+                <button
+                  ref={modelButtonRef}
+                  onClick={handleModelButtonClick}
+                  className="group px-3 py-1.5 rounded-md bg-gray-700/50 hover:bg-gray-600/50 text-gray-300 hover:text-white text-xs font-medium transition-colors border border-gray-600/50 shadow-sm"
+                >
+                  Models ({selectedModels.length}) <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 inline ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                </button>
+                <Link href="/auth/signin" className="px-4 py-2 text-sm font-medium transition-colors bg-white text-gray-900 rounded-full hover:bg-gray-200">
+                  Log in
+                </Link>
+                <Link href="/auth/signup" className="px-4 py-2 text-sm font-medium transition-colors text-white border border-white rounded-full hover:bg-white hover:text-gray-900">
+                  Sign up
+                </Link>
+              </div>
+            )}
           </div>
         </header>
-
-        {/* Model Selector */}
-        <ModelSelector
-          isOpen={showModelSelector}
-          setIsOpen={setShowModelSelector}
-          selectedModels={selectedModels}
-          setSelectedModels={setSelectedModels}
-          isGuest={isGuest}
-        />
-
-        <ApiKeyManager 
-          isOpen={showApiKeyManager} 
-          onClose={() => setShowApiKeyManager(false)} 
-        />
-        
-        {error && (
-          <div className="mx-auto w-full max-w-4xl p-4 my-2 bg-yellow-900/20 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-lg border border-yellow-200/30 dark:border-yellow-800/30">
-            <div className="flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 mr-2">
-                <path fillRule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 01.75.75v3.75a.75.75 0 01-1.5 0V9a.75.75 0 01.75-.75zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z" clipRule="evenodd" />
-              </svg>
-              Error: {error}
-            </div>
-          </div>
-        )}
-        
-        {/* Main content area */}
-        <main className="flex-1 overflow-hidden relative">
+        {/* Chat History / Welcome Screen */}
+        <main className="flex-1 overflow-y-auto relative scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-[#1E1E1E] bg-gray-950">
           {isSidePanelOpen && sidePanelContent ? (
             <SplitPanelLayout
               leftContent={renderMainContentArea()}
               rightContent={
-                sidePanelContent && (
+                <div className="h-full overflow-y-auto p-4">
                   <ResponseColumn
+                    key={`${sidePanelContent.conversationId}-${sidePanelContent.model}-side`}
                     {...sidePanelContent}
-                    isInSidePanel={true}
-                    onCloseSidePanel={closeSidePanel}
-                    onOpenInSidePanel={handleOpenInSidePanel}
                     onRetry={handleModelRetry}
                   />
-                )
+                </div>
               }
             />
           ) : (
             renderMainContentArea()
           )}
         </main>
-
-        {/* Footer with prompt bar */}
-        <footer className="px-2 sm:px-4 py-2 sm:py-4 bg-transparent relative sm:relative z-[40] safe-area-bottom">
-          <div className="relative max-w-4xl mx-auto">
-            {/* This div is the main "glass" container for the prompt bar */}
-            <div className="relative rounded-2xl backdrop-blur-md bg-white/10 dark:bg-gray-900/20 border border-gray-200/20 dark:border-gray-700/20 shadow-lg overflow-hidden">
-              <div className="flex items-center gap-3 p-2">
-                {history.length > 0 && (
-                  <button
-                    onClick={handleClear}
-                    className="p-2.5 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 hover:bg-red-50/20 dark:hover:bg-red-900/20 rounded-lg transition-all duration-200 group"
-                    title="Clear screen"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 transform group-hover:scale-110 transition-transform duration-200">
-                      <path fillRule="evenodd" d="M16.5 4.478v.227a48.816 48.816 0 013.878.512.75.75 0 11-.256 1.478l-.209-.035-1.005 13.07a3 3 0 01-2.991 2.77H8.084a3 3 0 01-2.991-2.77L4.087 6.66l-.209.035a.75.75 0 01-.256-1.478A48.567 48.567 0 017.5 4.705v-.227c0-1.564 1.213-2.9 2.816-2.951a52.662 52.662 0 013.369 0c1.603.051 2.815 1.387 2.815 2.951zm-6.136-1.452a51.196 51.196 0 013.273 0C14.39 3.05 15 3.684 15 4.478v.113a49.488 49.488 0 00-6 0v-.113c0-.794.609-1.428 1.364-1.452zm-.355 5.945a.75.75 0 10-1.5.058l.347 9a.75.75 0 101.499-.058l-.346-9zm5.48.058a.75.75 0 10-1.498-.058l-.347 9a.75.75 0 001.5.058l.345-9z" clipRule="evenodd" />
-                    </svg>
-                  </button>
-                )}
-                <div className="flex-grow">
-                  <PromptInput 
-                    prompt={prompt} 
-                    setPrompt={setPrompt} 
-                    onSubmit={(e) => {
-                      if (!hasInteracted) {
-                        handleFirstPrompt();
-                      }
-                      handleSubmit(e);
-                    }}
-                    disabled={
-                      (isGuest && guestConversationCount >= GUEST_CONVERSATION_LIMIT) || // Guest quota
-                      isProcessing || // Stream active
-                      loading || // General loading (e.g., thread creation)
-                      (!isGuest && selectedModels.length === 0) // Logged in but no models selected
-                    }
-                    isProcessing={isProcessing}
-                    preserveOnFocus={true}
-                    onStopStreaming={handleStopStreaming}
-                    threadId={activeThreadId}
-                    selectedModels={selectedModels}
-                    isGuest={isGuest} // Pass isGuest
-                    onTriggerLoginPrompt={triggerLoginPrompt} // Pass handler
-                  />
-                </div>
-              </div>
+        {/* Footer with Prompt Input */}
+        {(session || isGuest) && (
+          <footer className="p-4 flex-shrink-0 bg-[#1E1E1E]">
+            <div className="max-w-3xl mx-auto">
+              <PromptInput
+                prompt={prompt}
+                setPrompt={setPrompt}
+                onSubmit={handleSubmit}
+                disabled={
+                  (isGuest && guestConversationCount >= GUEST_CONVERSATION_LIMIT) ||
+                  isProcessing ||
+                  loading ||
+                  (!isGuest && selectedModels.length === 0)
+                }
+                isProcessing={isProcessing}
+                onStopStreaming={handleStopStreaming}
+                selectedModels={selectedModels}
+                isGuest={isGuest}
+                onTriggerLoginPrompt={triggerLoginPrompt}
+                threadId={activeThreadId}
+              />
             </div>
-          </div>
-        </footer>
-
-        <ThreadSidebar 
-          isOpen={sidebarOpen}
-          onClose={() => setSidebarOpen(false)}
-          threads={threads}
-          onNewThread={handleNewThread}
-          onThreadSelect={handleThreadSelect}
-          activeThreadId={activeThreadId}
-        />
+          </footer>
+        )}
       </div>
+      {/* Modals (ModelSelector, ApiKeyManager) remain outside the flex layout */}
+      <ModelSelector isOpen={showModelSelector} setIsOpen={setShowModelSelector} selectedModels={selectedModels} setSelectedModels={setSelectedModels} isGuest={isGuest} />
+      <ApiKeyManager isOpen={showApiKeyManager} onClose={() => setShowApiKeyManager(false)} />
+      {error && (
+        <div className="mx-auto w-full max-w-4xl p-4 my-2 bg-yellow-900/20 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-lg border border-yellow-200/30 dark:border-yellow-800/30">
+          <div className="flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 mr-2">
+              <path fillRule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 01.75.75v3.75a.75.75 0 01-1.5 0V9a.75.75 0 01.75-.75zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z" clipRule="evenodd" />
+            </svg>
+            Error: {error}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

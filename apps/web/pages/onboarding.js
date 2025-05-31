@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
-import StarfieldBackground from '../components/StarfieldBackground';
 
 export default function Onboarding() {
   const router = useRouter();
@@ -152,9 +151,6 @@ export default function Onboarding() {
         <title>Welcome to Quicke | API Setup</title>
         <link rel="icon" href="/favicon.ico" />
       </Head>
-      
-      {/* Starfield background */}
-      <StarfieldBackground />
       
       {/* Animated background elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
