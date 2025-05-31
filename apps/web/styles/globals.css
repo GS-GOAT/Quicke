@@ -487,8 +487,8 @@ a:hover {
 
 /* Response column styles */
 .light-response-column {
-  background: #1e1e1e;  /* Darker background for columns */
-  border: 1px solid rgba(75, 85, 99, 0.3);
+  background: #202124;  /* Background color matching the previous main area */
+  border: 1px solid rgba(0, 0, 0, 0.3); /* Adjusted border color */
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1);
 }
 

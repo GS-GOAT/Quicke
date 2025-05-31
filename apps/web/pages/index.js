@@ -1119,6 +1119,7 @@ export default function Home() {
 
     setHistory([]);
     setActiveThreadId(null);
+    closeSidePanel();
     setActiveThreadTitle("New Chat");
     router.push('/', undefined, { shallow: false }); // Changed shallow: true to false
     
@@ -1247,7 +1248,7 @@ export default function Home() {
         <div className="flex flex-col items-center justify-center h-full text-center px-4">
           <h2 className="text-2xl font-bold mb-4">Free Trial Limit Reached</h2>
           <p className="text-gray-600 dark:text-gray-400 mb-6">
-            You've used all {GUEST_CONVERSATION_LIMIT} free conversations. Sign up to continue chatting!
+            You've used all {GUEST_CONVERSATION_LIMIT - guestConversationCount} free conversations. Sign up to continue chatting!
           </p>
           <button
             onClick={() => signIn()}
@@ -1329,7 +1330,7 @@ export default function Home() {
       );
     }
     return (
-      <div className="h-full overflow-y-auto relative scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-[#1E1E1E]">
+      <div className="h-full overflow-y-auto relative scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-[#1E1E1E] bg-zinc-900">
         <div className="px-2 sm:px-4 py-2 pb-32">
           <div className="max-w-7xl mx-auto">
             {renderConversationHistory()}
@@ -1340,11 +1341,44 @@ export default function Home() {
     );
   };
 
+  // --- Add useEffect to auto-trigger summary when summarize button would appear ---
+  useEffect(() => {
+    // Find the latest conversation that is not historical, has all models done, has no summary, and is not loading summary
+    const latest = history.slice().reverse().find(entry =>
+      !entry.isHistorical &&
+      !entry.summary &&
+      Object.values(entry.responses).every(r => r.done || r.error) &&
+      !summaryLoading[entry.id]
+    );
+    if (latest) {
+      generateSummary(latest.id);
+    }
+  }, [history, summaryLoading]);
+
+  useEffect(() => {
+    setIsClient(true);
+    const saved = localStorage.getItem('selectedModels');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setSelectedModels(parsed);
+        }
+      } catch {}
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isClient) {
+      localStorage.setItem('selectedModels', JSON.stringify(selectedModels));
+    }
+  }, [selectedModels, isClient]);
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#0D0D0D]">
       {/* Persistent Sidebar */}
       {session && sidebarVisible && (
-        <div className="w-[260px] h-full bg-[#202124] flex flex-col flex-shrink-0 border-r border-gray-700">
+        <div className="w-[260px] h-full bg-black flex flex-col flex-shrink-0 border-r border-gray-700">
           {/* Sidebar Header: Logo + New Task Button */}
           <div className="p-4 h-[60px] flex-shrink-0 flex items-center justify-between">
             {/* Sidebar Toggle Button (in sidebar header when visible) */}
@@ -1357,6 +1391,12 @@ export default function Home() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path> {/* Hamburger icon */}
               </svg>
             </button>
+            {/* Logo */}
+            <div className="flex items-center">
+              <img src="/logo.jpeg" alt="Quicke Logo" className="h-8 w-auto mr-2" />
+              {/* Optional: Add a text label next to the logo */}
+              {/* <span className="text-xl font-semibold text-white">Quicke</span> */}
+            </div>
           </div>
           {/* New Task Button */}
           <div className="p-3 flex-shrink-0">
@@ -1381,7 +1421,7 @@ export default function Home() {
 
               return (
                 <div key={groupKey} className="space-y-1">
-                  <h4 className="text-xs font-semibold text-gray-400 uppercase mt-4 mb-1 px-2">{groupTitle}</h4>
+                  <h4 className="text-sm font-bold text-gray-300 uppercase mt-4 mb-1 px-2">{groupTitle}</h4>
                   {groupedList.map(thread => (
                     <div
                       key={thread.id}
@@ -1435,7 +1475,7 @@ export default function Home() {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header for main content area */}
-        <header className={`h-[60px] flex-shrink-0 bg-[#0D0D0D] flex items-center justify-between px-6`}>
+        <header className={`h-[60px] flex-shrink-0 bg-zinc-900 flex items-center justify-between px-6`}>
           {/* Left section: Quicke text and (conditionally) Sidebar Toggle */}
           <div className="flex items-center">
             {/* Sidebar Toggle Button, visible only when sidebar is hidden and session exists */}
@@ -1466,6 +1506,33 @@ export default function Home() {
                 >
                   Models ({selectedModels.length}) <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 inline ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
                 </button>
+
+                {/* ---- START NEW LAYOUT TOGGLE BUTTONS ---- */}
+                <div className="flex items-center ml-2 p-0.5 bg-gray-700/60 rounded-lg border border-gray-600/70">
+                  <button
+                    onClick={() => setResponseLayout('grid')}
+                    title="Grid View"
+                    className={`p-1.5 rounded-md transition-colors ${
+                      responseLayout === 'grid' ? 'bg-primary-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-600/50'
+                    }`}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="w-4 h-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 018.25 20.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25A2.25 2.25 0 0113.5 8.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25h-2.25a2.25 2.25 0 01-2.25-2.25v-2.25z" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => setResponseLayout('stack')}
+                    title="Stack View"
+                    className={`p-1.5 rounded-md transition-colors ${
+                      responseLayout === 'stack' ? 'bg-primary-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-600/50'
+                    }`}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="w-4 h-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 5.25h16.5m-16.5 4.5h16.5m-16.5 4.5h16.5m-16.5 4.5h16.5" />
+                    </svg>
+                  </button>
+                </div>
+                {/* ---- END NEW LAYOUT TOGGLE BUTTONS ---- */}
               </>
             ) : (
               // Guest user header content
@@ -1477,6 +1544,32 @@ export default function Home() {
                 >
                   Models ({selectedModels.length}) <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 inline ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
                 </button>
+                {/* ---- START NEW LAYOUT TOGGLE BUTTONS (Guest) ---- */}
+                <div className="flex items-center ml-2 p-0.5 bg-gray-700/60 rounded-lg border border-gray-600/70">
+                  <button
+                    onClick={() => setResponseLayout('grid')}
+                    title="Grid View"
+                    className={`p-1.5 rounded-md transition-colors ${
+                      responseLayout === 'grid' ? 'bg-primary-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-600/50'
+                    }`}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="w-4 h-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 018.25 20.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25A2.25 2.25 0 0113.5 8.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25h-2.25a2.25 2.25 0 01-2.25-2.25v-2.25z" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => setResponseLayout('stack')}
+                    title="Stack View"
+                    className={`p-1.5 rounded-md transition-colors ${
+                      responseLayout === 'stack' ? 'bg-primary-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-600/50'
+                    }`}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="w-4 h-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 5.25h16.5m-16.5 4.5h16.5m-16.5 4.5h16.5m-16.5 4.5h16.5" />
+                    </svg>
+                  </button>
+                </div>
+                {/* ---- END NEW LAYOUT TOGGLE BUTTONS (Guest) ---- */}
                 <Link href="/auth/signin" className="px-4 py-2 text-sm font-medium transition-colors bg-white text-gray-900 rounded-full hover:bg-gray-200">
                   Log in
                 </Link>
@@ -1488,7 +1581,7 @@ export default function Home() {
           </div>
         </header>
         {/* Chat History / Welcome Screen */}
-        <main className="flex-1 overflow-y-auto relative scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-[#1E1E1E] bg-gray-950">
+        <main className="flex-1 overflow-y-auto relative scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-[#1E1E1E] bg-zinc-900">
           {isSidePanelOpen && sidePanelContent ? (
             <SplitPanelLayout
               leftContent={renderMainContentArea()}
@@ -1508,7 +1601,7 @@ export default function Home() {
         </main>
         {/* Footer with Prompt Input */}
         {(session || isGuest) && (
-          <footer className="p-4 flex-shrink-0 bg-[#1E1E1E]">
+          <footer className="p-4 flex-shrink-0 bg-zinc-900">
             <div className="max-w-3xl mx-auto">
               <PromptInput
                 prompt={prompt}

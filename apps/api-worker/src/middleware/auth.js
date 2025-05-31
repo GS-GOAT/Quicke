@@ -16,10 +16,13 @@ if (!NEXTAUTH_SECRET_STRING) {
 }
 
 module.exports = async (req, res, next) => {
-  // Check for guest flag specifically for /api/stream (or any other guest-allowed route)
-  if (req.originalUrl.startsWith('/api/stream') && req.query.isGuest === 'true') {
-    console.log("API WORKER AUTH: Guest request to /api/stream. Bypassing token validation.");
-    // req.user will remain undefined for guests. stream.js will handle this.
+  // Check for guest flag specifically for guest-allowed routes
+  const isGuestRouteStream = req.originalUrl.startsWith('/api/stream');
+  const isGuestRouteSummarize = req.originalUrl.startsWith('/api/summarize');
+
+  if ((isGuestRouteStream || isGuestRouteSummarize) && req.query.isGuest === 'true') {
+    console.log(`API WORKER AUTH: Guest request to ${req.originalUrl}. Bypassing token validation.`);
+    // req.user will remain undefined for guests. Route handlers will handle this.
     return next();
   }
 

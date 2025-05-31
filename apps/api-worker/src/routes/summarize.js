@@ -64,10 +64,10 @@ router.post('/', async (req, res) => {
 
 ${formattedResponses}
 
-Format your answer as:
-- Common Points: Key agreements between responses
-- Differences: Notable variations in approaches
-- Final Answer: Take all response into account and provide the best final answer to the prompt nicely formatted for clarity and readability
+Format your answer as (seperated by horizontal lines):
+ Common Points: <Key agreements between responses>
+ Differences: <Notable variations in approaches>
+ Final Answer: <Take all response into account and provide the best final answer to the prompt nicely formatted for clarity and readability>
 `;
 
     const result = await model.generateContent(prompt);

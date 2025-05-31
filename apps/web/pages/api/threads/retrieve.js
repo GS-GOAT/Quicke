@@ -46,12 +46,6 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: 'Thread not found' });
     }
 
-    // Update thread access time
-    await prisma.thread.update({
-      where: { id: thread.id },
-      data: { updatedAt: new Date() }
-    });
-
     // Check if there are more conversations
     const hasMore = thread.conversations.length > pageSize;
     
