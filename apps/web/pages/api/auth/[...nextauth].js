@@ -32,7 +32,7 @@ export const authOptions = {
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
       authorization: {
         params: {
-          prompt: "consent",
+          prompt: "select_account",
           access_type: "offline",
           response_type: "code"
         }
@@ -122,9 +122,58 @@ export const authOptions = {
   },
   // +++ END JWT BLOCK +++
   callbacks: {
+    async signIn({ user, account, profile }) {
+      // --- Google Account Linking Logic ---
+      if (account?.provider === "google" && profile?.email) {
+        // Check if a user already exists with this email but NOT linked to this Google account
+        const existingUserByEmail = await prisma.user.findUnique({
+          where: { email: profile.email },
+          include: { accounts: true },
+        });
+        if (existingUserByEmail) {
+          const isGoogleLinked = existingUserByEmail.accounts.some(
+            (acc) => acc.provider === "google" && acc.providerAccountId === account.providerAccountId
+          );
+          if (!isGoogleLinked) {
+            // Attempt to link Google account to existing user (if not already linked)
+            try {
+              await prisma.account.create({
+                data: {
+                  userId: existingUserByEmail.id,
+                  type: account.type,
+                  provider: account.provider,
+                  providerAccountId: account.providerAccountId,
+                  access_token: account.access_token,
+                  refresh_token: account.refresh_token,
+                  expires_at: account.expires_at,
+                  token_type: account.token_type,
+                  scope: account.scope,
+                  id_token: account.id_token,
+                  session_state: account.session_state,
+                },
+              });
+              // After linking, let NextAuth continue. If user isNewUser, onboarding logic below will run.
+            } catch (linkError) {
+              console.error("Error auto-linking Google account:", linkError);
+              // If linking fails, let it proceed to the default error.
+              return "/auth/signin?error=OAuthLinkError";
+            }
+          }
+        }
+        // If this is a new user (first time Google sign-in), set onboarding flag
+        if (user && user.isNewUser) {
+          user.redirectToOnboarding = true;
+        }
+      }
+      // --- End Google Account Linking Logic ---
+      return true;
+    },
     async jwt({ token, user, account }) {
       if (user) {
         token.id = user.id;
+        if (user.redirectToOnboarding) {
+          token.redirectToOnboarding = true;
+        }
       }
       if (account?.provider === "google") {
         token.accessToken = account.access_token;
@@ -135,9 +184,17 @@ export const authOptions = {
       if (token && session.user) {
         session.user.id = token.id;
         session.user.accessToken = token.accessToken;
-      } else if (token) { // If session.user is undefined, create it
+        if (token.redirectToOnboarding) {
+          session.redirectToOnboarding = true;
+          delete token.redirectToOnboarding;
+        }
+      } else if (token) {
         session.user = { id: token.id };
         session.user.accessToken = token.accessToken;
+        if (token.redirectToOnboarding) {
+          session.redirectToOnboarding = true;
+          delete token.redirectToOnboarding;
+        }
       }
       return session;
     },

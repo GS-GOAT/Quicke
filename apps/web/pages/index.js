@@ -11,6 +11,7 @@ import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useSplitPanel } from '../components/SplitPanelContext';
 import SplitPanelLayout from '../components/SplitPanelLayout';
 import { toast } from 'react-hot-toast';
+import SkeletonLoaderChatUI from '../components/SkeletalLoaderChatUI';
 
 // Guest mode configuration
 const GUEST_ALLOWED_MODELS = ['gemini-flash', 'gemini-flash-2.5'];
@@ -77,6 +78,10 @@ export default function Home() {
   const [hasMoreConversations, setHasMoreConversations] = useState(true);
   const [isClient, setIsClient] = useState(false); // New state to track client mount
   const [sidebarVisible, setSidebarVisible] = useState(true); // State to control sidebar visibility
+  const [isThreadLoading, setIsThreadLoading] = useState(false); // <-- Ensure this is present
+  // --- FIX: Declare summariesProcessed state ---
+  const [summariesProcessed, setSummariesProcessed] = useState(new Set());
+  const [autoSummarizeEnabled, setAutoSummarizeEnabled] = useLocalStorage('autoSummarizeEnabled', true);
 
   // Track which conversations have been saved to avoid duplicate saves
   const savedConversationsRef = useRef(new Set());
@@ -317,11 +322,12 @@ export default function Home() {
         isHistorical: true
       }));
 
-      // Prepend new conversations if loading more, otherwise replace
+      // Defensive sort by timestamp
+      const sortedConversations = historicalConversations.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
       setHistory(prev => 
         pageNum > 1 
-          ? [...historicalConversations, ...prev]
-          : historicalConversations
+          ? [...prev, ...sortedConversations]
+          : sortedConversations
       );
       
       // Update showSummary state for loaded summaries
@@ -573,80 +579,89 @@ export default function Home() {
 
   // summary generation function
   const generateSummary = async (conversationId) => {
+    // Prevent multiple calls for the same conversation if one is already in progress or done
+    const conversationEntry = history.find(h => h.id === conversationId);
+    if (!conversationEntry || conversationEntry.summaryFetching || (conversationEntry.summary && !conversationEntry.summaryError)) {
+      if(conversationEntry && conversationEntry.summary && autoSummarizeEnabled && !conversationEntry.summaryOpenedInPanel) {
+        // If summary exists and should be auto-opened
+         openSidePanel({
+            model: 'summary', conversationId: conversationId,
+            response: { text: conversationEntry.summary, loading: false, streaming: false, error: null, done: true },
+            streaming: false, isSummary: true,
+          });
+          setHistory(prev => prev.map(c => c.id === conversationId ? { ...c, summaryOpenedInPanel: true } : c));
+      }
+      return;
+    }
+  
+    setHistory(prev => prev.map(h => h.id === conversationId ? { ...h, summaryFetching: true, summaryFetched: true, summaryError: null } : h));
+    setSummaryLoading(prev => ({ ...prev, [conversationId]: true }));
+  
     try {
-      // Find the conversation
-      const conversation = history.find(h => h.id === conversationId);
-      if (!conversation) {
-        throw new Error('Conversation not found');
-      }
-
-      // If the conversation already has a summary, just display it
-      if (conversation.summary) {
-        setShowSummary(prev => ({ ...prev, [conversationId]: true }));
-        return;
-      }
-      
-      // Otherwise, generate a new summary
-      setSummaryLoading(prev => ({ ...prev, [conversationId]: true }));
-      
-      // Format responses for the API
-      const validResponses = Object.entries(conversation.responses)
+      const validResponses = Object.entries(conversationEntry.responses)
         .filter(([_, response]) => !response.error && response.text)
         .reduce((acc, [model, response]) => {
           acc[model] = { text: response.text };
           return acc;
         }, {});
-      
-      // Check if we have responses to summarize
-      if (Object.keys(validResponses).length === 0) {
-        throw new Error('No valid responses to summarize');
-      }
-      
-      // Call summary API
-      const res = await fetch('/api/summarize', {
+  
+      if (Object.keys(validResponses).length === 0) throw new Error('No valid responses to summarize');
+  
+      let summarizeUrl = '/api/summarize';
+      if (isGuest) summarizeUrl += '?isGuest=true';
+  
+      const res = await fetch(summarizeUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ responses: validResponses })
       });
-      
+  
       if (!res.ok) {
-        throw new Error('Failed to generate summary');
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Failed to generate summary API');
       }
-      
-      const summary = await res.json();
-      
-      // Update local state
+  
+      const summaryData = await res.json();
+  
       setHistory(prev => prev.map(h => {
         if (h.id === conversationId) {
-          return {
-            ...h,
-            summary: summary.text
-          };
+          return { ...h, summary: summaryData.text, summaryError: null, summaryFetching: false };
         }
         return h;
       }));
-      
-      setShowSummary(prev => ({ ...prev, [conversationId]: true }));
-
-      // Save the summary to the database
-      const saveResponse = await fetch('/api/conversations/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: conversationId,
-          prompt: conversation.prompt,
-          responses: conversation.responses,
-          threadId: activeThreadId,
-          summary: summary.text
-        })
-      });
-
-      if (!saveResponse.ok) {
-        throw new Error('Failed to save summary');
+  
+      // Auto-open in side panel if enabled
+      if (autoSummarizeEnabled) {
+        openSidePanel({
+          model: 'summary', conversationId: conversationId,
+          response: { text: summaryData.text, loading: false, streaming: false, error: null, done: true },
+          streaming: false, isSummary: true,
+        });
+        setHistory(prev => prev.map(c => c.id === conversationId ? { ...c, summaryOpenedInPanel: true } : c));
       }
-
+  
+      if (!isGuest && session) {
+        await fetch('/api/conversations/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: conversationId,
+            prompt: conversationEntry.prompt,
+            responses: conversationEntry.responses, // Save original responses
+            threadId: conversationEntry.threadId, // Ensure threadId is from the conversation entry
+            summary: summaryData.text
+          })
+        });
+        // Optionally refetch threads if summary save should update thread list immediately
+        // fetchThreads(); 
+      }
+      return summaryData.text;
     } catch (error) {
-      console.error('Summary generation failed:', error);
+      console.error(`Summary generation failed for ${conversationId}:`, error);
+      setHistory(prev => prev.map(h =>
+        h.id === conversationId ? { ...h, summary: null, summaryError: error.message || 'Failed to generate summary', summaryFetching: false } : h
+      ));
+      // Do not re-throw here if error is handled by setting history
     } finally {
       setSummaryLoading(prev => ({ ...prev, [conversationId]: false }));
     }
@@ -736,9 +751,15 @@ export default function Home() {
 
   // Update renderConversationHistory to use history state directly
   const renderConversationHistory = () => {
+    // Only show conversations that have a prompt or at least one non-empty response
+    const filteredHistory = history.filter(entry => {
+      if (entry.prompt && entry.prompt.trim() !== '') return true;
+      // Check if any response has non-empty text
+      return Object.values(entry.responses || {}).some(r => r && r.text && r.text.trim() !== '');
+    });
     return (
       <div className="space-y-6">
-        {history.map((entry, index) => (
+        {filteredHistory.map((entry, index) => (
           <div key={entry.id || `entry-${index}`} className="space-y-6">
             {/* File attachment display */}
             {entry.fileId && (
@@ -763,13 +784,11 @@ export default function Home() {
                 </div>
               </div>
             )}
-            
             <div className="flex justify-end">
               <div className="bg-primary-100 dark:bg-primary-900/30 p-4 rounded-2xl rounded-tr-none shadow-sm max-w-[80%] border border-primary-200 dark:border-primary-800/30">
                 <p className="text-gray-800 dark:text-gray-200">{entry.prompt}</p>
               </div>
             </div>
-            
             <div className={getResponseLayoutClass()}>
               {(entry.activeModels || []).map(model => (
                 <ResponseColumn 
@@ -784,7 +803,6 @@ export default function Home() {
                 />
               ))}
             </div>
-
             {/* Display summary if available */}
             {entry.summary && (
               <ResponseColumn
@@ -796,7 +814,6 @@ export default function Home() {
                 isSummary={true}
               />
             )}
-            
             {/* summarize button */}
             {!entry.summary && !currentPromptId && (
               <div className="flex justify-center mt-6">
@@ -836,9 +853,8 @@ export default function Home() {
                 </button>
               </div>
             )}
-
             {/* Show separator between historical and new conversations */}
-            {index < history.length - 1 && entry.isHistorical !== history[index + 1].isHistorical && (
+            {index < filteredHistory.length - 1 && entry.isHistorical !== filteredHistory[index + 1].isHistorical && (
               <div className="flex items-center my-8">
                 <div className="flex-grow h-px bg-gradient-to-r from-transparent via-gray-300 dark:via-gray-600 to-transparent" />
                 <div className="mx-4 px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-xs text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
@@ -1091,14 +1107,21 @@ export default function Home() {
   };
 
   // Function to handle thread selection
-  const handleThreadSelect = (threadId) => {
+  const handleThreadSelect = (threadIdToSelect) => {
     if (isGuest || !session) return;
-    
-    if (threadId === activeThreadId && history.length > 0) {
+    if (threadIdToSelect === activeThreadId && history.length > 0) {
       return;
     }
-    
-    router.push(`/?threadId=${threadId}`, undefined, { shallow: false }); // Changed shallow: true to false
+    setIsThreadLoading(true);
+    setHistory([]);
+    closeSidePanel();
+    setPrompt('');
+    setCurrentPromptId(null);
+    setError(null);
+    setSummariesProcessed(new Set());
+    savedConversationsRef.current = new Set();
+    window.dispatchEvent(new Event('clearFileReferences'));
+    router.push(`/?threadId=${threadIdToSelect}`, undefined, { shallow: false });
   };
 
   // Fetch threads on component mount
@@ -1114,18 +1137,21 @@ export default function Home() {
       triggerLoginPrompt("Please sign up or log in to create and save chat threads.");
       return;
     }
-    
     if (!session) return;
-
+    setIsThreadLoading(true);
     setHistory([]);
     setActiveThreadId(null);
     closeSidePanel();
     setActiveThreadTitle("New Chat");
-    router.push('/', undefined, { shallow: false }); // Changed shallow: true to false
-    
-    setCurrentPromptId(null);
     setPrompt('');
+    setCurrentPromptId(null);
+    setError(null);
+    setSummariesProcessed(new Set());
+    savedConversationsRef.current = new Set();
     window.dispatchEvent(new Event('clearFileReferences'));
+    router.push('/', undefined, { shallow: false }).then(() => {
+      setIsThreadLoading(false);
+    });
   };
 
   // --- Session, Guest, and Thread Loading Logic ---
@@ -1154,6 +1180,7 @@ export default function Home() {
       if (queryThreadId) {
         router.replace('/', undefined, { shallow: true });
       }
+      setIsThreadLoading(false);
     } else {
       // Logged-in user handling
       fetchThreads(); // Fetch available threads for the sidebar
@@ -1162,6 +1189,8 @@ export default function Home() {
         // A specific thread is in the URL
         if (queryThreadId !== activeThreadId || history.length === 0) {
           loadThreadConversations(queryThreadId, 0, true);
+        } else {
+          setIsThreadLoading(false);
         }
       } else {
         // No threadId in URL, means it's a "new chat" or base page
@@ -1169,65 +1198,58 @@ export default function Home() {
           setHistory([]);
           setActiveThreadId(null);
           setActiveThreadTitle("New Chat");
+          setSummariesProcessed(new Set());
+          savedConversationsRef.current = new Set();
+          window.dispatchEvent(new Event('clearFileReferences'));
         }
+        setIsThreadLoading(false);
       }
     }
   }, [session, sessionStatus, router.query.threadId]);
 
   const loadThreadConversations = async (threadIdToLoad, skipCount = 0, initialLoad = false) => {
     if (isGuest || !session || !threadIdToLoad) return;
-    
-    setLoading(true);
-    setError(null);
-    
+    if (initialLoad) {
+      setHistory([]);
+      setIsThreadLoading(true);
+      setError(null);
+      setSummariesProcessed(new Set());
+      savedConversationsRef.current = new Set();
+    }
     try {
       const response = await fetch(`/api/threads/retrieve?id=${threadIdToLoad}&skip=${skipCount}`);
-      
       if (!response.ok) {
-        if (response.status === 404) {
-          setError("Thread not found or you don't have access.");
-          router.replace('/', undefined, { shallow: true });
-          setActiveThreadId(null);
-          setActiveThreadTitle("New Chat");
-          setHistory([]);
-          return;
-        }
-        throw new Error('Failed to load thread');
+        if (initialLoad) setIsThreadLoading(false);
+        return;
       }
-
       const data = await response.json();
-      const newConversations = data.conversations || [];
-
+      const newConversations = (data.conversations || []).map(conv => ({
+        ...conv,
+        summaryFetched: !!conv.summary,
+        summaryOpenedInPanel: false,
+      }));
+      // Defensive sort by timestamp
+      const sortedConversations = newConversations.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
       if (initialLoad) {
-        setHistory(newConversations.reverse());
+        setHistory(sortedConversations);
       } else {
-        setHistory(prev => [...newConversations.reverse(), ...prev]);
+        setHistory(prev => [...prev, ...sortedConversations]);
       }
-
       setActiveThreadId(threadIdToLoad);
       setActiveThreadTitle(data.thread?.title || "Chat");
       setHasMoreConversations(data.hasMore || false);
-      window.dispatchEvent(new Event('clearFileReferences'));
-
-      // Scroll handling
+      if (initialLoad) window.dispatchEvent(new Event('clearFileReferences'));
       setTimeout(() => {
-        const mainContent = document.querySelector('main div div.h-full.overflow-y-auto');
-        if (mainContent) {
-          if (initialLoad) {
-            mainContent.scrollTop = mainContent.scrollHeight;
-          } else {
-            const oldScrollHeight = mainContent.dataset.oldScrollHeight || 0;
-            mainContent.scrollTop = mainContent.scrollHeight - oldScrollHeight;
-            mainContent.dataset.oldScrollHeight = mainContent.scrollHeight;
-          }
+        const mainContent = document.querySelector('main div div.h-full.overflow-y-auto.relative.scrollbar-thin');
+        if (mainContent && initialLoad) {
+          mainContent.scrollTop = mainContent.scrollHeight;
         }
       }, 100);
-
     } catch (error) {
       console.error('Error loading thread:', error);
       setError(error.message || 'Failed to retrieve thread conversations.');
     } finally {
-      setLoading(false);
+      if (initialLoad) setIsThreadLoading(false);
     }
   };
 
@@ -1250,12 +1272,9 @@ export default function Home() {
           <p className="text-gray-600 dark:text-gray-400 mb-6">
             You've used all {GUEST_CONVERSATION_LIMIT - guestConversationCount} free conversations. Sign up to continue chatting!
           </p>
-          <button
-            onClick={() => signIn()}
-            className="px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
-          >
+          <Link href="/auth/signup" className="px-4 py-2 text-sm font-medium transition-colors bg-white text-gray-900 rounded-full hover:bg-gray-200">
             Sign Up Now
-          </button>
+          </Link>
         </div>
       );
     }
@@ -1310,7 +1329,33 @@ export default function Home() {
 
   // Add this helper function inside Home component
   const renderMainContentArea = () => {
-    if (history.length === 0 && !isProcessing && !(activeThreadId && loading && !error)) {
+    // Condition for showing skeleton loader:
+    // 1. Session is still loading (initial app load)
+    // 2. A specific thread is being loaded (isThreadLoading is true AND activeThreadId is set)
+    if (isThreadLoading) {
+      return (
+        // This div mimics the padding and max-width of the actual chat content area
+        <div className="flex-1 h-full overflow-y-auto px-2 sm:px-4 py-6 pb-32">
+          <div className="max-w-7xl mx-auto">
+            <SkeletonLoaderChatUI />
+            {/* You can repeat SkeletonLoader for more vertical fill if desired */}
+            {/* <div className="mt-6"><SkeletonLoader /></div> */}
+          </div>
+        </div>
+      );
+    }
+
+    // Error display specific to thread loading
+    if (error && activeThreadId && !isProcessing) { // Check if error is related to current thread
+      return (
+        <div className="flex-1 flex items-center justify-center h-full text-red-400 p-4 text-center">
+          <p>Could not load chat history.<br/>{error}</p>
+        </div>
+      );
+    }
+
+    // Welcome screen or empty state for "New Chat"
+    if (history.length === 0 && !isProcessing && !isThreadLoading) {
       return (
         <div className="flex-1 flex items-center justify-center h-full">
           <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
@@ -1329,8 +1374,11 @@ export default function Home() {
         </div>
       );
     }
+
+    // Default: Render conversation history
     return (
-      <div className="h-full overflow-y-auto relative scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-[#1E1E1E] bg-zinc-900">
+      // The parent <main> tag already has bg-zinc-800
+      <div className="h-full overflow-y-auto relative scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-[#1E1E1E]">
         <div className="px-2 sm:px-4 py-2 pb-32">
           <div className="max-w-7xl mx-auto">
             {renderConversationHistory()}
@@ -1340,20 +1388,6 @@ export default function Home() {
       </div>
     );
   };
-
-  // --- Add useEffect to auto-trigger summary when summarize button would appear ---
-  useEffect(() => {
-    // Find the latest conversation that is not historical, has all models done, has no summary, and is not loading summary
-    const latest = history.slice().reverse().find(entry =>
-      !entry.isHistorical &&
-      !entry.summary &&
-      Object.values(entry.responses).every(r => r.done || r.error) &&
-      !summaryLoading[entry.id]
-    );
-    if (latest) {
-      generateSummary(latest.id);
-    }
-  }, [history, summaryLoading]);
 
   useEffect(() => {
     setIsClient(true);
@@ -1373,6 +1407,21 @@ export default function Home() {
       localStorage.setItem('selectedModels', JSON.stringify(selectedModels));
     }
   }, [selectedModels, isClient]);
+
+  // --- Add useEffect to auto-trigger summary when summarize button would appear ---
+  useEffect(() => {
+    if (!autoSummarizeEnabled) return;
+    // Find the latest conversation that is not historical, has all models done, has no summary, and is not loading summary
+    const latest = history.slice().reverse().find(entry =>
+      !entry.isHistorical &&
+      !entry.summary &&
+      !entry.summaryFetching &&
+      Object.values(entry.responses).every(r => r.done || r.error)
+    );
+    if (latest) {
+      generateSummary(latest.id);
+    }
+  }, [history, autoSummarizeEnabled]);
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#0D0D0D]">
@@ -1428,18 +1477,41 @@ export default function Home() {
                       onClick={() => handleThreadSelect(thread.id)}
                       className={`block w-full text-left p-2.5 rounded-md cursor-pointer group ${ activeThreadId === thread.id ? 'bg-gray-700 shadow-inner' : 'hover:bg-gray-700/60'}`}
                     >
-                      <h3 className={`text-sm font-medium truncate ${activeThreadId === thread.id ? 'text-white' : 'text-gray-300 group-hover:text-white'}`}>
-                        {thread.title}
-                      </h3>
-                      <p className={`text-xs truncate mt-0.5 ${activeThreadId === thread.id ? 'text-gray-400' : 'text-gray-500 group-hover:text-gray-400'}`}>
-                        {thread.preview || "No preview available"}
-                        <span className="float-right">{new Date(thread.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
-                      </p>
+                      <h3 className={`text-sm font-medium truncate ${activeThreadId === thread.id ? 'text-white' : 'text-gray-300 group-hover:text-white'}`}>{thread.title}</h3>
+                      <p className={`text-xs truncate mt-0.5 ${activeThreadId === thread.id ? 'text-gray-400' : 'text-gray-500 group-hover:text-gray-400'}`}>{thread.preview || "No preview available"}<span className="float-right">{new Date(thread.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</span></p>
                     </div>
                   ))}
                 </div>
               );
             })}
+            {/* Load More Threads Button */}
+            {/* {hasMore && (
+              <div className="flex justify-center mt-4">
+                <button
+                  onClick={fetchThreads}
+                  className="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-700 hover:bg-gray-600 rounded-md border border-gray-600 transition-colors"
+                >
+                  Load More Threads
+                </button>
+              </div>
+            )} */}
+          </div>
+          {/* Auto Summarize Toggle */}
+          <div className="px-3 pb-2">
+            <div className="flex items-center justify-between bg-gray-800 rounded-md px-3 py-2 mb-2">
+              <span className="text-sm text-gray-200 font-medium">Auto Summarize</span>
+              <button
+                onClick={() => setAutoSummarizeEnabled(v => !v)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${autoSummarizeEnabled ? 'bg-primary-600' : 'bg-gray-600'}`}
+                title="Toggle auto summarize"
+                type="button"
+              >
+                <span className="sr-only">Toggle auto summarize</span>
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${autoSummarizeEnabled ? 'translate-x-6' : 'translate-x-1'}`}
+                />
+              </button>
+            </div>
           </div>
           {/* User Menu at the bottom */}
           <div className="p-3">

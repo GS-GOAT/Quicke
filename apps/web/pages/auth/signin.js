@@ -5,7 +5,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 
 const GoogleIcon = () => (
-  <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+  <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
     <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
     <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
@@ -19,17 +19,19 @@ export default function SignIn() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  const [showGooglePopup, setShowGooglePopup] = useState(false);
   const router = useRouter();
   const { error: queryError, callbackUrl } = router.query;
 
   useEffect(() => {
     if (queryError) {
       if (queryError === "OAuthAccountNotLinked") {
-        setError("This email is already associated with an account using a different sign-in method. Please sign in with the original method.");
-      } else if (queryError === "Callback") {
+        setError("This email is already associated with an account using a different sign-in method. Please sign in with the original method or use a different email for Google sign-in.");
+      } else if (queryError === "Callback" || queryError === "OAuthCallback") {
         setError("There was an issue during the Google Sign-In process. Please try again.");
-      } else {
+      } else if (queryError === "CredentialsSignin") {
+        setError("Invalid email or password. Please try again.");
+      }
+      else {
         setError("Sign-in failed. Please check your credentials or try a different method.");
       }
     }
@@ -43,39 +45,24 @@ export default function SignIn() {
       email,
       password,
       redirect: false,
-      callbackUrl: callbackUrl || '/',
     });
 
-    if (res.error) {
-      setError(res.error === "CredentialsSignin" ? 'Invalid email or password.' : 'Sign-in failed.');
+    if (res && res.error) {
+      setError(res.error === "CredentialsSignin" ? 'Invalid email or password.' : (res.error || 'Sign-in failed.'));
       setIsLoading(false);
-    } else if (res.url) {
-      router.push(res.url);
-    } else {
+    } else if (res && res.ok && res.url) {
       router.push(callbackUrl || '/');
+    } else {
+      setIsLoading(false);
     }
   };
 
   const handleGoogleSignIn = async () => {
     setIsGoogleLoading(true);
     setError('');
-    setShowGooglePopup(true);
-    try {
-      const result = await signIn('google', { callbackUrl: callbackUrl || '/' });
-      // Simulate backend check for first time user (replace with real check)
-      const isFirstTime = result?.url?.includes('firstTime=true');
-      if (isFirstTime) {
-        router.push('/onboarding');
-      } else if (result?.url) {
-        router.push(result.url);
-      } else {
-        router.push(callbackUrl || '/');
-      }
-    } catch (error) {
-      setIsGoogleLoading(false);
-      setError('Failed to connect to Google. Please try again.');
-      setShowGooglePopup(false);
-    }
+    await signIn('google', {
+      callbackUrl: callbackUrl || '/'
+    });
   };
 
   return (
@@ -83,153 +70,107 @@ export default function SignIn() {
       <Head>
         <title>Sign In - Quicke</title>
       </Head>
-      <div className="min-h-screen flex flex-col items-center justify-center auth-bg px-4">
-        <div className="w-full max-w-md relative z-10">
-          <div className="text-center mb-8">
-            <h2 className="mt-2 text-4xl font-bold bg-gradient-to-r from-primary-400 to-primary-600 bg-clip-text text-transparent">
-              Welcome back
-            </h2>
-            <p className="mt-2 text-sm text-gray-400">
-              Get responses from leading AI models
-            </p>
-          </div>
-
-          <div className="backdrop-blur-xl bg-gray-900/50 rounded-2xl shadow-2xl overflow-hidden border border-gray-800/50">
-            <div className="p-6 sm:p-8">
-              {error && (
-                <div className="mb-6 p-3 rounded-lg bg-red-900/30 text-red-400 text-sm animate-shake">
-                  <p>{error}</p>
-                </div>
-              )}
-
-              <form onSubmit={handleCredentialsSubmit} className="space-y-6">
-                <div className="space-y-2">
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-300">
-                    Email address
-                  </label>
-                  <input
-                    id="email"
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="appearance-none block w-full px-4 py-3 rounded-lg text-white bg-gray-900/50 border border-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200"
-                    placeholder="name@example.com"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label htmlFor="password" className="block text-sm font-medium text-gray-300">
-                    Password
-                  </label>
-                  <input
-                    id="password"
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="appearance-none block w-full px-4 py-3 rounded-lg text-white bg-gray-900/50 border border-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200"
-                    placeholder="••••••••"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isLoading || isGoogleLoading}
-                  className={`w-full bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white py-3 rounded-lg font-medium shadow-sm hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200 relative ${
-                    isLoading ? 'cursor-not-allowed opacity-70' : ''
-                  } ${isGoogleLoading ? 'cursor-not-allowed opacity-70' : ''}`}
-                >
-                  {isLoading ? (
-                    <span className="inline-flex items-center">
-                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Signing in...
-                    </span>
-                  ) : (
-                    'Sign in'
-                  )}
-                </button>
-              </form>
-
-              <div className="my-6 flex items-center">
-                <div className="flex-grow border-t border-gray-600/50"></div>
-                <span className="mx-4 flex-shrink text-xs text-gray-400">OR</span>
-                <div className="flex-grow border-t border-gray-600/50"></div>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#101010] p-4 selection:bg-primary-500 selection:text-white">
+        {/* Logo and Quicke text in top left */}
+        <div className="absolute top-6 left-6 flex items-center z-20">
+          <img src="/logo.jpeg" alt="Quicke Logo" className="h-8 w-auto mr-2" />
+          <span className="text-xl font-bold text-white">Quicke</span>
+        </div>
+        {/* Particle/Star Background - Placeholder (Can be implemented with CSS or a library) */}
+        {/* <div className="fixed inset-0 z-0 opacity-20 pointer-events-none star-bg"></div> */}
+        <div className="w-full max-w-xs sm:max-w-sm relative z-10">
+          <div className="bg-[#1D1D1E] rounded-xl shadow-2xl p-8 space-y-7">
+            <div className="text-center mb-2">
+              <h2 className="text-3xl font-semibold text-white">
+                Welcome Back
+              </h2>
+              <p className="mt-2.5 text-sm text-gray-400">
+                Sign in to your account
+              </p>
+            </div>
+            {error && (
+              <div className="p-3.5 rounded-md bg-red-500/10 text-red-400 text-sm border border-red-500/20">
+                <p>{error}</p>
               </div>
-
+            )}
+            <form onSubmit={handleCredentialsSubmit} className="space-y-5">
+              <div>
+                <input
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="appearance-none block w-full px-4 py-3 rounded-md text-sm text-white bg-[#2C2C2E] border border-[#3A3A3C] focus:outline-none focus:border-primary-500 placeholder-gray-500 transition-colors"
+                  placeholder="Email"
+                />
+              </div>
+              <div>
+                <input
+                  id="password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="appearance-none block w-full px-4 py-3 rounded-md text-sm text-white bg-[#2C2C2E] border border-[#3A3A3C] focus:outline-none focus:border-primary-500 placeholder-gray-500 transition-colors"
+                  placeholder="Password"
+                />
+              </div>
               <button
-                onClick={handleGoogleSignIn}
+                type="submit"
                 disabled={isLoading || isGoogleLoading}
-                className={`w-full px-4 py-3 flex items-center justify-center space-x-3 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-xl hover:shadow-lg transition-all duration-200 border border-gray-200 dark:border-gray-700/80 relative ${
-                  isGoogleLoading ? 'cursor-not-allowed opacity-70' : ''
-                } ${isLoading ? 'cursor-not-allowed opacity-70' : ''}`}
+                className={`w-full bg-white hover:bg-gray-200 text-black py-2.5 text-sm rounded-md font-semibold shadow-sm transition-colors duration-150 relative ${
+                  (isLoading || isGoogleLoading) ? 'cursor-not-allowed opacity-60' : ''
+                }`}
               >
-                {isGoogleLoading ? (
-                  <span className="inline-flex items-center">
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-primary-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                {isLoading ? (
+                  <span className="flex items-center justify-center">
+                    <svg className="animate-spin mr-2 h-4 w-4 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    Processing...
+                    Signing in...
                   </span>
-                ) : (
-                  <>
-                    <GoogleIcon />
-                    <span>Continue with Google</span>
-                  </>
-                )}
+                ) : 'Sign In'}
               </button>
-
-              <div className="mt-6 text-center">
-                <p className="text-sm text-gray-400">
-                  Don't have an account?{' '}
-                  <Link href="/auth/signup" className="text-primary-500 hover:text-primary-400 font-medium">
-                    Sign up for free
-                  </Link>
-                </p>
-              </div>
+            </form>
+            <div className="my-5 flex items-center">
+              <div className="flex-grow border-t border-[#3A3A3C]"></div>
+              <span className="mx-3.5 flex-shrink text-xs text-gray-500">OR</span>
+              <div className="flex-grow border-t border-[#3A3A3C]"></div>
+            </div>
+            <button
+              onClick={handleGoogleSignIn}
+              disabled={isLoading || isGoogleLoading}
+              className={`w-full px-4 py-2.5 text-sm flex items-center justify-center bg-[#2C2C2E] hover:bg-[#363638] text-gray-200 rounded-md transition-colors duration-150 border border-[#3A3A3C] font-medium relative ${
+                (isLoading || isGoogleLoading) ? 'cursor-not-allowed opacity-60' : ''
+              }`}
+            >
+              {isGoogleLoading ? (
+                <span className="flex items-center justify-center">
+                 <svg className="animate-spin mr-2 h-4 w-4 text-white" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                  Processing...
+                </span>
+              ) : (
+                <>
+                  <GoogleIcon />
+                  Continue with Google
+                </>
+              )}
+            </button>
+            <div className="mt-7 text-center">
+              <p className="text-sm text-gray-500">
+                Don't have an account?{' '}
+                <Link href="/auth/signup" className="text-gray-300 hover:text-white hover:underline font-medium transition-colors">
+                  Sign up
+                </Link>
+              </p>
             </div>
           </div>
         </div>
       </div>
-      {showGooglePopup && (
-        <div className="fixed top-0 right-0 z-50 w-96 max-w-full bg-white dark:bg-gray-900 shadow-2xl rounded-l-2xl border-l border-gray-200 dark:border-gray-800 p-6 flex flex-col items-center animate-slide-in-right">
-          <div className="flex items-center mb-4">
-            <GoogleIcon />
-            <span className="text-lg font-semibold ml-2">Continue with Google</span>
-          </div>
-          <p className="text-gray-600 dark:text-gray-300 mb-4 text-center">Sign in with your Google account to continue.</p>
-          <button
-            onClick={handleGoogleSignIn}
-            disabled={isGoogleLoading}
-            className="w-full px-4 py-3 flex items-center justify-center space-x-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all duration-200 border border-blue-700 relative"
-          >
-            {isGoogleLoading ? (
-              <span className="inline-flex items-center">
-                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Processing...
-              </span>
-            ) : (
-              <>
-                <GoogleIcon />
-                <span>Continue as Google</span>
-              </>
-            )}
-          </button>
-          <button
-            onClick={() => setShowGooglePopup(false)}
-            className="mt-4 text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 text-sm"
-          >
-            Cancel
-          </button>
-        </div>
-      )}
     </>
   );
 }

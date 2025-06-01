@@ -73,16 +73,16 @@ export default function ModelSelector({ isOpen, setIsOpen, models, selectedModel
           icon: '🧠',
           highlighted: true
         },
-        {
-          id: 'nemotron-70b',
-          name: 'Nemotron 70B',
-          provider: 'OpenRouter',
-          description: 'NVIDIA\'s advanced Llama 3.1 based instruction model',
-          context: '32K',
-          badge: 'Free',
-          color: 'from-green-500 to-green-700',
-          icon: '🎮'
-        },
+        // {
+        //   id: 'nemotron-70b',
+        //   name: 'Nemotron 70B',
+        //   provider: 'OpenRouter',
+        //   description: 'NVIDIA\'s advanced Llama 3.1 based instruction model',
+        //   context: '32K',
+        //   badge: 'Free',
+        //   color: 'from-green-500 to-green-700',
+        //   icon: '🎮'
+        // },
         {
           id: 'deepseek-v3-openrouter',
           name: 'DeepSeek V3 (Free)',

@@ -334,6 +334,11 @@ export default function ResponseColumn({
     window.timerRegistry = new Map();
   }
 
+  // --- Auto-scroll state ---
+  const [userHasScrolled, setUserHasScrolled] = useState(false);
+  const scrollDebounceTimeoutRef = useRef(null);
+  // --- End auto-scroll state ---
+
   // Reset state when conversation changes
   useEffect(() => {
     if (currentConversationRef.current !== conversationId) {
@@ -388,18 +393,61 @@ export default function ResponseColumn({
     }
   }, [response?.text, streaming, response?.loading, conversationId]);
 
-  // Auto-scroll during streaming
+  // Reset userHasScrolled when conversationId changes or when a new stream starts for THIS column
   useEffect(() => {
-    if (contentRef.current && streaming) {
-      // Only auto-scroll if user has scrolled to bottom
-      const container = contentRef.current;
-      const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 100;
-      
-      if (isAtBottom) {
-        container.scrollTop = container.scrollHeight;
-      }
+    if (currentConversationRef.current !== conversationId) {
+      // New conversation for this column instance
+      setUserHasScrolled(false);
+      setDisplayedText(''); // Clear previous content
+      lastResponseRef.current = '';
+      previousResponseRef.current = '';
+      if (contentRef.current) contentRef.current.scrollTop = 0; // Scroll to top for new convo
+      currentConversationRef.current = conversationId;
+    } else if (response?.loading && !streaming) {
+      // Existing conversation, but a new stream is about to begin (e.g., retry)
+      setUserHasScrolled(false);
+      if (contentRef.current && response?.loading) contentRef.current.scrollTop = 0; // Scroll to top for new stream
     }
-  }, [displayedText, streaming]);
+  }, [conversationId, response?.loading, streaming]);
+
+  // --- Attach scroll event to content area ---
+  useEffect(() => {
+    const element = contentRef.current;
+    if (!element) return;
+
+    const handleScroll = () => {
+      if (scrollDebounceTimeoutRef.current) {
+        clearTimeout(scrollDebounceTimeoutRef.current);
+      }
+      scrollDebounceTimeoutRef.current = setTimeout(() => {
+        const { scrollTop, scrollHeight, clientHeight } = element;
+        // Check if scrolled to the bottom (with a small tolerance)
+        if (scrollHeight - scrollTop - clientHeight <= 50) {
+          setUserHasScrolled(false); // Re-enable auto-scroll if user scrolls to bottom
+        } else {
+          setUserHasScrolled(true); // User has scrolled away from bottom
+        }
+      }, 100); // Debounce for 100ms
+    };
+
+    element.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      element.removeEventListener('scroll', handleScroll);
+      if (scrollDebounceTimeoutRef.current) {
+        clearTimeout(scrollDebounceTimeoutRef.current);
+      }
+    };
+  }, [contentRef.current]);
+
+  // --- Auto-scroll to bottom if streaming and user hasn't manually scrolled up ---
+  useEffect(() => {
+    const element = contentRef.current;
+    if (element && streaming && !userHasScrolled) {
+      element.scrollTop = element.scrollHeight;
+    }
+    // Also consider scrolling if streaming has just ended and user hadn't scrolled.
+    // This is implicitly handled if the last chunk of `displayedText` triggers this effect.
+  }, [displayedText, streaming, userHasScrolled]);
 
   // Initialize timer data from registry or create new entry
   useEffect(() => {
@@ -841,7 +889,7 @@ export default function ResponseColumn({
           minHeight: isCollapsed ? "0" : (
             (response?.loading === true && !displayedText && !response?.error) ? "140px" : "auto" // Or "200px" if that's preferred when text is present
           ), 
-          maxHeight: "600px",
+          maxHeight: (isExpanded || isInSidePanel) ? undefined : "300px",
           pointerEvents: isCollapsed ? 'none' : 'auto',
           transform: `scale(${isCollapsed ? '0.95' : '1'})`,
           transformOrigin: 'top'
