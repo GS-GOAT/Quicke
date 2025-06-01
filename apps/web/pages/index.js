@@ -15,7 +15,7 @@ import SkeletonLoaderChatUI from '../components/SkeletalLoaderChatUI';
 
 // Guest mode configuration
 const GUEST_ALLOWED_MODELS = ['gemini-flash', 'gemini-flash-2.5'];
-const GUEST_CONVERSATION_LIMIT = 300;
+const GUEST_CONVERSATION_LIMIT = 5;
 
 // Model display names for UI elements
 const modelDisplayNames = {
