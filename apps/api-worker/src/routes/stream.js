@@ -691,7 +691,10 @@ router.get('/', async (req, res) => {
                 content: file.content,
                 isImage: file.documentType === 'image' || file.fileType.startsWith('image/'),
                 isPdf: file.documentType === 'pdf' || file.fileType === 'application/pdf',
-                isText: file.documentType === 'text' || file.fileType.startsWith('text/'),
+                isText: file.documentType === 'text' ||
+                        file.fileType.startsWith('text/') ||
+                        file.fileType === 'text/markdown' ||
+                        (file.fileName && file.fileName.toLowerCase().endsWith('.md')),
                 isPpt: file.documentType === 'ppt' || file.fileType.includes('presentation')
               }));
               console.log(`Retrieved ${fileDataArray.length} files for prompt for user ${userId}`);

@@ -242,11 +242,23 @@ export default function PromptInput({
       'image/webp',
       'text/plain',
       'application/vnd.ms-powerpoint',
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'text/markdown',
     ];
+    const acceptedExtensions = ['.md']; 
 
-    if (!acceptedTypes.includes(file.type)) {
-      alert('Only PDF, text, PowerPoint, and image files are allowed');
+    let fileTypeAccepted = acceptedTypes.includes(file.type);
+    let isMarkdown = file.type === 'text/markdown' || (file.name && file.name.toLowerCase().endsWith('.md'));
+    if (!fileTypeAccepted && file.name) {
+      const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+      if (acceptedExtensions.includes(fileExtension) && (file.type === '' || file.type === 'application/octet-stream')) {
+        fileTypeAccepted = true;
+        if (fileExtension === '.md') isMarkdown = true;
+      }
+    }
+
+    if (!fileTypeAccepted) {
+      alert('Only PDF, text, PowerPoint, image, and Markdown (.md) files are allowed');
       return;
     }
     
@@ -283,14 +295,13 @@ export default function PromptInput({
           if (fileData) {
             if (fileData.isPdf) {
               promptMessage = "I've uploaded a PDF document. Please analyze its content and provide a summary.";
-            } else if (fileData.isText) {
-              promptMessage = "I've uploaded a text file. Please analyze its content and help me understand the main points.";
+            } else if (fileData.isText || fileData.documentType === 'text' || isMarkdown) {
+              promptMessage = `I've uploaded a text-based file (${fileData.name}). Please analyze its content.`;
             } else if (fileData.isPpt) {
               promptMessage = "I've uploaded a PowerPoint presentation. Please help me understand its structure and key messages.";
             } else if (fileData.type?.startsWith('image/')) {
               promptMessage = "I've uploaded an image. Please analyze what's shown in this image.";
             }
-            
             setPrompt(promptMessage);
           }
         } else {
@@ -321,14 +332,25 @@ export default function PromptInput({
       'image/webp',
       'text/plain',
       'application/vnd.ms-powerpoint',
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'text/markdown', // Markdown MIME type
     ];
+    const acceptedExtensions = ['.md'];
 
     // Filter only valid files
-    const validFiles = files.filter(file => acceptedTypes.includes(file.type));
+    const validFiles = files.filter(file => {
+      let fileTypeAccepted = acceptedTypes.includes(file.type);
+      if (!fileTypeAccepted && file.name) {
+        const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+        if (acceptedExtensions.includes(fileExtension) && (file.type === '' || file.type === 'application/octet-stream')) {
+          fileTypeAccepted = true;
+        }
+      }
+      return fileTypeAccepted;
+    });
     
     if (validFiles.length === 0) {
-      alert('Only PDF, text, PowerPoint, and image files are allowed');
+      alert('Only PDF, text, PowerPoint, image, and Markdown (.md) files are allowed');
       return;
     }
     
@@ -375,9 +397,9 @@ export default function PromptInput({
           // Set appropriate prompt message based on file types
           const fileTypes = {
             pdf: files.some(f => f.isPdf),
-            text: files.some(f => f.isText),
+            text: files.some(f => f.isText || f.documentType === 'text' || (f.type === 'text/markdown' || f.name?.toLowerCase().endsWith('.md'))),
             ppt: files.some(f => f.isPpt),
-            image: files.some(f => f.isImage || f.type?.startsWith('image/'))
+            image: files.some(f => f.isImage || f.type?.startsWith('image/')),
           };
           
           let promptMessage = "I've uploaded ";
@@ -387,7 +409,7 @@ export default function PromptInput({
             if (fileTypes.pdf) {
               promptMessage += "a PDF document. Please analyze its content and provide a summary.";
             } else if (fileTypes.text) {
-              promptMessage += "a text file. Please analyze its content and help me understand the main points.";
+              promptMessage += `a text-based file (${files[0].name}). Please analyze its content.`;
             } else if (fileTypes.ppt) {
               promptMessage += "a PowerPoint presentation. Please help me understand its structure and key messages.";
             } else if (fileTypes.image) {
@@ -410,7 +432,7 @@ export default function PromptInput({
       })
       .catch(err => {
         console.error('Upload error:', err);
-        alert('Failed to upload files: ' + (err.message || 'Unknown error'));
+        alert('Failed to upload file: ' + (err.message || 'Unknown error'));
       })
       .finally(() => {
         setIsPdfProcessing(false);
@@ -711,7 +733,7 @@ export default function PromptInput({
         <input
           type="file"
           className="hidden"
-          accept="application/pdf,image/jpeg,image/jpg,image/png,image/webp,text/plain,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+          accept="application/pdf,image/jpeg,image/jpg,image/png,image/webp,text/plain,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/markdown,.md"
           onChange={handleFileChange}
           ref={fileInputRef}
           multiple

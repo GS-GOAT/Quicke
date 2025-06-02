@@ -1087,24 +1087,24 @@ export default function Home() {
   };
 
   // Function to delete the oldest thread and its conversations
-  const deleteOldestThread = async () => {
-    if (!session) return { success: false };
-    try {
-      const response = await fetch(`/api/threads/delete-oldest`, {
-        method: 'DELETE'
-      });
-      if (response.ok) {
-        // Refetch threads after deletion
-        fetchThreads();
-        return { success: true };
-      } else {
-        return { success: false };
-      }
-    } catch (error) {
-      console.error('Error deleting oldest thread:', error);
-      return { success: false };
-    }
-  };
+  // const deleteOldestThread = async () => {
+  //   if (!session) return { success: false };
+  //   try {
+  //     const response = await fetch(`/api/threads/delete-oldest`, {
+  //       method: 'DELETE'
+  //     });
+  //     if (response.ok) {
+  //       // Refetch threads after deletion
+  //       fetchThreads();
+  //       return { success: true };
+  //     } else {
+  //       return { success: false };
+  //     }
+  //   } catch (error) {
+  //     console.error('Error deleting oldest thread:', error);
+  //     return { success: false };
+  //   }
+  // };
 
   // Function to handle thread selection
   const handleThreadSelect = (threadIdToSelect) => {
@@ -1115,7 +1115,7 @@ export default function Home() {
     setIsThreadLoading(true);
     setHistory([]);
     closeSidePanel();
-    setPrompt('');
+    // setPrompt('');
     setCurrentPromptId(null);
     setError(null);
     setSummariesProcessed(new Set());
@@ -1138,12 +1138,11 @@ export default function Home() {
       return;
     }
     if (!session) return;
-    setIsThreadLoading(true);
     setHistory([]);
     setActiveThreadId(null);
     closeSidePanel();
     setActiveThreadTitle("New Chat");
-    setPrompt('');
+    // setPrompt('');
     setCurrentPromptId(null);
     setError(null);
     setSummariesProcessed(new Set());
@@ -1571,14 +1570,25 @@ export default function Home() {
               // Logged-in user header content
               <>
                 <h1 className="text-lg font-medium text-gray-300">{activeThreadTitle}</h1>
-                <button
-                  ref={modelButtonRef}
-                  onClick={handleModelButtonClick}
-                  className="group px-3 py-1.5 rounded-md bg-gray-700/50 hover:bg-gray-600/50 text-gray-300 hover:text-white text-xs font-medium transition-colors border border-gray-600/50 shadow-sm"
-                >
-                  Models ({selectedModels.length}) <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 inline ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
-                </button>
-
+                {/* Model Selector Button and Dropdown */}
+                <div className="relative">
+                  <button
+                    ref={modelButtonRef}
+                    onClick={handleModelButtonClick}
+                    className="group px-3 py-1.5 rounded-md bg-gray-700/50 hover:bg-gray-600/50 text-gray-300 hover:text-white text-xs font-medium transition-colors border border-gray-600/50 shadow-sm flex items-center"
+                  >
+                    Models ({selectedModels.length})
+                    <svg xmlns="http://www.w3.org/2000/svg" className={`h-3 w-3 inline ml-1 transition-transform duration-200 ${showModelSelector ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                  </button>
+                  <ModelSelector
+                    ref={modelSelectorRef}
+                    isOpen={showModelSelector}
+                    setIsOpen={setShowModelSelector}
+                    selectedModels={selectedModels}
+                    setSelectedModels={setSelectedModels}
+                    isGuest={isGuest}
+                  />
+                </div>
                 {/* ---- START NEW LAYOUT TOGGLE BUTTONS ---- */}
                 <div className="flex items-center ml-2 p-0.5 bg-gray-700/60 rounded-lg border border-gray-600/70">
                   <button
@@ -1609,13 +1619,24 @@ export default function Home() {
             ) : (
               // Guest user header content
               <div className="flex items-center space-x-4">
-                <button
-                  ref={modelButtonRef}
-                  onClick={handleModelButtonClick}
-                  className="group px-3 py-1.5 rounded-md bg-gray-700/50 hover:bg-gray-600/50 text-gray-300 hover:text-white text-xs font-medium transition-colors border border-gray-600/50 shadow-sm"
-                >
-                  Models ({selectedModels.length}) <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 inline ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
-                </button>
+                <div className="relative">
+                  <button
+                    ref={modelButtonRef}
+                    onClick={handleModelButtonClick}
+                    className="group px-3 py-1.5 rounded-md bg-gray-700/50 hover:bg-gray-600/50 text-gray-300 hover:text-white text-xs font-medium transition-colors border border-gray-600/50 shadow-sm flex items-center"
+                  >
+                    Models ({selectedModels.length})
+                    <svg xmlns="http://www.w3.org/2000/svg" className={`h-3 w-3 inline ml-1 transition-transform duration-200 ${showModelSelector ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                  </button>
+                  <ModelSelector
+                    ref={modelSelectorRef}
+                    isOpen={showModelSelector}
+                    setIsOpen={setShowModelSelector}
+                    selectedModels={selectedModels}
+                    setSelectedModels={setSelectedModels}
+                    isGuest={isGuest}
+                  />
+                </div>
                 {/* ---- START NEW LAYOUT TOGGLE BUTTONS (Guest) ---- */}
                 <div className="flex items-center ml-2 p-0.5 bg-gray-700/60 rounded-lg border border-gray-600/70">
                   <button
@@ -1697,8 +1718,6 @@ export default function Home() {
         )}
       </div>
       {/* Modals (ModelSelector, ApiKeyManager) remain outside the flex layout */}
-      <ModelSelector isOpen={showModelSelector} setIsOpen={setShowModelSelector} selectedModels={selectedModels} setSelectedModels={setSelectedModels} isGuest={isGuest} />
-      <ApiKeyManager isOpen={showApiKeyManager} onClose={() => setShowApiKeyManager(false)} />
       {error && (
         <div className="mx-auto w-full max-w-4xl p-4 my-2 bg-yellow-900/20 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-lg border border-yellow-200/30 dark:border-yellow-800/30">
           <div className="flex items-center">

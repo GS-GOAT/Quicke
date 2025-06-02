@@ -51,7 +51,7 @@ router.post('/', async (req, res) => {
         temperature: 0.7,
         topK: 40,
         topP: 0.8,
-        maxOutputTokens: 5000,
+        maxOutputTokens: 8000,
       },
     });
 

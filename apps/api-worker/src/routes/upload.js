@@ -72,56 +72,61 @@ router.post('/', async (req, res) => {
 
           const isImage = file.mimetype.startsWith('image/');
           const isPdf = file.mimetype === 'application/pdf';
-          const isText = file.mimetype === 'text/plain';
+          const isTextPlain = file.mimetype === 'text/plain';
           const isPpt = file.mimetype === 'application/vnd.ms-powerpoint' || 
                         file.mimetype === 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+          const isMarkdown = file.mimetype === 'text/markdown' || (file.originalFilename && file.originalFilename.toLowerCase().endsWith('.md'));
 
-          if (!isImage && !isPdf && !isText && !isPpt) {
-            continue; // Skip invalid file types
+          // Treat Markdown as text for processing and documentType
+          let effectiveDocumentType = '';
+          let contentToStore;
+
+          if (isImage) {
+            effectiveDocumentType = 'image';
+            contentToStore = await processImage(file.filepath);
+          } else if (isPdf) {
+            effectiveDocumentType = 'pdf';
+            const pdfData = await extractTextFromPDF(file.filepath);
+            contentToStore = typeof pdfData.text === 'string' ? pdfData.text : JSON.stringify(pdfData.text);
+          } else if (isPpt) {
+            effectiveDocumentType = 'ppt';
+            const pptData = await extractTextFromPPT(file.filepath);
+            contentToStore = pptData.text;
+          } else if (isTextPlain || isMarkdown) { // Treat MD as plain text for content extraction
+            effectiveDocumentType = 'text'; // Store MD as 'text' type now
+            const textData = await extractTextFromTextFile(file.filepath);
+            contentToStore = textData.text;
+          } else {
+            // Fallback for other unknown text-like files or files with generic MIME types but .txt/.md extensions
+            const ext = file.originalFilename ? file.originalFilename.split('.').pop().toLowerCase() : '';
+            if ((file.mimetype.startsWith('text/')) || ext === 'txt' || ext === 'md') {
+                effectiveDocumentType = 'text';
+                const textData = await extractTextFromTextFile(file.filepath);
+                contentToStore = textData.text;
+            } else {
+                console.log(`Skipping file ${file.originalFilename} with type ${file.mimetype} - not explicitly handled.`);
+                continue; // Skip unhandled file types
+            }
+          }
+          
+          if (contentToStore === undefined || contentToStore === null) {
+             if (effectiveDocumentType !== 'image' && typeof contentToStore !== 'string') { // Images store base64
+                console.error(`Content extraction failed for ${file.originalFilename}, type ${effectiveDocumentType}`);
+                continue;
+             }
           }
 
-          // Process file content based on type
-          let content;
-          let fileType = '';
-          try {
-            if (isImage) {
-              const base64Content = await processImage(file.filepath);
-              content = base64Content; // Store base64 string directly
-              fileType = 'image';
-            } else if (isPdf) {
-              const pdfData = await extractTextFromPDF(file.filepath);
-              content = typeof pdfData.text === 'string' ? pdfData.text : JSON.stringify(pdfData.text);
-              fileType = 'pdf';
-            } else if (isText) {
-              const textData = await extractTextFromTextFile(file.filepath);
-              content = textData.text;
-              fileType = 'text';
-            } else if (isPpt) {
-              const pptData = await extractTextFromPPT(file.filepath);
-              content = pptData.text;
-              fileType = 'ppt';
-            }
-
-            if (!content) {
-              throw new Error('Failed to process file content');
-            }
-          } catch (processError) {
-            console.error('File processing error:', processError);
-            continue; // Skip files that fail processing
-          }
-
-          // Save to database with proper content handling
           const uploadedFile = await prisma.uploadedFile.create({
             data: {
               userId,
               fileName: file.originalFilename,
-              fileType: file.mimetype,
+              fileType: file.mimetype, // Store original MIME
               fileSize: file.size,
               filePath: null,
-              content: content || '',
+              content: contentToStore || '',
               threadId: fields.threadId ? (Array.isArray(fields.threadId) ? fields.threadId[0] : fields.threadId) : null,
               conversationId: fields.conversationId ? (Array.isArray(fields.conversationId) ? fields.conversationId[0] : fields.conversationId) : null,
-              documentType: fileType,
+              documentType: effectiveDocumentType, // Store our processed type ('text' for .md)
             }
           });
 
@@ -139,12 +144,13 @@ router.post('/', async (req, res) => {
             id: uploadedFile.id,
             type: file.mimetype,
             name: file.originalFilename,
-            content: isImage ? content : undefined, // Only send back image content
+            content: isImage ? contentToStore : undefined, // Only send back image content
             isImage,
             isPdf,
-            isText,
+            isText: isTextPlain || isMarkdown,
             isPpt,
-            documentType: fileType
+            isMarkdown,
+            documentType: effectiveDocumentType
           });
         }
 

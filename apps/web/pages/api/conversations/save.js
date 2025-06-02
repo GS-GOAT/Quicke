@@ -81,14 +81,19 @@ export default async function handler(req, res) {
             role: 'user',
             content: prompt
           },
-          ...Object.entries(responses).map(([model, data]) => ({
-            role: 'assistant',
-            content: JSON.stringify({
-              model,
-              text: data.text,
-              timestamp: data.timestamp
+          ...Object.entries(responses)
+            .filter(([model, data]) => {
+              // Only save if text is non-empty and no error
+              return data && typeof data.text === 'string' && data.text.trim() !== '' && !data.error;
             })
-          }))
+            .map(([model, data]) => ({
+              role: 'assistant',
+              content: JSON.stringify({
+                model,
+                text: data.text,
+                timestamp: data.timestamp
+              })
+            }))
         ]
       }
     };
