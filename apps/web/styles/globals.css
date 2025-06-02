@@ -780,11 +780,7 @@ main {
 
 footer {
   @apply sticky bottom-0 z-10;
-  /* Ensure footer stays above content */
-  background: linear-gradient(to top,
-    rgba(17, 17, 17, 1) 0%,
-    rgba(17, 17, 17, 0.9) 100%
-  );
+  background-color: #18181b !important;
 }
 
 /* Scrolling prompts animation */
@@ -853,11 +849,6 @@ footer {
   opacity: 0.8;
 }
 
-/* Update existing footer style to be transparent */
-footer {
-  background: transparent !important;
-}
-
 /* Backdrop blur styles */
 .backdrop-blur-sm {
   backdrop-filter: blur(4px);
@@ -915,9 +906,7 @@ footer {
     bottom: 0;
     left: 0;
     right: 0;
-    background: rgba(17, 17, 17, 0.8);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background-color: #18181b !important;
     z-index: 40;
   }
 }

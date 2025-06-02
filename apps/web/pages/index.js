@@ -228,15 +228,6 @@ export default function Home() {
     }
   }, [history.length]);
 
-  // backdrop blur when model selector is open
-  useEffect(() => {
-    if (showModelSelector) {
-      document.body.classList.add('backdrop-blur-active');
-    } else {
-      document.body.classList.remove('backdrop-blur-active');
-    }
-    return () => document.body.classList.remove('backdrop-blur-active');
-  }, [showModelSelector]);
 
   // event listener for API key manager toggle
   useEffect(() => {
@@ -1422,6 +1413,16 @@ export default function Home() {
     }
   }, [history, autoSummarizeEnabled]);
 
+  useEffect(() => {
+    const handleOpenApiKeyEvent = () => {
+      setShowApiKeyManager(true);
+    };
+    window.addEventListener('openApiKeyManager', handleOpenApiKeyEvent);
+    return () => {
+      window.removeEventListener('openApiKeyManager', handleOpenApiKeyEvent);
+    };
+  }, []);
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#0D0D0D]">
       {/* Persistent Sidebar */}
@@ -1727,6 +1728,10 @@ export default function Home() {
             Error: {error}
           </div>
         </div>
+      )}
+      {/* API Key Manager Overlay */}
+      {showApiKeyManager && (
+        <ApiKeyManager isOpen={showApiKeyManager} onClose={() => setShowApiKeyManager(false)} />
       )}
     </div>
   );

@@ -122,6 +122,16 @@ const ModelSelector = forwardRef(function ModelSelector({ isOpen, setIsOpen, sel
                       isSelected ? 'bg-primary-700/25 border-primary-600/50' : 'bg-gray-800/30'
                     }`}
                   >
+                    {isDisabled && (
+                      <div className="absolute left-1/2 -top-3 z-50 -translate-x-1/2 -translate-y-full group-hover:opacity-100 group-hover:pointer-events-auto opacity-0 pointer-events-none transition-all duration-200">
+                        <div className="relative flex flex-col items-center">
+                          <div className="px-3 py-2 rounded-md bg-white text-gray-800 text-xs shadow-lg border border-gray-300 font-medium whitespace-nowrap">
+                            Log in to use this model
+                          </div>
+                          <div className="w-3 h-3 bg-white border-l border-b border-gray-300 rotate-45 mt-[-7px] z-[-1]"></div>
+                        </div>
+                      </div>
+                    )}
                     <div className="flex items-center space-x-2">
                       <div className={`flex-shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-white text-xs bg-gradient-to-br ${model.color || 'from-gray-600 to-gray-700'}`}>
                         {model.icon || '●'}
