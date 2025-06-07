@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { produce } from 'immer';
 import Head from 'next/head';
 import ModelSelector from '../components/ModelSelector';
 import PromptInput from '../components/PromptInput';
@@ -136,10 +137,20 @@ export default function Home() {
   // Get split panel context
   const { isSidePanelOpen, sidePanelContent, openSidePanel, closeSidePanel } = useSplitPanel();
 
-  // handler for opening response in side panel
-  const handleOpenInSidePanel = (columnProps) => {
+  // handler for opening response in side panel - memoized with useCallback
+  const handleOpenInSidePanel = useCallback((columnProps) => {
     openSidePanel(columnProps);
-  };
+    
+    // If this is a summary, mark it as opened in the panel
+    if (columnProps.isSummary && columnProps.conversationId) {
+      setHistory(produce(draft => {
+        const entry = draft.find(c => c.id === columnProps.conversationId);
+        if (entry) {
+          entry.summaryOpenedInPanel = true;
+        }
+      }));
+    }
+  }, [openSidePanel]);
 
   // Modify auto-scroll to only trigger on new prompt addition
   useEffect(() => {
@@ -172,7 +183,7 @@ export default function Home() {
           !modelButtonRef.current.contains(event.target) &&
           !modelSelectorRef.current.contains(event.target)) {
         setShowModelSelector(false);
-      }
+      } 
     }
 
     document.addEventListener("mousedown", handleClickOutside);
@@ -357,7 +368,223 @@ export default function Home() {
     }
   };
 
-  const handleSubmit = async (contextData) => {
+  // Optimized summary generation function with race condition protection
+  const generateSummary = useCallback(async (conversationEntryToSummarize) => {
+    if (!conversationEntryToSummarize) return;
+    const { id: conversationId, responses: modelResponses, prompt: promptText, threadId: convThreadId } = conversationEntryToSummarize;
+
+    // Check if summary is already being fetched or exists
+    if (conversationEntryToSummarize.summaryFetching || (conversationEntryToSummarize.summary && !conversationEntryToSummarize.summaryError)) {
+      // Potentially auto-open if conditions met
+      if (autoSummarizeEnabled && conversationEntryToSummarize.summary && !conversationEntryToSummarize.summaryOpenedInPanel) {
+          openSidePanel({ model: 'summary', conversationId: conversationId, response: {text: conversationEntryToSummarize.summary, loading: false, streaming: false, error: null, done: true }, streaming: false, isSummary: true, });
+          setHistory(produce(draft => {
+            const entry = draft.find(c => c.id === conversationId);
+            if (entry) {
+              entry.summaryOpenedInPanel = true;
+            }
+          }));
+      }
+      return;
+    }
+
+    // Use Immer to update history
+    setHistory(produce(draft => {
+      const entry = draft.find(h => h.id === conversationId);
+      if (entry) {
+        entry.summaryFetching = true;
+        entry.summaryFetched = true;
+        entry.summaryError = null;
+      }
+    }));
+
+    setSummaryLoading(prev => ({ ...prev, [conversationId]: true }));
+
+    try {
+      const validResponses = Object.entries(modelResponses)
+        .filter(([_, response]) => !response.error && response.text)
+        .reduce((acc, [model, response]) => {
+          acc[model] = { text: response.text };
+          return acc;
+        }, {});
+
+      if (Object.keys(validResponses).length === 0) throw new Error('No valid responses to summarize');
+
+      let summarizeUrl = '/api/summarize';
+      if (isGuest) summarizeUrl += '?isGuest=true';
+
+      const res = await fetch(summarizeUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ responses: validResponses })
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Failed to generate summary API');
+      }
+
+      const summaryData = await res.json();
+
+      // Use Immer to update history
+      setHistory(produce(draft => {
+        const entry = draft.find(h => h.id === conversationId);
+        if (entry) {
+          entry.summary = summaryData.text;
+          entry.summaryError = null;
+          entry.summaryFetching = false;
+        }
+      }));
+
+      // Auto-open in side panel if enabled
+      if (autoSummarizeEnabled) {
+        openSidePanel({
+          model: 'summary', conversationId: conversationId,
+          response: { text: summaryData.text, loading: false, streaming: false, error: null, done: true },
+          streaming: false, isSummary: true,
+        });
+
+        // Use Immer to update history
+        setHistory(produce(draft => {
+          const entry = draft.find(c => c.id === conversationId);
+          if (entry) {
+            entry.summaryOpenedInPanel = true;
+          }
+        }));
+      }
+
+      if (!isGuest && session) {
+        await fetch('/api/conversations/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: conversationId,
+            prompt: promptText,
+            responses: modelResponses,
+            threadId: convThreadId,
+            summary: summaryData.text
+          })
+        });
+        // Optionally refetch threads if summary save should update thread list immediately
+        // fetchThreads(); 
+      }
+      return summaryData.text;
+    } catch (error) {
+      console.error(`Summary generation failed for ${conversationId}:`, error);
+
+      // Use Immer to update history
+      setHistory(produce(draft => {
+        const entry = draft.find(h => h.id === conversationId);
+        if (entry) {
+          entry.summary = null;
+          entry.summaryError = error.message || 'Failed to generate summary';
+          entry.summaryFetching = false;
+        }
+      }));
+      // Do not re-throw here if error is handled by setting history
+    } finally {
+      setSummaryLoading(prev => ({ ...prev, [conversationId]: false }));
+      setHistory(produce(draft => { // Ensure summaryFetching is reset
+        const entry = draft.find(h => h.id === conversationId);
+        if (entry) entry.summaryFetching = false;
+      }));
+    }
+  }, [isGuest, session, autoSummarizeEnabled, openSidePanel]);
+
+  // Update handleStopStreaming to work with history state - optimized with useCallback and Immer
+  const handleStopStreaming = useCallback(() => {
+    console.log('Stopping stream for prompt ID:', currentPromptId);
+
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+
+    if (currentPromptId) { // Only update history if there was an active prompt
+      let conversationToSummarize = null; // Will store the entry to summarize if conditions met
+
+      setHistory(produce(draft => {
+        const entry = draft.find(e => e.id === currentPromptId);
+        if (entry) {
+          Object.keys(entry.responses).forEach(modelKey => {
+            if (entry.responses[modelKey]?.streaming || entry.responses[modelKey]?.loading) {
+              entry.responses[modelKey].streaming = false;
+              entry.responses[modelKey].loading = false;
+              entry.responses[modelKey].text = entry.responses[modelKey].text ? entry.responses[modelKey].text + " [stopped]" : "[stopped]";
+              entry.responses[modelKey].done = true;
+            }
+          });
+          // Check if summary needs to be triggered after stopping
+          const allDone = Object.values(entry.responses).every(r => r.done || r.error);
+          if (allDone && autoSummarizeEnabled && !entry.summaryFetched && !entry.summaryError && !entry.summaryFetching) {
+            // If summary is needed, mark the entry for summarization outside this Immer update
+            conversationToSummarize = JSON.parse(JSON.stringify(entry)); // Deep clone the entry
+          }
+        }
+      }));
+
+      // Trigger summary generation outside the Immer producer
+      if (conversationToSummarize && !summariesProcessed.has(conversationToSummarize.id)) {
+        setSummariesProcessed(prev => {
+          const newSet = new Set(prev);
+          newSet.add(conversationToSummarize.id);
+          return newSet;
+        });
+        generateSummary(conversationToSummarize);
+      }
+    }
+
+    setIsProcessing(false);
+    setCurrentPromptId(null);
+  }, [currentPromptId, autoSummarizeEnabled, summariesProcessed, generateSummary]);
+
+  // Function to fetch threads
+  const fetchThreads = useCallback(async () => {
+    if (!session) return;
+    try {
+      const response = await fetch(`/api/threads/list`);
+      if (response.ok) {
+        const data = await response.json();
+        // Process threads to group by date
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+        const thirtyDaysAgo = new Date(now);
+        thirtyDaysAgo.setDate(now.getDate() - 30);
+
+        const groupedThreads = { today: [], yesterday: [], past30Days: [], older: [] };
+
+        data.threads.forEach(thread => {
+          const threadDate = new Date(thread.updatedAt);
+          const threadDay = new Date(threadDate.getFullYear(), threadDate.getMonth(), threadDate.getDate());
+
+          if (threadDay >= today) {
+            groupedThreads.today.push(thread);
+          } else if (threadDay >= yesterday) {
+            groupedThreads.yesterday.push(thread);
+          } else if (threadDay >= thirtyDaysAgo) {
+            groupedThreads.past30Days.push(thread);
+          } else {
+            groupedThreads.older.push(thread);
+          }
+        });
+
+        // Sort each group by updatedAt descending
+        Object.keys(groupedThreads).forEach(key => {
+          groupedThreads[key].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+        });
+
+        setThreads(groupedThreads);
+
+      } else {
+        console.error('Failed to fetch threads:', response.status);
+      }
+    } catch (error) {
+      console.error('Error fetching threads:', error);
+    }
+  }, [session]);
+
+  const handleSubmit = useCallback(async (contextData) => {
     const currentPromptText = contextData.prompt || contextData.text || prompt;
 
     if (loading || isCreatingThread || !currentPromptText || !currentPromptText.trim()) {
@@ -437,19 +664,27 @@ export default function Home() {
       initialResponses[model] = { text: '', loading: true, error: null, streaming: true, done: false };
     });
 
-    setHistory(prev => [...prev, {
-      id: conversationId,
-      prompt: currentPromptText,
-      responses: initialResponses,
-      activeModels: [...modelsToSubmit],
-      timestamp: new Date(),
-      isHistorical: false,
-      fileId: firstFileId,
-      fileIds: fileIds,
-      fileName: !isGuest ? (contextData?.fileName || null) : null,
-      fileNames: !isGuest ? (contextData?.fileNames || []) : [],
-      threadId: isGuest ? null : currentThreadIdForAPI,
-    }]);
+    // Use Immer to update history
+    setHistory(produce(draft => {
+      draft.push({ 
+        id: conversationId,
+        prompt: currentPromptText,
+        responses: initialResponses,
+        activeModels: [...modelsToSubmit],
+        timestamp: new Date(),
+        isHistorical: false,
+        fileId: firstFileId,
+        fileIds: fileIds,
+        fileName: !isGuest ? (contextData?.fileName || null) : null,
+        fileNames: !isGuest ? (contextData?.fileNames || []) : [],
+        threadId: isGuest ? null : currentThreadIdForAPI,
+        summaryFetched: false,
+        summaryFetching: false,
+        summaryError: null,
+        summary: null,
+        summaryOpenedInPanel: false
+      });
+    }));
 
     setPrompt('');
 
@@ -491,24 +726,22 @@ export default function Home() {
           finalModelTextsToSave[data.model] = { text: update.text, timestamp: Date.now() };
         }
 
-        setHistory(prevHist => {
-          const updatedHist = [...prevHist];
-          const idx = updatedHist.findIndex(e => e.id === conversationId);
-          if (idx !== -1) {
-            if (!updatedHist[idx].responses[data.model]) updatedHist[idx].responses[data.model] = {};
-            updatedHist[idx].responses[data.model] = { ...updatedHist[idx].responses[data.model], ...update };
+        // Use Immer to update history
+        setHistory(produce(draft => {
+          const entry = draft.find(e => e.id === conversationId);
+          if (entry) {
+            if (!entry.responses[data.model]) entry.responses[data.model] = {};
+            entry.responses[data.model] = { ...entry.responses[data.model], ...update };
           }
-          return updatedHist;
-        });
+        }));
 
         // After updating history, check if all models are done and save the conversation (for logged-in users only)
         if (!isGuest) {
           setTimeout(() => {
-            setHistory(prevHist => {
-              const updatedHist = [...prevHist];
-              const idx = updatedHist.findIndex(e => e.id === conversationId);
-              if (idx !== -1) {
-                const allDone = Object.values(updatedHist[idx].responses).every(r => r.done || r.error);
+            setHistory(produce(draft => {
+              const entry = draft.find(e => e.id === conversationId);
+              if (entry) {
+                const allDone = Object.values(entry.responses).every(r => r.done || r.error);
                 if (allDone && !savedConversationsRef.current.has(conversationId)) {
                   savedConversationsRef.current.add(conversationId);
                   // Save the conversation
@@ -517,10 +750,10 @@ export default function Home() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                       id: conversationId,
-                      prompt: updatedHist[idx].prompt,
-                      responses: updatedHist[idx].responses,
-                      threadId: updatedHist[idx].threadId,
-                      summary: updatedHist[idx].summary || undefined
+                      prompt: entry.prompt,
+                      responses: entry.responses,
+                      threadId: entry.threadId,
+                      summary: entry.summary || undefined
                     })
                   }).then(() => {
                     // After saving the conversation, refetch threads to update the list
@@ -530,8 +763,8 @@ export default function Home() {
                   });
                 }
               }
-              return updatedHist;
-            });
+              return draft;
+            }));
           }, 0);
         }
       }
@@ -549,9 +782,11 @@ export default function Home() {
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, 100);
-  };
+  }, [prompt, loading, isCreatingThread, isGuest, selectedModels, GUEST_ALLOWED_MODELS, modelDisplayNames, 
+      guestConversationCount, GUEST_CONVERSATION_LIMIT, session, currentPromptId, handleStopStreaming, 
+      activeThreadId, contextEnabled, fetchThreads, savedConversationsRef]);
 
-  const handleClear = () => {
+  const handleClear = useCallback(() => {
     if (history.length === 0) return;
     
     // If there's an active stream, close it
@@ -562,101 +797,11 @@ export default function Home() {
 
     // Reset all relevant state
     setPrompt('');
-    setHistory([]);
+    setHistory([]); // No need for Immer here as we're replacing the entire array
     setError(null);
     setIsProcessing(false);
     setCurrentPromptId(null);
-  };
-
-  // summary generation function
-  const generateSummary = async (conversationId) => {
-    // Prevent multiple calls for the same conversation if one is already in progress or done
-    const conversationEntry = history.find(h => h.id === conversationId);
-    if (!conversationEntry || conversationEntry.summaryFetching || (conversationEntry.summary && !conversationEntry.summaryError)) {
-      if(conversationEntry && conversationEntry.summary && autoSummarizeEnabled && !conversationEntry.summaryOpenedInPanel) {
-        // If summary exists and should be auto-opened
-         openSidePanel({
-            model: 'summary', conversationId: conversationId,
-            response: { text: conversationEntry.summary, loading: false, streaming: false, error: null, done: true },
-            streaming: false, isSummary: true,
-          });
-          setHistory(prev => prev.map(c => c.id === conversationId ? { ...c, summaryOpenedInPanel: true } : c));
-      }
-      return;
-    }
-  
-    setHistory(prev => prev.map(h => h.id === conversationId ? { ...h, summaryFetching: true, summaryFetched: true, summaryError: null } : h));
-    setSummaryLoading(prev => ({ ...prev, [conversationId]: true }));
-  
-    try {
-      const validResponses = Object.entries(conversationEntry.responses)
-        .filter(([_, response]) => !response.error && response.text)
-        .reduce((acc, [model, response]) => {
-          acc[model] = { text: response.text };
-          return acc;
-        }, {});
-  
-      if (Object.keys(validResponses).length === 0) throw new Error('No valid responses to summarize');
-  
-      let summarizeUrl = '/api/summarize';
-      if (isGuest) summarizeUrl += '?isGuest=true';
-  
-      const res = await fetch(summarizeUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ responses: validResponses })
-      });
-  
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Failed to generate summary API');
-      }
-  
-      const summaryData = await res.json();
-  
-      setHistory(prev => prev.map(h => {
-        if (h.id === conversationId) {
-          return { ...h, summary: summaryData.text, summaryError: null, summaryFetching: false };
-        }
-        return h;
-      }));
-  
-      // Auto-open in side panel if enabled
-      if (autoSummarizeEnabled) {
-        openSidePanel({
-          model: 'summary', conversationId: conversationId,
-          response: { text: summaryData.text, loading: false, streaming: false, error: null, done: true },
-          streaming: false, isSummary: true,
-        });
-        setHistory(prev => prev.map(c => c.id === conversationId ? { ...c, summaryOpenedInPanel: true } : c));
-      }
-  
-      if (!isGuest && session) {
-        await fetch('/api/conversations/save', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: conversationId,
-            prompt: conversationEntry.prompt,
-            responses: conversationEntry.responses, // Save original responses
-            threadId: conversationEntry.threadId, // Ensure threadId is from the conversation entry
-            summary: summaryData.text
-          })
-        });
-        // Optionally refetch threads if summary save should update thread list immediately
-        // fetchThreads(); 
-      }
-      return summaryData.text;
-    } catch (error) {
-      console.error(`Summary generation failed for ${conversationId}:`, error);
-      setHistory(prev => prev.map(h =>
-        h.id === conversationId ? { ...h, summary: null, summaryError: error.message || 'Failed to generate summary', summaryFetching: false } : h
-      ));
-      // Do not re-throw here if error is handled by setting history
-    } finally {
-      setSummaryLoading(prev => ({ ...prev, [conversationId]: false }));
-    }
-  };
+  }, [history.length, eventSourceRef]);
 
   // Replace the old suggestion rendering with continuous scroll
   const renderSuggestions = () => (
@@ -791,6 +936,10 @@ export default function Home() {
                   className="light-response-column"
                   onRetry={handleModelRetry}
                   onOpenInSidePanel={handleOpenInSidePanel}
+                  promptText={entry.prompt} // Pass the prompt for this specific turn
+                  fileId={entry.fileId}     // Pass other necessary static details
+                  fileIds={entry.fileIds}
+                  threadIdToUse={entry.threadId} // Pass the specific threadId for this conversation entry
                 />
               ))}
             </div>
@@ -809,7 +958,7 @@ export default function Home() {
             {!entry.summary && !currentPromptId && (
               <div className="flex justify-center mt-6">
                 <button
-                  onClick={() => generateSummary(entry.id)}
+                  onClick={() => generateSummary(entry)}
                   disabled={summaryLoading[entry.id]}
                   className={`
                     group relative flex items-center gap-3 px-6 py-2.5 
@@ -860,108 +1009,92 @@ export default function Home() {
     );
   };
 
-  const handleModelRetry = async (modelId, conversationId) => {
-    console.log(`Retrying model ${modelId} for conversation ${conversationId}`);
-    
-    // Find the conversation to retry
-    const conversation = history.find(entry => entry.id === conversationId);
-    if (!conversation) {
-      console.error("Conversation not found:", conversationId);
-      return;
-    }
-    
-    // Update UI to show loading
-    setHistory(prev => {
-      const updated = [...prev];
-      const entryIndex = updated.findIndex(entry => entry.id === conversationId);
-      if (entryIndex !== -1) {
-        updated[entryIndex].responses = {
-          ...updated[entryIndex].responses,
-          [modelId]: {
-            text: '',
-            loading: true,
-            error: null,
-            streaming: true
-          }
-        };
+  const handleModelRetry = useCallback(async (modelId, conversationIdToRetry, promptTextForRetry, fileIdForRetry, fileIdsForRetry, threadIdForRetry) => {
+    console.log(`Retrying model ${modelId} for conversation ${conversationIdToRetry} with prompt: "${promptTextForRetry}"`);
+
+    // Update UI to show loading using Immer
+    setHistory(produce(draft => {
+      const entry = draft.find(e => e.id === conversationIdToRetry);
+      if (entry && entry.responses[modelId]) {
+        entry.responses[modelId].text = '';
+        entry.responses[modelId].loading = true;
+        entry.responses[modelId].error = null;
+        entry.responses[modelId].streaming = true;
+        entry.responses[modelId].done = false; // Reset done state
+        // Also reset summary related flags for this conversation if retry invalidates summary
+        entry.summary = null;
+        entry.summaryError = null;
+        entry.summaryFetched = false;
+        entry.summaryFetching = false;
+        entry.summaryOpenedInPanel = false;
       }
-      return updated;
+    }));
+
+    // Remove from summariesProcessed if it was there, so it can be summarized again
+    setSummariesProcessed(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(conversationIdToRetry);
+      return newSet;
     });
-    
+
     try {
-      // This would normally call an API endpoint to retry the model
-      // For now, we'll simulate it by re-submitting the prompt for this model only
-      
-      // Create a new EventSource
-      const newEventSource = new EventSource(
-        `/api/stream?prompt=${encodeURIComponent(conversation.prompt)}&models=${encodeURIComponent(modelId)}`
-      );
-      
-      newEventSource.onmessage = (event) => {
+      const queryParams = new URLSearchParams({
+        prompt: promptTextForRetry,
+        models: modelId,
+        conversationId: conversationIdToRetry, // Use the original conversation ID for the retry stream
+      });
+      if (isGuest) queryParams.append('isGuest', "true");
+      // Add other relevant params like fileId, threadId, useContext if applicable
+      if (threadIdForRetry && !isGuest) queryParams.append('threadId', threadIdForRetry);
+      if (contextEnabled && !isGuest) queryParams.append('useContext', "true");
+      if (fileIdForRetry && !isGuest) queryParams.append('fileId', fileIdForRetry);
+      if (fileIdsForRetry && fileIdsForRetry.length > 0 && !isGuest) queryParams.append('fileIds', fileIdsForRetry.join(','));
+
+      const retryEventSource = new EventSource(`/api/stream?${queryParams.toString()}`);
+
+      retryEventSource.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        
         if (data.model === modelId) {
-          const update = {
-            text: data.text || '',
-            error: data.error || null,
-            loading: data.loading !== false,
-            streaming: data.streaming !== false
-          };
-          
-          setHistory(prev => {
-            const updated = [...prev];
-            const entryIndex = updated.findIndex(entry => entry.id === conversationId);
-            if (entryIndex !== -1) {
-              updated[entryIndex].responses[modelId] = update;
+          setHistory(produce(draft => {
+            const entry = draft.find(e => e.id === conversationIdToRetry);
+            if (entry && entry.responses[modelId]) {
+              entry.responses[modelId].text = data.text || '';
+              entry.responses[modelId].error = data.error || null;
+              entry.responses[modelId].loading = data.loading !== undefined ? data.loading : false;
+              entry.responses[modelId].streaming = data.streaming !== undefined ? data.streaming : false;
+              entry.responses[modelId].done = data.done === true;
             }
-            return updated;
-          });
+          }));
         }
-        
-        // Handle final completion
-        if (data.allComplete) {
-          newEventSource.close();
+
+        if (data.done === true && data.model === modelId) { // Model specific done
+          retryEventSource.close();
+          // We don't call generateSummary directly here anymore
+          // The useEffect watching history will handle auto-summarization
+          // This decouples the dependencies and prevents circular references
         }
       };
-      
-      // Handle errors
-      newEventSource.onerror = (error) => {
-        console.error('EventSource error:', error);
-        
-        setHistory(prev => {
-          const updated = [...prev];
-          const entryIndex = updated.findIndex(entry => entry.id === conversationId);
-          if (entryIndex !== -1) {
-            updated[entryIndex].responses[modelId] = {
-              text: '',
-              loading: false,
-              error: 'Failed to retry model',
-              streaming: false
-            };
+
+      retryEventSource.onerror = (error) => {
+        console.error('EventSource error on retry:', error);
+        setHistory(produce(draft => {
+          const entry = draft.find(e => e.id === conversationIdToRetry);
+          if (entry && entry.responses[modelId]) {
+            entry.responses[modelId] = { text: '', loading: false, error: 'Failed to retry model', streaming: false, done: true };
           }
-          return updated;
-        });
-        
-        newEventSource.close();
+        }));
+        retryEventSource.close();
       };
     } catch (error) {
       console.error("Error retrying model:", error);
-      
-      setHistory(prev => {
-        const updated = [...prev];
-        const entryIndex = updated.findIndex(entry => entry.id === conversationId);
-        if (entryIndex !== -1) {
-          updated[entryIndex].responses[modelId] = {
-            text: '',
-            loading: false,
-            error: `Failed to retry: ${error.message}`,
-            streaming: false
-          };
+      setHistory(produce(draft => {
+        const entry = draft.find(e => e.id === conversationIdToRetry);
+        if (entry && entry.responses[modelId]) {
+          entry.responses[modelId] = { text: '', loading: false, error: `Failed to retry: ${error.message}`, streaming: false, done: true };
         }
-        return updated;
-      });
+      }));
     }
-  };
+  }, [isGuest, contextEnabled]); // Removed autoSummarizeEnabled and generateSummary dependencies
 
   const renderContextToggle = () => (
     <div className="flex items-center space-x-2">
@@ -979,6 +1112,34 @@ export default function Home() {
     </div>
   );
 
+  // Effect to auto-trigger summary with enhanced filtering
+  useEffect(() => {
+    if (!autoSummarizeEnabled || !isClient) return;
+
+    const latestConversations = history.slice().filter(entry =>
+      !entry.isHistorical && // Only new, non-historical entries
+      !entry.summaryFetched && // Hasn't been fetched/attempted
+      !entry.summaryFetching && // Isn't currently being fetched
+      !entry.summary && // Doesn't already have a summary
+      !entry.summaryError && // Doesn't have a summary error
+      Object.values(entry.responses).length > 0 && // Must have some responses
+      Object.values(entry.responses).every(r => r.done || r.error) // All models for this entry are done
+    );
+
+    if (latestConversations.length > 0) {
+        const convToSummarize = latestConversations[latestConversations.length -1]; // Get the most recent one
+        if (!summariesProcessed.has(convToSummarize.id)) {
+             // Track that we're processing this summary to prevent duplicates
+             setSummariesProcessed(prev => {
+               const newSet = new Set(prev);
+               newSet.add(convToSummarize.id);
+               return newSet;
+             });
+             generateSummary(convToSummarize);
+        }
+    }
+  }, [history, autoSummarizeEnabled, isClient, generateSummary, summariesProcessed]);
+
   // Ensure the layout toggle works correctly on initial load
   useEffect(() => {
     // Force a re-render of the toggle buttons when the component mounts
@@ -994,88 +1155,7 @@ export default function Home() {
     });
   }, [responseLayout]);
 
-  // Update handleStopStreaming to work with history state
-  const handleStopStreaming = () => {
-    console.log('Stopping stream');
-    
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-    }
-    
-    setHistory(prev => {
-      return prev.map(entry => {
-        if (entry.id === currentPromptId) {
-          const updatedResponses = { ...entry.responses };
-          
-          Object.keys(updatedResponses).forEach(model => {
-            if (updatedResponses[model]?.streaming || updatedResponses[model]?.loading) {
-              updatedResponses[model] = {
-                ...updatedResponses[model],
-                streaming: false,
-                loading: false,
-                text: updatedResponses[model].text ? updatedResponses[model].text + " [stopped]" : "[stopped]",
-                done: true
-              };
-            }
-          });
-          
-          return { ...entry, responses: updatedResponses };
-        }
-        return entry;
-      });
-    });
-    
-    setIsProcessing(false);
-    setLoading(false);
-    setCurrentPromptId(null);
-  };
 
-  // Function to fetch threads
-  const fetchThreads = async () => {
-    if (!session) return;
-    try {
-      const response = await fetch(`/api/threads/list`);
-      if (response.ok) {
-        const data = await response.json();
-        // Process threads to group by date
-        const now = new Date();
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-        const thirtyDaysAgo = new Date(now);
-        thirtyDaysAgo.setDate(now.getDate() - 30);
-
-        const groupedThreads = { today: [], yesterday: [], past30Days: [], older: [] };
-
-        data.threads.forEach(thread => {
-          const threadDate = new Date(thread.updatedAt);
-          const threadDay = new Date(threadDate.getFullYear(), threadDate.getMonth(), threadDate.getDate());
-
-          if (threadDay >= today) {
-            groupedThreads.today.push(thread);
-          } else if (threadDay >= yesterday) {
-            groupedThreads.yesterday.push(thread);
-          } else if (threadDay >= thirtyDaysAgo) {
-            groupedThreads.past30Days.push(thread);
-          } else {
-            groupedThreads.older.push(thread);
-          }
-        });
-
-        // Sort each group by updatedAt descending
-        Object.keys(groupedThreads).forEach(key => {
-          groupedThreads[key].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-        });
-
-        setThreads(groupedThreads);
-
-      } else {
-        console.error('Failed to fetch threads:', response.status);
-      }
-    } catch (error) {
-      console.error('Error fetching threads:', error);
-    }
-  };
 
   // Function to delete the oldest thread and its conversations
   // const deleteOldestThread = async () => {
@@ -1400,18 +1480,31 @@ export default function Home() {
 
   // --- Add useEffect to auto-trigger summary when summarize button would appear ---
   useEffect(() => {
-    if (!autoSummarizeEnabled) return;
-    // Find the latest conversation that is not historical, has all models done, has no summary, and is not loading summary
-    const latest = history.slice().reverse().find(entry =>
-      !entry.isHistorical &&
-      !entry.summary &&
-      !entry.summaryFetching &&
-      Object.values(entry.responses).every(r => r.done || r.error)
+    if (!autoSummarizeEnabled || !isClient) return;
+
+    const latestConversations = history.slice().filter(entry =>
+      !entry.isHistorical && // Only new, non-historical entries
+      !entry.summaryFetched && // Hasn't been fetched/attempted
+      !entry.summaryFetching && // Isn't currently being fetched
+      !entry.summary && // Doesn't already have a summary
+      !entry.summaryError && // Doesn't have a summary error
+      Object.values(entry.responses).length > 0 && // Must have some responses
+      Object.values(entry.responses).every(r => r.done || r.error) // All models for this entry are done
     );
-    if (latest) {
-      generateSummary(latest.id);
+
+    if (latestConversations.length > 0) {
+        const convToSummarize = latestConversations[latestConversations.length - 1]; // Get the most recent one
+        if (!summariesProcessed.has(convToSummarize.id)) {
+             // Track that we're processing this summary to prevent duplicates
+             setSummariesProcessed(prev => {
+               const newSet = new Set(prev);
+               newSet.add(convToSummarize.id);
+               return newSet;
+             });
+             generateSummary(convToSummarize);
+        }
     }
-  }, [history, autoSummarizeEnabled]);
+  }, [history, autoSummarizeEnabled, isClient, generateSummary, summariesProcessed]);
 
   useEffect(() => {
     const handleOpenApiKeyEvent = () => {

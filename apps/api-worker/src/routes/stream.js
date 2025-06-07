@@ -178,7 +178,7 @@ const openRouterModels = {
     id: 'meta-llama/llama-3.1-8b-instruct:free',
     name: 'Llama 3.1 8B'
   },
-  'deepseek/deepseek-r1:free': {
+  'deepseek/deepseek-r1-0528:free': {
     id: 'deepseek/deepseek-r1:free',
     name: 'DeepSeek R1'
   },

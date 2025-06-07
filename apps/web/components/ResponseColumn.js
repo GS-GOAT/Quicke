@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/cjs/styles/prism';
@@ -292,7 +292,7 @@ const markdownConfig = {
   }
 };
 
-export default function ResponseColumn({
+function ResponseColumn({
   model,
   response,
   streaming,
@@ -933,3 +933,6 @@ export default function ResponseColumn({
     </div>
   );
 }
+
+// Wrap with React.memo for performance optimization
+export default memo(ResponseColumn);

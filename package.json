@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "pnpm --parallel --stream dev",
     "dev:web": "pnpm --filter quicke dev",
-    "dev:api": "pnpm --filter \"@quicke/api-worker\" dev", 
+    "dev:api": "pnpm --filter \"@quicke/api-worker\" dev",
     "build": "pnpm --filter quicke build && pnpm --filter \"@quicke/api-worker\" build",
     "prisma:generate": "pnpm --filter quicke exec prisma generate && pnpm --filter \"@quicke/api-worker\" exec prisma generate && pnpm --filter @quicke/db exec prisma generate",
     "prisma:migrate": "pnpm --filter @quicke/db exec prisma migrate dev",
@@ -14,10 +14,10 @@
     "postinstall": "pnpm exec patch-package"
   },
   "devDependencies": {
+    "bcrypt": "^5.1.1",
     "eslint": "^8.56.0",
     "eslint-config-next": "^14.0.4",
     "jose": "^5.10.0",
-    "bcrypt": "^5.1.1",
     "patch-package": "^8.0.0",
     "pdf-parse": "^1.1.1",
     "prisma": "^6.5.0"
@@ -25,5 +25,8 @@
   "engines": {
     "node": ">=18.0.0",
     "pnpm": ">=8.0.0"
+  },
+  "dependencies": {
+    "immer": "^10.1.1"
   }
 }
