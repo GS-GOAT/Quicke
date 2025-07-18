@@ -46,6 +46,7 @@ RUN echo '{ "name": "prod-dummy-root", "private": true }' > package.json
 RUN corepack enable pnpm
 RUN pnpm install --prod --ignore-scripts --recursive --filter "@quicke/api-worker" --filter "@quicke/utils"
 COPY --from=builder /usr/src/app/apps/api-worker/src ./apps/api-worker/src
+COPY --from=builder /usr/src/app/apps/api-worker/config ./apps/api-worker/config
 COPY --from=builder /usr/src/app/packages/utils ./packages/utils/
 COPY --from=builder /usr/src/app/apps/api-worker/node_modules/.prisma ./apps/api-worker/node_modules/.prisma
 COPY --from=builder /usr/src/app/apps/api-worker/node_modules/@prisma/client ./apps/api-worker/node_modules/@prisma/client

@@ -26,8 +26,6 @@ const allowlist = [
   normalizeUrl('https://quicke-psi.vercel.app')     
 ].filter(Boolean); 
 
-console.log("CORS allowlist:", allowlist);
-
 const corsOptions = {
   origin: function (origin, callback) {
     if (!origin) {
