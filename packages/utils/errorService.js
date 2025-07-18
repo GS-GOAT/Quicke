@@ -6,7 +6,7 @@ const ERROR_TYPES = {
   MAX_RETRIES_EXCEEDED: 'MAX_RETRIES_EXCEEDED',
   EMPTY_RESPONSE: 'EMPTY_RESPONSE',
   RATE_LIMIT: 'RATE_LIMIT',
-  INSUFFICIENT_BALANCE: 'INSUFFICIENT_BALANCE',  //  error type
+  INSUFFICIENT_BALANCE: 'INSUFFICIENT_BALANCE',
   NETWORK_ERROR: 'NETWORK_ERROR',
   UNKNOWN_ERROR: 'UNKNOWN_ERROR',
   INSUFFICIENT_QUOTA: 'INSUFFICIENT_QUOTA',
@@ -14,10 +14,9 @@ const ERROR_TYPES = {
   INVALID_PARAMETERS: 'INVALID_PARAMETERS',
   SERVER_ERROR: 'SERVER_ERROR',
   SERVER_OVERLOADED: 'SERVER_OVERLOADED',
-  TOKEN_LIMIT_EXCEEDED: 'TOKEN_LIMIT_EXCEEDED'  // new error type for token limit
+  TOKEN_LIMIT_EXCEEDED: 'TOKEN_LIMIT_EXCEEDED'
 };
 
-// Timeout settings
 const TIMEOUT_SETTINGS = {
   INITIAL_RESPONSE: 59000,    // 59 seconds for initial response
   CHUNK_INTERVAL: 10000      // 10 seconds between chunks
@@ -25,7 +24,6 @@ const TIMEOUT_SETTINGS = {
 
 // Stream utilities for common processing patterns
 const streamUtils = {
-  // Safety limits for stream processing
   SAFETY_LIMITS: {
     MAX_CHUNKS: 5000,
     MAX_STREAM_DURATION: 300000 // 5 minutes
@@ -170,7 +168,6 @@ const streamUtils = {
     
     // Handle generic error types if no provider-specific handling was done
     if (errorType === ERROR_TYPES.UNKNOWN_ERROR) {
-      // Classify by status code
       if (status === 401 || status === 403) {
         errorType = ERROR_TYPES.API_KEY_MISSING;
       } else if (status === 429) {
@@ -233,7 +230,6 @@ class ErrorService {
       hasReceivedChunk: false
     });
     
-    // Set standard timeout for initial response
     const timeoutDuration = TIMEOUT_SETTINGS.INITIAL_RESPONSE;
 
     // Create a timeout that will fire if no chunks are received
@@ -259,18 +255,15 @@ class ErrorService {
 
   // Unregister a stream (call on completion or error)
   unregisterStream(modelId) {
-    // Clear any pending timers
     const timerId = this.modelTimers.get(modelId);
     if (timerId) {
       clearTimeout(timerId);
       this.modelTimers.delete(modelId);
     }
     
-    // Remove stream tracking
     this.activeStreams.delete(modelId);
   }
 
-  // Handle timeout scenario
   handleTimeout(modelId) {
     console.log(`[${modelId}] Model availability timeout`);
     const stream = this.activeStreams.get(modelId);
@@ -287,9 +280,7 @@ class ErrorService {
     return null;
   }
 
-  // Get user-friendly error message
   getErrorMessage(errorType, modelId, provider = '') {
-    // Use just the model ID rather than the provider name
     const modelName = modelId || 'Unknown model';
     
     switch (errorType) {
@@ -392,7 +383,6 @@ class ErrorService {
       return ERROR_TYPES.INSUFFICIENT_BALANCE;
     }
 
-    // Check for rate limit message patterns
     if (message && (
       message.toLowerCase().includes('rate limit') ||
       message.toLowerCase().includes('free-models-per-day') ||

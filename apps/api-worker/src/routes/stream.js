@@ -14,10 +14,9 @@ const {
   formatMessagesWithMedia
 } = require('@quicke/utils');
 
-// Define models guests can use on the backend for validation
+// Defines models guests can use on the backend for validation
 const GUEST_ALLOWED_MODELS_BACKEND = ['gemini-flash', 'gemini-flash-2.5'];
 
-// Remove MAX_RETRIES_EXCEEDED from error types since we're removing automatic retries
 const FALLBACK_ERROR_TYPES = {
   API_KEY_MISSING: 'API_KEY_MISSING',
   MODEL_UNAVAILABLE: 'MODEL_UNAVAILABLE',
@@ -30,7 +29,7 @@ const FALLBACK_ERROR_TYPES = {
   AUTH_REQUIRED: 'AUTH_REQUIRED'
 };
 
-// Use the imported values with a fallback if needed
+// Use the imported values with a fallback if needed - To be improved
 const ERROR_TYPES = errorService?.ERROR_TYPES || IMPORTED_ERROR_TYPES || FALLBACK_ERROR_TYPES;
 
 const router = express.Router();
@@ -569,10 +568,9 @@ router.get('/', async (req, res) => {
     let genAI;
 
     if (isGuestRequest) {
-      console.log("API WORKER STREAM: Processing GUEST request.");
       const systemGeminiKey = process.env.SYSTEM_GEMINI_API_KEY;
       if (!systemGeminiKey) {
-        console.error('Guest Access Error: SYSTEM_GEMINI_API_KEY is not set in environment.');
+        console.error('Guest Access Error: SYSTEM_GEMINI_API_KEY is not set.');
         modelArray.forEach(modelId => {
           errorHandler.sendErrorEvent(modelId, ERROR_TYPES.API_KEY_MISSING, "System configuration error prevents guest access.");
           completionManager.markCompleted(modelId);
@@ -585,9 +583,7 @@ router.get('/', async (req, res) => {
       }
       effectiveApiKeys.google = systemGeminiKey;
       genAI = new GoogleGenerativeAI(effectiveApiKeys.google);
-      console.log("API WORKER STREAM: Guest using SYSTEM_GEMINI_API_KEY.");
     } else if (userId) {
-      console.log(`API WORKER STREAM: Processing request for user: ${userId}`);
       try {
         const apiKeysRes = await prisma.apiKey.findMany({
           where: { userId },
@@ -612,7 +608,7 @@ router.get('/', async (req, res) => {
         return;
       }
     } else {
-      console.error('Stream Error: Critical authentication state. Not a guest, but no user ID found.');
+      console.error('Stream Error: Not a guest, but no user ID found.');
       modelArray.forEach(modelId => {
         errorHandler.sendErrorEvent(modelId, ERROR_TYPES.API_KEY_MISSING, "User authentication failed.");
         completionManager.markCompleted(modelId);
@@ -697,7 +693,6 @@ router.get('/', async (req, res) => {
                         (file.fileName && file.fileName.toLowerCase().endsWith('.md')),
                 isPpt: file.documentType === 'ppt' || file.fileType.includes('presentation')
               }));
-              console.log(`Retrieved ${fileDataArray.length} files for prompt for user ${userId}`);
             }
           } catch (fileError) {
             console.error('Error retrieving file data:', fileError);
@@ -708,10 +703,8 @@ router.get('/', async (req, res) => {
 
         if (!isGuestRequest && userId && useContextQuery === 'true' && (threadId || conversationId)) {
           try {
-            console.log(`[${modelId}] Retrieving conversation context for ${threadId || conversationId} for user ${userId}`);
             const contextMessages = await getConversationContext(prisma, conversationId, threadId);
             if (contextMessages && contextMessages.length > 0) {
-              console.log(`[${modelId}] Retrieved ${contextMessages.length} context messages`);
               if (modelId && modelId.startsWith('gemini')) {
                 const currentPromptMessage = formattedMessages[0];
                 const geminiContextMessages = contextMessages.map(msg => ({

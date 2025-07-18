@@ -10,7 +10,6 @@ export default async function handler(req, res) {
   const userId = session.user.id;
 
   if (req.method === 'GET') {
-    // Get user's API keys
     const apiKeys = await prisma.apiKey.findMany({ 
       where: { userId },
       select: { provider: true, encryptedKey: true }
@@ -21,7 +20,6 @@ export default async function handler(req, res) {
     const { provider, key } = req.body;
     
     try {
-      // Upsert the API key - update if exists, create if doesn't
       await prisma.apiKey.upsert({
         where: {
           userId_provider: {
@@ -41,7 +39,7 @@ export default async function handler(req, res) {
       
       res.status(200).json({ message: "API key updated successfully" });
     } catch (error) {
-      console.error('Error upserting API key:', error);
+      console.error('API key upsert failed:', error);
       res.status(500).json({ error: "Failed to save API key" });
     }
     
@@ -59,7 +57,7 @@ export default async function handler(req, res) {
       });
       res.status(204).end();
     } catch (error) {
-      console.error('Error deleting API key:', error);
+      console.error('API key deletion failed:', error);
       res.status(500).json({ error: "Failed to delete API key" });
     }
     

@@ -6,13 +6,11 @@ import { getConversationContext } from "@quicke/utils";
 const prisma = new PrismaClient();
 
 export default async function handler(req, res) {
-  // Ensure the user is authenticated
   const session = await getServerSession(req, res, authOptions);
   if (!session) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  // Get the thread or conversation ID from the query
   const { threadId, conversationId } = req.query;
 
   if (!threadId && !conversationId) {
@@ -23,10 +21,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Get the context using the database approach from contextManager
     const context = await getConversationContext(prisma, conversationId, threadId);
 
-    // Return the context data
     return res.status(200).json({
       success: true,
       contextSize: context.length,
@@ -40,7 +36,7 @@ export default async function handler(req, res) {
       }))
     });
   } catch (error) {
-    console.error('Error retrieving context:', error);
+    console.error('Context retrieval failed:', error);
     return res.status(500).json({
       error: "Server Error",
       message: error.message

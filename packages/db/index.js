@@ -11,4 +11,4 @@ if (process.env.NODE_ENV === 'production') {
   prisma = global._prisma;
 }
 
-module.exports = prisma; // Use module.exports for CommonJS 
+module.exports = prisma; 

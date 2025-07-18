@@ -2,8 +2,6 @@ const fs = require('fs');
 const AdmZip = require('adm-zip');
 const { parseStringPromise } = require('xml2js');
 const path = require('path');
-// We'll use a simple file reading approach since pptx-parser doesn't work server-side
-// For production use, you'd want to use a more robust library like pptx-extractor or officegen
 
 /**
  * Extract text content from a PowerPoint file
@@ -12,21 +10,14 @@ const path = require('path');
  */
 async function extractTextFromPPT(filePath) {
   try {
-    // Check if file exists
     if (!fs.existsSync(filePath)) {
       throw new Error('PowerPoint file not found');
     }
-
-    // For PPTX files, we'll use the XML-based approach
     if (filePath.toLowerCase().endsWith('.pptx')) {
       return extractTextFromPPTX(filePath);
     }
-
-    // For older PPT files, we'll retain the basic info approach
-    // In a production app, you might want to use a more robust solution
     const fileStats = fs.statSync(filePath);
     const fileName = path.basename(filePath);
-    
     return {
       text: `This is a legacy PowerPoint file (.ppt) that can't be parsed directly. Consider converting to PPTX format for better results.\n\nFile: ${fileName}\nSize: ${Math.round(fileStats.size / 1024)} KB`,
       info: {
@@ -40,7 +31,7 @@ async function extractTextFromPPT(filePath) {
       }
     };
   } catch (error) {
-    console.error('Error extracting text from PowerPoint:', error);
+    console.error('PPT extraction failed:', error);
     throw new Error('Failed to extract text from PowerPoint file');
   }
 }
@@ -141,7 +132,7 @@ async function extractTextFromPPTX(filePath) {
       }
     };
   } catch (error) {
-    console.error('Error extracting PPTX content:', error);
+    console.error('PPTX extraction failed:', error);
     throw error;
   }
 }

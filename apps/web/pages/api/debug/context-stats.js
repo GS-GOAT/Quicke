@@ -4,19 +4,16 @@ const { PrismaClient } = require('../../../prisma/generated-client');
 const prisma = new PrismaClient();
 
 export default async function handler(req, res) {
-  // Ensure the user is authenticated
   const session = await getServerSession(req, res, authOptions);
   if (!session) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
   try {
-    // Get thread stats
     const threadCount = await prisma.thread.count({
       where: { userId: session.user.id }
     });
     
-    // Get latest threads
     const latestThreads = await prisma.thread.findMany({
       where: { userId: session.user.id },
       orderBy: { updatedAt: 'desc' },
@@ -28,7 +25,6 @@ export default async function handler(req, res) {
       }
     });
     
-    // Get latest conversation
     const latestConversation = await prisma.conversation.findFirst({
       where: { userId: session.user.id },
       orderBy: { createdAt: 'desc' },
@@ -37,7 +33,6 @@ export default async function handler(req, res) {
       }
     });
     
-    // Return the stats data
     return res.status(200).json({
       success: true,
       stats: {
@@ -63,7 +58,7 @@ export default async function handler(req, res) {
       }
     });
   } catch (error) {
-    console.error('Error retrieving context stats:', error);
+    console.error('Context stats retrieval failed:', error);
     return res.status(500).json({
       error: "Server Error",
       message: error.message

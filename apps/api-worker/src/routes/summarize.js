@@ -5,7 +5,6 @@ const prisma = new PrismaClient();
 
 const router = express.Router();
 
-// Main route handler
 router.post('/', async (req, res) => {
   try {
     const userId = req.user ? req.user.id : null;
@@ -15,11 +14,9 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Responses are required' });
     }
 
-    // Get API key for Google
     let googleApiKey = null;
 
     if (userId) {
-      // Logged-in user: fetch their specific key
       const apiKey = await prisma.apiKey.findFirst({
         where: {
           userId,
@@ -31,10 +28,9 @@ router.post('/', async (req, res) => {
         googleApiKey = apiKey.encryptedKey;
       }
     } else {
-      // Guest user: use the system-wide guest key
       googleApiKey = process.env.SYSTEM_GEMINI_API_KEY; 
       if (!googleApiKey) {
-         console.error('Guest Summarization Error: SYSTEM_GEMINI_API_KEY is not set in environment.');
+         console.error('SYSTEM_GEMINI_API_KEY is not set.');
          return res.status(500).json({ error: 'System configuration error prevents guest summarization.' });
       }
     }
@@ -55,7 +51,6 @@ router.post('/', async (req, res) => {
       },
     });
 
-    // Format responses for summary
     const formattedResponses = Object.entries(responses)
       .map(([model, response]) => `${model}:\n${response.text}\n`)
       .join('\n---\n');
