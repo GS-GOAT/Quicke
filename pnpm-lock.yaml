@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      immer:
+        specifier: ^10.1.1
+        version: 10.1.1
     devDependencies:
       bcrypt:
         specifier: ^5.1.1
@@ -134,7 +138,7 @@ importers:
         version: 4.98.0
       pptx-parser:
         specifier: ^1.1.7-beta.9
-        version: 1.1.7-beta.9(@babel/core@7.27.1)(webpack@5.99.8)
+        version: 1.1.7-beta.9(@babel/core@7.27.1)(webpack@5.99.8(esbuild@0.25.4))
       prisma:
         specifier: ^6.7.0
         version: 6.7.0(typescript@5.8.3)
@@ -174,7 +178,7 @@ importers:
         version: 10.4.21(postcss@8.5.3)
       copy-webpack-plugin:
         specifier: ^13.0.0
-        version: 13.0.0(webpack@5.99.8)
+        version: 13.0.0(webpack@5.99.8(esbuild@0.25.4))
       eslint:
         specifier: ^8.56.0
         version: 8.57.1
@@ -192,7 +196,7 @@ importers:
         version: 3.4.17
       webpack:
         specifier: ^5.99.8
-        version: 5.99.8
+        version: 5.99.8(esbuild@0.25.4)
 
   packages/db:
     dependencies:
@@ -2316,6 +2320,9 @@ packages:
   ignore@5.3.2:
     resolution: {integrity: sha512-hsBTNUqQTDwkWtcdYI2i06Y/nUBEsNEDJKjWdigLvegy8kDuJAS8uRlpkkcQpyEXL0Z/pjDy5HBmMjRCJ2gq+g==}
     engines: {node: '>= 4'}
+
+  immer@10.1.1:
+    resolution: {integrity: sha512-s2MPrmjovJcoMaHtx6K11Ra7oD05NT97w1IC5zpMkT6Atjr7H8LjaDd81iIxUYpMKSRRNMJE703M1Fhr/TctHw==}
 
   import-fresh@3.3.1:
     resolution: {integrity: sha512-TR3KfrTZTYLPB6jUjfx6MF9WcWrHL9su5TObK4ZkYgBdWKPOFoSoQIdEuTuR82pmtxH2spWG9h6etwfr1pLBqQ==}
@@ -5485,14 +5492,14 @@ snapshots:
 
   cookie@0.7.2: {}
 
-  copy-webpack-plugin@13.0.0(webpack@5.99.8):
+  copy-webpack-plugin@13.0.0(webpack@5.99.8(esbuild@0.25.4)):
     dependencies:
       glob-parent: 6.0.2
       normalize-path: 3.0.0
       schema-utils: 4.3.2
       serialize-javascript: 6.0.2
       tinyglobby: 0.2.13
-      webpack: 5.99.8
+      webpack: 5.99.8(esbuild@0.25.4)
 
   core-js-compat@3.42.0:
     dependencies:
@@ -5515,7 +5522,7 @@ snapshots:
 
   crypt@0.0.2: {}
 
-  css-loader@3.6.0(webpack@5.99.8):
+  css-loader@3.6.0(webpack@5.99.8(esbuild@0.25.4)):
     dependencies:
       camelcase: 5.3.1
       cssesc: 3.0.0
@@ -5530,7 +5537,7 @@ snapshots:
       postcss-value-parser: 4.2.0
       schema-utils: 2.7.1
       semver: 6.3.1
-      webpack: 5.99.8
+      webpack: 5.99.8(esbuild@0.25.4)
 
   cssesc@3.0.0: {}
 
@@ -6445,6 +6452,8 @@ snapshots:
   ignore-by-default@1.0.1: {}
 
   ignore@5.3.2: {}
+
+  immer@10.1.1: {}
 
   import-fresh@3.3.1:
     dependencies:
@@ -7609,11 +7618,11 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
-  pptx-parser@1.1.7-beta.9(@babel/core@7.27.1)(webpack@5.99.8):
+  pptx-parser@1.1.7-beta.9(@babel/core@7.27.1)(webpack@5.99.8(esbuild@0.25.4)):
     dependencies:
       '@babel/runtime-corejs3': 7.27.1
       '@vf.js/launcher': 2.0.12
-      css-loader: 3.6.0(webpack@5.99.8)
+      css-loader: 3.6.0(webpack@5.99.8(esbuild@0.25.4))
       deepmerge: 4.3.1
       element-to-path: 1.2.1
       jquery: 3.7.1
@@ -7621,14 +7630,14 @@ snapshots:
       jszip-utils: 0.1.0
       lodash: 4.17.21
       prst-shape-transform: 1.0.5-beta.0(@babel/core@7.27.1)
-      style-loader: 1.3.0(webpack@5.99.8)
+      style-loader: 1.3.0(webpack@5.99.8(esbuild@0.25.4))
       svg-path-bbox: 0.0.49
       svg-path-bounds: 1.0.2
       svgson: 4.1.0
       tinycolor2: 1.6.0
       transformation-matrix: 2.16.1
       txml: 3.1.3
-      url-loader: 4.1.1(webpack@5.99.8)
+      url-loader: 4.1.1(webpack@5.99.8(esbuild@0.25.4))
     transitivePeerDependencies:
       - '@babel/core'
       - file-loader
@@ -8182,11 +8191,11 @@ snapshots:
 
   strip-json-comments@3.1.1: {}
 
-  style-loader@1.3.0(webpack@5.99.8):
+  style-loader@1.3.0(webpack@5.99.8(esbuild@0.25.4)):
     dependencies:
       loader-utils: 2.0.4
       schema-utils: 2.7.1
-      webpack: 5.99.8
+      webpack: 5.99.8(esbuild@0.25.4)
 
   style-to-object@0.4.4:
     dependencies:
@@ -8285,14 +8294,16 @@ snapshots:
       mkdirp: 1.0.4
       yallist: 4.0.0
 
-  terser-webpack-plugin@5.3.14(webpack@5.99.8):
+  terser-webpack-plugin@5.3.14(esbuild@0.25.4)(webpack@5.99.8(esbuild@0.25.4)):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.25
       jest-worker: 27.5.1
       schema-utils: 4.3.2
       serialize-javascript: 6.0.2
       terser: 5.39.0
-      webpack: 5.99.8
+      webpack: 5.99.8(esbuild@0.25.4)
+    optionalDependencies:
+      esbuild: 0.25.4
 
   terser@5.39.0:
     dependencies:
@@ -8509,12 +8520,12 @@ snapshots:
     dependencies:
       punycode: 2.3.1
 
-  url-loader@4.1.1(webpack@5.99.8):
+  url-loader@4.1.1(webpack@5.99.8(esbuild@0.25.4)):
     dependencies:
       loader-utils: 2.0.4
       mime-types: 2.1.35
       schema-utils: 3.3.0
-      webpack: 5.99.8
+      webpack: 5.99.8(esbuild@0.25.4)
 
   use-sync-external-store@1.5.0(react@18.3.1):
     dependencies:
@@ -8567,7 +8578,7 @@ snapshots:
 
   webpack-sources@3.2.3: {}
 
-  webpack@5.99.8:
+  webpack@5.99.8(esbuild@0.25.4):
     dependencies:
       '@types/eslint-scope': 3.7.7
       '@types/estree': 1.0.7
@@ -8590,7 +8601,7 @@ snapshots:
       neo-async: 2.6.2
       schema-utils: 4.3.2
       tapable: 2.2.1
-      terser-webpack-plugin: 5.3.14(webpack@5.99.8)
+      terser-webpack-plugin: 5.3.14(esbuild@0.25.4)(webpack@5.99.8(esbuild@0.25.4))
       watchpack: 2.4.2
       webpack-sources: 3.2.3
     transitivePeerDependencies:
