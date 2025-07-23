@@ -9,4 +9,5 @@ module.exports = {
   ...require('./textProcessor'),
   ...require('./streamUtils'),
   ...require('./formatMessages'),
+  ...require('./tokenUtils'),
 }; 

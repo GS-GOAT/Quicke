@@ -21,6 +21,7 @@ const {
   openRouterModels,
   geminiModels,
 } = require('../../config/models');
+const { getStreamHandler } = require('../services/llm/router');
 
 // Defines models guests can use on the backend for validation
 const GUEST_ALLOWED_MODELS_BACKEND = ['gemini-flash', 'gemini-flash-2.5'];
@@ -171,176 +172,7 @@ const verifyApiKey = (modelId, providerMap, userApiKeys) => {
 };
 
 // Model handler functions
-async function handleOpenAIStream(modelId, messages, sendEvent, openai) {
-  const formattedMessages = Array.isArray(messages) 
-    ? messages 
-    : [{ role: 'user', content: messages }];
-  
-  console.log(`OpenAI: Using model ${modelId} with ${formattedMessages.length} messages`);
-  
-  return handleUnifiedModelStream({
-    modelId,
-    prompt: formattedMessages,
-    sendEvent,
-    client: openai,
-    provider: 'openai',
-    generateStream: () => openai.chat.completions.create({
-      model: openAIModels[modelId] || modelId,
-      messages: formattedMessages,
-      stream: true,
-    }),
-    processChunk: chunk => chunk.choices[0]?.delta?.content
-  });
-}
-
-async function handleClaudeStream(modelId, messages, sendEvent, anthropic) {
-  const formattedMessages = Array.isArray(messages) 
-    ? messages 
-    : [{ role: 'user', content: messages }];
-  
-  console.log(`Claude: Using model ${modelId} with ${formattedMessages.length} messages`);
-  
-  return handleUnifiedModelStream({
-    modelId,
-    prompt: formattedMessages,
-    sendEvent,
-    client: anthropic,
-    provider: 'anthropic',
-    generateStream: () => anthropic.messages.create({
-      model: claudeModels[modelId] || 'claude-3-5-sonnet-20250219',
-      max_tokens: 5000,
-      messages: formattedMessages,
-      stream: true,
-    }),
-    processChunk: chunk => chunk.type === 'content_block_delta' && chunk.delta.text ? chunk.delta.text : ''
-  });
-}
-
-async function handleGeminiStream(modelId, messages, sendEvent, genAI, geminiModels) {
-  const modelInfo = geminiModels[modelId];
-  if (!modelInfo) {
-    throw new Error(`Invalid Gemini model: ${modelId}`);
-  }
-  
-  const geminiMessages = Array.isArray(messages) 
-    ? messages 
-    : [{ role: 'user', parts: [{ text: messages }] }];
-  
-  console.log(`Gemini: Using model ${modelInfo.id} with ${geminiMessages.length} messages`);
-  
-  return handleUnifiedModelStream({
-    modelId,
-    prompt: geminiMessages,
-    sendEvent,
-    client: genAI,
-    provider: 'google',
-    generateStream: async () => {
-      const geminiModel = genAI.getGenerativeModel({ 
-        model: modelInfo.id,
-        api_version: 'v1alpha',
-        ...(modelInfo.id !== 'gemini-2.0-flash-thinking-exp-01-21' && {
-          tools: [{ 'google_search': {} }]
-        })
-      });
-      
-      const generationConfig = {
-        temperature: 1.0,
-        topP: 0.8,
-        topK: 40,
-        maxOutputTokens: 12192,
-      };
-      
-      const response = await geminiModel.generateContentStream({
-        contents: geminiMessages,
-        generationConfig
-      });
-      
-      return response.stream;
-    },
-    processChunk: chunk => chunk.text()
-  });
-}
-
-async function handleOpenRouterStream(modelId, messages, sendEvent, openRouter, openRouterModels) {
-  const formattedMessages = Array.isArray(messages) 
-    ? messages 
-    : [{ role: 'user', content: messages }];
-  
-  console.log(`OpenRouter: Using model ${modelId} with ${formattedMessages.length} messages`);
-  
-  const modelInfo = openRouterModels[modelId];
-  
-  return handleUnifiedModelStream({
-    modelId,
-    prompt: formattedMessages,
-    sendEvent,
-    client: openRouter,
-    provider: 'openrouter',
-    generateStream: () => openRouter.chat.completions.create({
-      model: modelInfo?.id || modelId,
-      messages: formattedMessages,
-      stream: true,
-      transforms: ["middle-out"],
-    }),
-    processChunk: chunk => chunk.choices && chunk.choices[0]?.delta?.content,
-    customErrorHandler: (error) => {
-      console.error(`OpenRouter error for ${modelId}:`, error);
-      
-      if (error.error?.message?.includes('free-models-per-day')) {
-        return {
-          errorType: ERROR_TYPES.RATE_LIMIT,
-          errorMessage: `OpenRouter: Rate limit exceeded for free tier for today. Add credits at openrouter.ai to continue using this model or wait till the quota resets.`
-        };
-      }
-      
-      if (error.status === 402 || error.error?.code === 402) {
-        return {
-          errorType: ERROR_TYPES.INSUFFICIENT_BALANCE,
-          errorMessage: `OpenRouter: Insufficient credits for ${modelId}. Please add more credits at openrouter.ai/settings/credits`
-        };
-      }
-      
-      if (error.error?.message?.includes("maximum context length") || 
-          error.error?.message?.includes("token limit")) {
-        return {
-          errorType: ERROR_TYPES.TOKEN_LIMIT_EXCEEDED,
-          errorMessage: `OpenRouter: Token limit exceeded for ${modelId}. Try with a smaller prompt or image.`
-        };
-      }
-      
-      if (error.status === 429 || error.error?.code === 429) {
-        return {
-          errorType: ERROR_TYPES.RATE_LIMIT,
-          errorMessage: `OpenRouter: Rate limit exceeded for ${modelId}. Please try again later.`
-        };
-      }
-      
-      return null;
-    }
-  });
-}
-
-async function handleDeepSeekStream(modelId, messages, sendEvent, deepseek) {
-  const formattedMessages = Array.isArray(messages) 
-    ? messages 
-    : [{ role: 'user', content: messages }];
-  
-  console.log(`DeepSeek: Using model ${modelId} with ${formattedMessages.length} messages`);
-  
-  return handleUnifiedModelStream({
-    modelId,
-    prompt: formattedMessages,
-    sendEvent,
-    client: deepseek,
-    provider: 'deepseek',
-    generateStream: () => deepseek.chat.completions.create({
-      model: modelId,
-      messages: formattedMessages,
-      stream: true,
-    }),
-    processChunk: chunk => chunk.choices[0]?.delta?.content
-  });
-}
+// Remove all handle*Stream functions (handleOpenAIStream, handleClaudeStream, handleGeminiStream, handleOpenRouterStream, handleDeepSeekStream)
 
 // Main route handler
 router.get('/', async (req, res) => {
@@ -521,48 +353,34 @@ router.get('/', async (req, res) => {
           }
         }
 
-        if (geminiModels[modelId] && genAI) {
-          const validatedMessages = [];
-          let lastRole = null;
-          formattedMessages.forEach(msg => {
-            if (msg.role === lastRole && validatedMessages.length > 0) {
-              const prevMsg = validatedMessages[validatedMessages.length - 1];
-              if (prevMsg.parts && msg.parts) {
-                msg.parts.forEach(part => {
-                  if (part.text && prevMsg.parts.some(p => p.text)) {
-                    const textPart = prevMsg.parts.find(p => p.text);
-                    textPart.text += '\n' + part.text;
-                  } else {
-                    prevMsg.parts.push(part);
-                  }
-                });
-              } else if (prevMsg.content && typeof prevMsg.content === 'string' && msg.content && typeof msg.content === 'string') {
-                prevMsg.content += '\n' + msg.content;
-              }
-            } else {
-              const validatedMsg = {
-                role: msg.role,
-                parts: msg.parts || (msg.content ? [{ text: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content) }] : [{ text: '' }])
-              };
-              validatedMessages.push(validatedMsg);
-              lastRole = msg.role;
-            }
-          });
-          await handleGeminiStream(modelId, validatedMessages, sendEvent, genAI, geminiModels);
-        } else if (openAIModels[modelId] && openai && !isGuestRequest) {
-          await handleOpenAIStream(modelId, formattedMessages, sendEvent, openai);
-        } else if (claudeModels[modelId] && anthropic && !isGuestRequest) {
-          await handleClaudeStream(modelId, formattedMessages, sendEvent, anthropic);
-        } else if (deepseekModels[modelId] && deepseek && !isGuestRequest) {
-          await handleDeepSeekStream(modelId, formattedMessages, sendEvent, deepseek);
-        } else if (openRouterModels[modelId] && openRouter && !isGuestRequest) {
-          await handleOpenRouterStream(modelId, formattedMessages, sendEvent, openRouter, openRouterModels);
-        } else {
-          if (isGuestRequest && !GUEST_ALLOWED_MODELS_BACKEND.includes(modelId)) {
-            errorHandler.sendErrorEvent(modelId, ERROR_TYPES.MODEL_UNAVAILABLE, "Model not available for guests.");
-          } else {
-            errorHandler.sendErrorEvent(modelId, ERROR_TYPES.API_KEY_MISSING, `API client for ${modelId} is not available or key is missing.`);
-          }
+        // Use the new modular handler
+        const streamHandler = getStreamHandler(provider);
+        if (!streamHandler) {
+          errorHandler.sendErrorEvent(modelId, ERROR_TYPES.MODEL_UNAVAILABLE, `No handler for provider: ${provider}`);
+          completionManager.markCompleted(modelId);
+          return;
+        }
+        // Build options for each provider
+        const options = {
+          modelId,
+          messages: formattedMessages,
+          sendEvent,
+          openai,
+          anthropic,
+          genAI,
+          deepseek,
+          openRouter,
+          openAIModels,
+          claudeModels,
+          geminiModels,
+          deepseekModels,
+          openRouterModels,
+          ERROR_TYPES,
+        };
+        try {
+          await streamHandler(options);
+        } catch (err) {
+          errorHandler.sendErrorEvent(modelId, ERROR_TYPES.UNKNOWN_ERROR, err.message);
         }
         completionManager.markCompleted(modelId);
       } catch (error) {

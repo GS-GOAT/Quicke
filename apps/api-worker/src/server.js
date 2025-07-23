@@ -8,7 +8,8 @@ const cookieParser = require('cookie-parser');
 const streamRouteHandler = require('./routes/stream');
 const summarizeRouteHandler = require('./routes/summarize');
 const uploadRouteHandler = require('./routes/upload');
-const authMiddleware = require('./middleware/auth');
+const authRequired = require('./middleware/authRequired');
+const authOptional = require('./middleware/authOptional');
 
 // Imports for JWE self-test route
 const { CompactEncrypt, jwtDecrypt } = require('jose');
@@ -94,9 +95,9 @@ app.get('/api/test-jwe', async (req, res) => {
 });
 
 // Apply JWT validation middleware to other protected routes
-app.use('/api/stream', authMiddleware);
-app.use('/api/summarize', authMiddleware);
-app.use('/api/upload', authMiddleware);
+app.use('/api/stream', authOptional);
+app.use('/api/summarize', authOptional);
+app.use('/api/upload', authRequired);
 
 // Mount route handlers
 app.use('/api/stream', streamRouteHandler);
