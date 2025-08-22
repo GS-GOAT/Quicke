@@ -262,6 +262,62 @@ const modelDisplayNames = {
   'meta-llama/llama-3.1-8b-instruct:free': 'Llama 3.1 8B',
 };
 
+const modelCategories = {
+  Google: [
+    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', provider: 'Google', description: 'Latest Gemini 2.5 Pro with enhanced capabilities', context: 0, color: 'from-emerald-400 to-emerald-600', icon: '🧠', badge: 'Free' },
+    { id: 'gemini-flash-2.5', name: 'Gemini 2.5 Flash', provider: 'Google', description: 'Latest Flash model with improved speed and capabilities', context: 0, color: 'from-yellow-400 to-yellow-600', icon: '⚡', badge: 'Free' },
+    { id: 'gemini-flash', name: 'Gemini 2.0 Flash', provider: 'Google', description: 'Fastest performance optimized model', context: 0, color: 'from-blue-400 to-blue-600', icon: '🚀', badge: 'Free' },
+    { id: 'gemini-lite', name: 'Gemini Lite', provider: 'Google', description: 'Full-featured model with enhanced capabilities', context: 0, color: 'from-indigo-400 to-indigo-600', icon: '🌟', badge: 'Free' },
+    { id: 'gemini-thinking', name: 'Gemini 2.0 Flash Thinking', provider: 'Google', description: 'Advanced reasoning for more thoughtful responses', context: 0, color: 'from-purple-400 to-purple-600', icon: '🤔', badge: 'Free' }
+  ],
+  OpenRouter: [
+    { id: 'deepseek-v3-0324', name: 'DeepSeek V3 Latest', description: 'DeepSeek V3, a 685B-parameter, mixture-of-experts model', provider: 'OpenRouter', color: 'from-purple-400 to-purple-600', badge: 'Free', context: '32K', icon: '🧠', highlighted: true },
+    { id: 'deepseek/deepseek-r1:free', name: 'DeepSeek R1', provider: 'OpenRouter', description: 'Advanced reasoning and analysis model', context: '32K', badge: 'Free', color: 'from-violet-400 to-violet-600', icon: '🤔' },
+    { id: 'deepseek/deepseek-prover-v2:free', name: 'DeepSeek Prover V2', provider: 'OpenRouter', description: 'Advanced mathematical and logical proof verification model', context: '32K', badge: 'Free', color: 'from-blue-400 to-blue-600', icon: '🔍' },
+    { id: 'nvidia/llama-3.1-nemotron-ultra-253b-v1:free', name: 'Nemotron Ultra 253B', provider: 'OpenRouter', description: 'Ultra-large 253B parameter model for complex tasks', context: '32K', badge: 'Free', color: 'from-purple-400 to-purple-600', icon: '🌠' },
+    { id: 'mistral-small-3', name: 'Mistral Small 3', provider: 'OpenRouter', description: 'Compact yet powerful 24B parameter instruction model', context: '32K', badge: 'Free', color: 'from-blue-400 to-blue-600', icon: '🌪️' },
+    { id: 'mistral-nemo', name: 'Mistral Nemo', provider: 'OpenRouter', description: 'Advanced Mistral model with enhanced capabilities', context: '32K', badge: 'Free', color: 'from-indigo-400 to-indigo-700', icon: '🌊' },
+    { id: 'mistral-small-31', name: 'Mistral Small 3.1 24B', description: 'Latest Mistral small model with improved reasoning', provider: 'OpenRouter', color: 'from-purple-400 to-purple-600', badge: 'Free', icon: '🏆' },
+    { id: 'qwen-32b', name: 'Qwen Coder 32B', provider: 'OpenRouter', description: 'Code-Specific Qwen large language models', context: '32K', badge: 'Free', color: 'from-red-400 to-red-600', icon: '🌏' },
+    { id: 'llama2-70b', name: 'Llama-2 70B', provider: 'OpenRouter', description: 'Meta\'s largest open model', context: '128K', badge: 'Free', color: 'from-blue-500 to-blue-700', icon: '🦙' },
+    { id: 'mistral-7b', name: 'Mistral 7B Instruct', provider: 'OpenRouter', description: 'A high-performing model with optimizations for speed and context length.', badge: 'Free', color: 'from-purple-400 to-purple-600', icon: '🌪️' },
+    { id: 'phi3', name: 'Phi-3', provider: 'OpenRouter', description: 'Compact but capable model', context: '8K', badge: 'Free', color: 'from-cyan-400 to-cyan-600', icon: 'φ' },
+    { id: 'openchat', name: 'OpenChat 3.5', provider: 'OpenRouter', description: 'Open-source chat model', context: '8K', badge: 'Free', color: 'from-green-400 to-green-600', icon: '💬' },
+    { id: 'nvidia/llama-3.1-nemotron-nano-8b-v1:free', name: 'Nemotron Nano 8B', provider: 'OpenRouter', description: 'Efficient 8B parameter model for general tasks', context: '32K', badge: 'Free', color: 'from-green-400 to-green-600', icon: '⚡' },
+    { id: 'nvidia/llama-3.3-nemotron-super-49b-v1:free', name: 'Nemotron Super 49B', provider: 'OpenRouter', description: 'Powerful 49B parameter model with enhanced capabilities', context: '32K', badge: 'Free', color: 'from-blue-400 to-blue-600', icon: '🚀' },
+    { id: 'meta-llama/llama-3.2-11b-vision-instruct:free', name: 'Llama 3.2 Vision', provider: 'OpenRouter', description: 'Vision-language model for multimodal tasks', context: '32K', badge: 'Free', color: 'from-indigo-400 to-indigo-600', icon: '👁️' },
+    { id: 'meta-llama/llama-3.1-8b-instruct:free', name: 'Llama 3.1 8B', provider: 'OpenRouter', description: 'Efficient instruction-following model', context: '32K', badge: 'Free', color: 'from-cyan-400 to-cyan-600', icon: '🦙' },
+    { id: 'deepseek-v3-openrouter', name: 'DeepSeek V3 (Free)', provider: 'OpenRouter', description: 'Latest DeepSeek chat model optimized for performance', context: '32K', badge: 'Free', color: 'from-purple-400 to-purple-600', icon: '🌌' },
+    { id: 'deepseek/deepseek-r1-zero:free', name: 'DeepSeek R1 Zero', provider: 'OpenRouter', description: 'Optimized version of R1 for faster responses', context: '32K', badge: 'Free', color: 'from-rose-400 to-rose-600', icon: '⚡' },
+    { id: 'deepseek-distill', name: 'DeepSeek R1 Distill 70B', provider: 'OpenRouter', description: 'Advanced reasoning model', context: '164K', badge: 'Free', color: 'from-violet-400 to-violet-600', icon: '🔮' },
+    { id: 'qwen/qwen3-30b-a3b:free', name: 'Qwen3 30B A3B', provider: 'OpenRouter', description: 'Advanced 30B parameter model with enhanced capabilities', context: '32K', badge: 'Free', color: 'from-green-400 to-green-600', icon: '🌟' },
+    { id: 'qwen/qwen3-235b-a22b:free', name: 'Qwen3 235B A22B', provider: 'OpenRouter', description: 'Ultra-large 235B parameter model for complex tasks', context: '32K', badge: 'Free', color: 'from-purple-400 to-purple-600', icon: '🚀' },
+    { id: 'microsoft/mai-ds-r1:free', name: 'Microsoft MAI DS R1', provider: 'OpenRouter', description: 'Specialized data science and analysis model', context: '32K', badge: 'Free', color: 'from-blue-500 to-blue-700', icon: '📊' },
+    { id: 'tngtech/deepseek-r1t-chimera:free', name: 'TNG DeepSeek R1T Chimera', provider: 'OpenRouter', description: 'Hybrid model combining multiple specialized capabilities', context: '32K', badge: 'Free', color: 'from-indigo-400 to-indigo-600', icon: '🐉' },
+    { id: 'qwen/qwen3-0.6b-04-28:free', name: 'Qwen3 0.6B', provider: 'OpenRouter', description: 'Efficient compact model optimized for quick responses', context: '32K', badge: 'Free', color: 'from-cyan-400 to-cyan-600', icon: '⚡' },
+    { id: 'microsoft/phi-4-reasoning:free', name: 'Phi 4 Reasoning', provider: 'OpenRouter', description: 'Advanced reasoning and problem-solving model', context: '32K', badge: 'Free', color: 'from-violet-400 to-violet-600', icon: '🧠' },
+    { id: 'microsoft/phi-4-reasoning-plus:free', name: 'Phi 4 Reasoning Plus', provider: 'OpenRouter', description: 'Enhanced version of Phi 4 with improved reasoning capabilities', context: '32K', badge: 'Free', color: 'from-rose-400 to-rose-600', icon: '🎯' }
+  ],
+  OpenAI: [
+    { id: 'gpt-4.5-preview', name: 'GPT-4.5 Preview', provider: 'OpenAI', description: 'Latest GPT-4.5 preview model with enhanced capabilities', context: 0, color: 'from-violet-400 to-fuchsia-600', icon: '🔮', badge: 'Paid' },
+    { id: 'gpt-4o', name: 'GPT-4o', provider: 'OpenAI', description: 'Advanced GPT-4 Omega model', context: 0, color: 'from-blue-400 to-indigo-600', icon: 'Ω', badge: 'Paid' },
+    { id: 'gpt-4o-mini', name: 'GPT-4o Mini', provider: 'OpenAI', description: 'Compact version of GPT-4 Omega', context: 0, color: 'from-cyan-400 to-blue-600', icon: 'ω', badge: 'Paid' },
+    { id: 'o1', name: 'O1', provider: 'OpenAI', description: 'Next generation O1 model', context: 0, color: 'from-rose-400 to-pink-600', icon: '🌟', badge: 'Paid' },
+    { id: 'o3-mini', name: 'O3 Mini', provider: 'OpenAI', description: 'Compact O3 model with efficient performance', context: 0, color: 'from-purple-400 to-violet-600', icon: '💫', badge: 'Paid' },
+    { id: 'o1-mini', name: 'O1 Mini', provider: 'OpenAI', description: 'Efficient and compact O1 model', context: 0, color: 'from-fuchsia-400 to-purple-600', icon: '✨', badge: 'Paid' }
+  ],
+  Anthropic: [
+    { id: 'claude-3-7', name: 'Claude 3.7 Sonnet', provider: 'Anthropic', description: 'Latest Claude model with superior reasoning and analysis', context: 0, color: 'from-orange-400 to-orange-600', icon: '🧠', badge: 'Paid' },
+    { id: 'claude-3-5', name: 'Claude 3.5 Sonnet', provider: 'Anthropic', description: 'Advanced Claude model optimized for complex tasks', context: 0, color: 'from-orange-500 to-orange-700', icon: '🤖', badge: 'Paid' }
+  ],
+  DeepSeek: [
+    { id: 'deepseek-chat', name: 'DeepSeek V3', provider: 'DeepSeek', description: 'Latest DeepSeek chat model optimized for performance', context: '32K', color: 'from-purple-400 to-purple-600', icon: '🌌', badge: 'Paid' },
+    { id: 'deepseek-coder', name: 'DeepSeek Coder', provider: 'DeepSeek', description: 'Specialized model for coding tasks and technical discussions', context: '32K', color: 'from-indigo-400 to-indigo-600', icon: '👨‍💻', badge: 'Paid' },
+    { id: 'deepseek-reasoner', name: 'DeepSeek R1', provider: 'DeepSeek', description: 'Advanced model with chain-of-thought reasoning', context: '32K', color: 'from-blue-400 to-blue-600', icon: '🤔', badge: 'Paid' }
+  ]
+};
+
+
 module.exports = {
   providerMap,
   openAIModels,
@@ -270,4 +326,5 @@ module.exports = {
   openRouterModels,
   geminiModels,
   modelDisplayNames,
+  modelCategories
 }; 

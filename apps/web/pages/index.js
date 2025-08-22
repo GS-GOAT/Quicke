@@ -93,39 +93,7 @@ export default function Home() {
     "What are the best practices for web accessibility?",
     "How does machine learning work?",
   ]);
-  const promptSuggestions = {
-    writing: [
-      "Write a short story about time travel",
-      "Create a poem about the ocean",
-      "Write a dialogue between two AI systems",
-      "Craft a creative product description",
-    ],
-    analysis: [
-      "Compare different programming languages",
-      "Analyze the impact of AI on society",
-      "Explain quantum computing simply",
-      "Break down complex economic concepts",
-    ],
-    creativity: [
-      "Design a unique superhero concept",
-      "Create a recipe fusion dish",
-      "Invent a new sport",
-      "Generate creative marketing ideas",
-    ],
-    business: [
-      "Write a professional email template",
-      "Create a business pitch",
-      "Develop a marketing strategy",
-      "Draft a project proposal",
-    ],
-    technical: [
-      "Debug this code snippet",
-      "Explain microservices architecture",
-      "Compare cloud providers",
-      "Optimize database queries",
-    ]
-  };
-
+  
   const [showSummary, setShowSummary] = useState({});
   const [summaryLoading, setSummaryLoading] = useState({});
 
@@ -198,30 +166,7 @@ export default function Home() {
     }
   }, [router.query]);
 
-  // to useEffect section
-  useEffect(() => {
-    if (history.length === 0) {
-      const categories = Object.keys(promptSuggestions);
-      let currentIndex = 0;
-
-      const rotateSuggestions = () => {
-        const category = categories[currentIndex % categories.length];
-        const suggestions = promptSuggestions[category];
-        const randomSuggestions = suggestions
-          .sort(() => Math.random() - 0.5)
-          .slice(0, 4);
-
-        setVisibleSuggestions(randomSuggestions);
-        currentIndex++;
-      };
-
-      rotateSuggestions();
-      const interval = setInterval(rotateSuggestions, 8000);
-      return () => clearInterval(interval);
-    }
-  }, [history.length]);
-
-
+  // useEffect section
   // event listener for API key manager toggle
   useEffect(() => {
     const handleApiKeyManagerToggle = (event) => {
@@ -233,118 +178,6 @@ export default function Home() {
       window.removeEventListener('toggleApiKeyManager', handleApiKeyManagerToggle);
     };
   }, []);
-
-  // Modified function to fetch conversations
-  const fetchConversations = async (pageNum = 1) => {
-    try {
-      const mainContent = document.querySelector('main');
-      const oldScrollHeight = mainContent?.scrollHeight || 0;
-      const oldScrollTop = mainContent?.scrollTop || 0;
-
-      const response = await fetch(`/api/conversations/retrieve?page=${pageNum}`);
-      if (!response.ok) throw new Error('Failed to fetch conversations');
-      
-      const data = await response.json();
-      
-      // Check if there are more conversations to load
-      setHasMore(data.hasMore);
-
-      const transformedHistory = data.conversations.map(conv => {
-        const userMessage = conv.messages.find(msg => msg.role === 'user');
-        
-        // Get all assistant messages and summary, maintaining order
-        const assistantMessages = conv.messages
-          .filter(msg => msg.role === 'assistant' || msg.role === 'summary')
-          .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
-          .map(msg => {
-            try {
-              return {
-                ...JSON.parse(msg.content),
-                role: msg.role
-              };
-            } catch (error) {
-              console.error('Failed to parse message content:', error);
-              return null;
-            }
-          })
-          .filter(Boolean);
-
-        const responses = {};
-        let summaryText = null;
-
-        assistantMessages.forEach(parsed => {
-          const { model, timestamp, role, ...responseData } = parsed;
-          
-          if (role === 'summary') {
-            summaryText = responseData.text;
-          } else {
-            responses[model] = {
-              ...responseData,
-              loading: false,
-              streaming: false
-            };
-          }
-        });
-
-        return {
-          id: conv.id,
-          prompt: userMessage.content,
-          responses,
-          activeModels: Object.keys(responses).filter(model => model !== 'summary'),
-          timestamp: new Date(conv.createdAt),
-          isHistorical: true,
-          summary: summaryText
-        };
-      });
-
-      // isHistorical flag to loaded conversations
-      const historicalConversations = transformedHistory.map(conv => ({
-        ...conv,
-        isHistorical: true
-      }));
-
-      const sortedConversations = historicalConversations.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-      setHistory(prev => 
-        pageNum > 1 
-          ? [...prev, ...sortedConversations]
-          : sortedConversations
-      );
-      
-      // Update showSummary state for loaded summaries
-      setShowSummary(prev => {
-        const updatedState = { ...prev };
-        historicalConversations.forEach(conv => {
-          if (conv.summary) {
-            updatedState[conv.id] = true;
-          }
-        });
-        return updatedState;
-      });
-      
-      // Only scroll on initial load (page 1) or maintain scroll position for load more
-      if (pageNum === 1) {
-        setTimeout(() => {
-          if (mainContent) {
-            mainContent.scrollTo({
-              top: mainContent.scrollHeight,
-              behavior: 'smooth'
-            });
-          }
-        }, 100);
-      } else {
-        // After state update, adjust scroll position to maintain view
-        setTimeout(() => {
-          if (mainContent) {
-            const newScrollHeight = mainContent.scrollHeight;
-            const heightDifference = newScrollHeight - oldScrollHeight;
-            mainContent.scrollTop = oldScrollTop + heightDifference;
-          }
-        }, 0);
-      }
-    } catch (error) {
-      console.error('Error fetching conversations:', error);
-    }
-  };
 
   // Optimized summary generation function with race condition protection
   const generateSummary = useCallback(async (conversationEntryToSummarize) => {
@@ -791,48 +624,6 @@ export default function Home() {
       </div>
     </div>
   );
-
-  const handleLoadMore = () => {
-    if (hasMore) {
-      if (activeThreadId) {
-        handleLoadMoreThreadConversations();
-      } 
-    }
-  };
-  
-  // Function to load more conversations from the current thread
-  const handleLoadMoreThreadConversations = async () => {
-    try {
-      // Get current scroll position before loading more
-      const mainContent = document.querySelector('main');
-      const oldScrollHeight = mainContent?.scrollHeight || 0;
-      const oldScrollTop = mainContent?.scrollTop || 0;
-      
-      const existingConversations = history.length;
-      const response = await fetch(`/api/threads/retrieve?id=${activeThreadId}&skip=${existingConversations}`);
-      
-      if (!response.ok) throw new Error('Failed to load more thread conversations');
-      
-      const data = await response.json();
-      
-      setHasMore(data.conversations.length > 0);
-      
-      if (data.conversations.length > 0) {
-        setHistory(prev => [...prev, ...data.conversations]);
-        
-        // After state update, adjust scroll position to maintain view
-        setTimeout(() => {
-          if (mainContent) {
-            const newScrollHeight = mainContent.scrollHeight;
-            const heightDifference = newScrollHeight - oldScrollHeight;
-            mainContent.scrollTop = oldScrollTop + heightDifference;
-          }
-        }, 100);
-      }
-    } catch (error) {
-      console.error('Error loading more thread conversations:', error);
-    }
-  };
 
   const getResponseLayoutClass = () => {
     if (isSidePanelOpen) {
@@ -1508,7 +1299,7 @@ export default function Home() {
             })}
             {/* Load More Threads Button */}
             {/* {hasMore && (
-              <div className="flex justify-center mt-4">
+              <div className="flex justify-center mt-4">  # To Be Implemented
                 <button
                   onClick={fetchThreads}
                   className="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-700 hover:bg-gray-600 rounded-md border border-gray-600 transition-colors"
@@ -1612,7 +1403,7 @@ export default function Home() {
                     isGuest={isGuest}
                   />
                 </div>
-                {/* ---- START NEW LAYOUT TOGGLE BUTTONS ---- */}
+                {/* START NEW LAYOUT TOGGLE BUTTONS*/}
                 <div className="flex items-center ml-2 p-0.5 bg-gray-700/60 rounded-lg border border-gray-600/70">
                   <button
                     onClick={() => setResponseLayout('grid')}
